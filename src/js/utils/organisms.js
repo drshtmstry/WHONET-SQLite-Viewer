@@ -8,10 +8,12 @@
  * @returns {string}
  */
 export function getOrganismName(code) {
-  if (!code) return '';
-  const key = String(code).trim().toLowerCase();
-  if (typeof window !== 'undefined' && window.ORGANISMS_DICT && window.ORGANISMS_DICT[key]) {
-    return window.ORGANISMS_DICT[key];
+  if (code == null || code === '') return '';
+  const str = String(code).trim();
+  const lower = str.toLowerCase();
+  if (typeof window !== 'undefined' && window.ORGANISMS_DICT) {
+    if (window.ORGANISMS_DICT[lower]) return window.ORGANISMS_DICT[lower];
+    if (window.ORGANISMS_DICT[str]) return window.ORGANISMS_DICT[str];
   }
   return '';
 }
@@ -23,8 +25,11 @@ export function getOrganismName(code) {
  * @returns {string}
  */
 export function renderOrgBadge(code, extraStyle = '') {
-  if (!code || code === '—') return '—';
-  const name = getOrganismName(code);
-  const titleAttr = name ? `title="${name} (${code})"` : `title="${code}"`;
-  return `<span class="badge badge-org" ${titleAttr} style="${extraStyle}">${code}</span>`;
+  if (code == null || code === '' || code === '—') return '—';
+  const cleanCode = String(code).trim();
+  const name = getOrganismName(cleanCode);
+  const rawTitle = name ? `${name} (${cleanCode})` : cleanCode;
+  const safeTitle = rawTitle.replace(/"/g, '&quot;');
+  const safeCode = cleanCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<span class="badge badge-org" title="${safeTitle}" style="${extraStyle}">${safeCode}</span>`;
 }
