@@ -7,6 +7,7 @@ Comprehensive architectural guide and modular schema reference for developers ma
 ## 1. System Architecture Overview
 
 WHONET SQLite Viewer utilizes a **hybrid execution model** designed to function in two operational modes with zero code duplication:
+
 1. **Local SQLite Server (Node.js)**: Runs locally with `npm start` (`node --watch server.js`) on `http://localhost:7890`. Direct file I/O to `C:\WHONET\Data` via Node's native `DatabaseSync` (`node:sqlite`). Zero security dialogs or browser sandbox restrictions.
 2. **In-Browser Engine (Client-side)**: Runs statically on [whonet-tool.vercel.app](https://whonet-tool.vercel.app/) using `sql.js` in the browser. Supports installation as a desktop/mobile PWA with a zero-cache service worker (`public/sw.js`) for instant deployment rollouts. Uses the **File System Access API** with IndexedDB persistent handles to read and save changes directly to local `.sqlite` files on disk without cloud transmission.
 
@@ -74,7 +75,7 @@ The codebase separates static public assets, frontend modules, and backend execu
 │       │
 │       ├── utils/
 │       │   ├── natural-sort.js # naturalKey() & naturalCompare() algorithms
-│       │   ├── formatters.js   # Date formatters, HTML sanitization, debouncing
+│       │   ├── formatters.js   # Date formatters (locale), formatAgeSex(), HTML sanitization, debouncing
 │       │   └── organisms.js    # Organism badge rendering & full name lookup
 │       │
 │       └── pages/
@@ -86,7 +87,7 @@ The codebase separates static public assets, frontend modules, and backend execu
 │           └── fixes.js        # Bulk data cleansing operations
 │
 ├── server.js                   # Local Node.js server (native node:sqlite & auto-sync)
-├── Start-WHONET.bat            # Windows 1-click launcher for lab machines
+├── start.bat                   # Windows 1-click launcher for lab machines
 ├── vite.config.js              # Vite configuration for production builds (/dist)
 ├── vercel.json                 # Vercel deployment routing & static build config
 └── package.json                # Project dependencies & operational scripts
@@ -96,22 +97,23 @@ The codebase separates static public assets, frontend modules, and backend execu
 
 ## 3. Module Responsibilities & Contracts
 
-| Module | Core Exports | Primary Responsibility |
-|---|---|---|
-| `state/store.js` | `state`, `subscribe`, `markModified`, `setRuntimeBadge` | Single source of truth for active database, pagination, filters, and modified flags. |
-| `api/client.js` | `api(path, options)`, `API_BASE` | Dispatches requests to `wasm-emulator.js` if in browser WASM mode, or `fetch()` if connected to Node server. |
-| `api/wasm-emulator.js`| `handleWasmApi(path, options)` | Emulates backend endpoints (`/api/stats`, `/api/isolates`, `/api/duplicates`, etc.) inside browser WASM memory. |
-| `db/wasm.js` | `getSqlJs`, `wasmSelect`, `wasmRun`, `saveToFileHandle` | Direct execution interface to the WebAssembly SQLite instance; registers custom SQLite functions. |
-| `db/filesystem.js` | `chooseWhonetFolder`, `restoreWhonetFolder`, `scanWhonetFolder` | Handles directory picker permissions and preserves access handles across browser sessions via IndexedDB. |
-| `ui/table.js` | `renderSortHeader`, `renderPagination` | Generates accessible, sortable `<th>` headers with dynamic arrow icons and unified pagination controls. |
-| `ui/modal.js` | `viewDetail`, `openEditModal`, `confirmDeleteRow` | Modal dialog controllers, inline cell editor, and deletion confirmation guards. |
-| `utils/natural-sort.js` | `naturalKey`, `naturalCompare` | Natural alphanumeric ordering engine that pads numeric segments to 12 digits. |
-| `pages/dashboard.js` | `loadStats`, `updateDashboardCharts`, `switchDb` | Renders executive summary counters and responsive Chart.js visual distribution graphs. |
-| `pages/isolates.js` | `loadIsolates`, `sortIsolates`, `renderIsolatesTable` | All Isolates table controller with natural column sorting and live search filters. |
-| `pages/duplicates.js` | `loadDuplicates`, `sortDuplicates`, `setDupMode` | Deduplication interface supporting Specimen # vs Patient ID clustering and multi-row selection. |
-| `pages/monthly-amr.js` | `loadMonthlyAmrData`, `renderAmrTable`, `exportAmrCsv` | National AMR Surveillance matrix (OPD/IPD/ICU vs Specimen Types) with TSV/CSV export. |
-| `pages/sql-workspace.js` | `runSQL`, `sortSqlTable`, `initSqlAutocomplete` | Arbitrary SQL query execution engine with intelligent caret-based keyword/column autocomplete. |
-| `pages/fixes.js` | `bulkFix`, `fixCasingAndRefresh` | Sanitizes data (e.g. UPPERCASE specimen normalization, whitespace cleanup). |
+| Module                   | Core Exports                                                    | Primary Responsibility                                                                                          |
+| ------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `state/store.js`         | `state`, `subscribe`, `markModified`, `setRuntimeBadge`         | Single source of truth for active database, pagination, filters, and modified flags.                            |
+| `api/client.js`          | `api(path, options)`, `API_BASE`                                | Dispatches requests to `wasm-emulator.js` if in browser WASM mode, or `fetch()` if connected to Node server.    |
+| `api/wasm-emulator.js`   | `handleWasmApi(path, options)`                                  | Emulates backend endpoints (`/api/stats`, `/api/isolates`, `/api/duplicates`, etc.) inside browser WASM memory. |
+| `db/wasm.js`             | `getSqlJs`, `wasmSelect`, `wasmRun`, `saveToFileHandle`         | Direct execution interface to the WebAssembly SQLite instance; registers custom SQLite functions.               |
+| `db/filesystem.js`       | `chooseWhonetFolder`, `restoreWhonetFolder`, `scanWhonetFolder` | Handles directory picker permissions and preserves access handles across browser sessions via IndexedDB.        |
+| `ui/table.js`            | `renderSortHeader`, `renderPagination`                          | Generates accessible, sortable `<th>` headers with dynamic arrow icons and unified pagination controls.         |
+| `ui/modal.js`            | `viewDetail`, `openEditModal`, `confirmDeleteRow`               | Modal dialog controllers, inline cell editor, and deletion confirmation guards.                                 |
+| `utils/natural-sort.js`  | `naturalKey`, `naturalCompare`                                  | Natural alphanumeric ordering engine that pads numeric segments to 12 digits.                                   |
+| `utils/formatters.js`    | `fmtDate`, `formatAgeSex`, `escapeHtml`, `debounce`             | Formats dates per user locale, formats merged `Age/Sex` (`19/f`), sanitizes HTML, and debounces calls.          |
+| `pages/dashboard.js`     | `loadStats`, `updateDashboardCharts`, `switchDb`                | Renders executive summary counters and responsive Chart.js visual distribution graphs.                          |
+| `pages/isolates.js`      | `loadIsolates`, `sortIsolates`, `renderIsolatesTable`           | All Isolates table controller with natural column sorting and live search filters.                              |
+| `pages/duplicates.js`    | `loadDuplicates`, `sortDuplicates`, `setDupMode`                | Deduplication interface supporting Specimen # vs Patient ID clustering and multi-row selection.                 |
+| `pages/monthly-amr.js`   | `loadMonthlyAmrData`, `renderAmrTable`, `exportAmrCsv`          | Gujarat SAPCAR-G AMR Surveillance data (OPD/IPD/ICU vs Specimen Types) with TSV/CSV export.                     |
+| `pages/sql-workspace.js` | `runSQL`, `sortSqlTable`, `initSqlAutocomplete`                 | Arbitrary SQL query execution engine with intelligent caret-based keyword/column autocomplete.                  |
+| `pages/fixes.js`         | `bulkFix`, `fixCasingAndRefresh`                                | Sanitizes data (e.g. UPPERCASE specimen normalization, whitespace cleanup).                                     |
 
 ---
 
@@ -155,9 +157,11 @@ CREATE TABLE Isolates (
 ## 5. Universal Natural Sort Engine (`NATURAL_KEY`)
 
 ### Problem
+
 ASCII sorting arranges string characters sequentially, causing `CSR-10` and `CSR-151` to precede `CSR-2`.
 
 ### Normalization Algorithm
+
 Any continuous block of digits is padded to a 12-digit zero-prefixed string:
 
 $$\text{"CSR-1"} \longrightarrow \text{"csr-000000000001"}$$
@@ -165,6 +169,7 @@ $$\text{"CSR-151"} \longrightarrow \text{"csr-000000000151"}$$
 $$\text{"CSR-2"} \longrightarrow \text{"csr-000000000002"}$$
 
 ### Implementation:
+
 - **Node.js**: Registered via `db.function('NATURAL_KEY', fn)` in `server.js`.
 - **WASM Browser**: Registered via `db.create_function('NATURAL_KEY', fn)` in `src/js/db/wasm.js`.
 - **Client JS Sorting**: Performed with `naturalCompare(a, b)` using `localeCompare(..., { numeric: true })` in `src/js/utils/natural-sort.js`.

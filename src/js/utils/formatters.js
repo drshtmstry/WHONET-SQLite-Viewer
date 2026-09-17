@@ -18,13 +18,44 @@ export function escapeHtml(str) {
 }
 
 /**
- * Formats a raw database date string into YYYY-MM-DD.
+ * Formats a raw database date string into user locale date string.
  * @param {string|null|undefined} d 
  * @returns {string}
  */
 export function fmtDate(d) {
   if (!d) return '—';
-  return String(d).substring(0, 10);
+  const raw = String(d).trim();
+  // Check for standard YYYY-MM-DD pattern
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const day = parseInt(match[3], 10);
+    const dateObj = new Date(year, month, day);
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toLocaleDateString();
+    }
+  }
+  const dateObj = new Date(raw);
+  if (!isNaN(dateObj.getTime())) {
+    return dateObj.toLocaleDateString();
+  }
+  return raw.substring(0, 10);
+}
+
+/**
+ * Formats age and sex into combined '19/f' style.
+ * @param {*} age 
+ * @param {*} sex 
+ * @returns {string}
+ */
+export function formatAgeSex(age, sex) {
+  const a = age != null && String(age).trim() !== '' ? String(age).trim() : '';
+  const s = sex != null && String(sex).trim() !== '' ? String(sex).trim().toLowerCase() : '';
+  if (a && s) return `${a}/${s}`;
+  if (a) return a;
+  if (s) return s;
+  return '—';
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

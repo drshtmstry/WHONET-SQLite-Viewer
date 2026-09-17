@@ -210,8 +210,8 @@ export function exportAmrCsv() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Monthly_AMR_Surveillance_Report_${state.currentDb || 'WHONET'}.csv`;
+  a.download = `SAPCAR_G_Monthly_AMR_Report_${state.currentDb || 'WHONET'}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  toast('Exported all months AMR CSV', 'success');
+  toast('Exported SAPCAR-G monthly AMR CSV', 'success');
 }

@@ -2,7 +2,7 @@ import { state } from '../state/store.js';
 import { api } from '../api/client.js';
 import { toast } from '../ui/toast.js';
 import { renderSortHeader, renderPagination } from '../ui/table.js';
-import { fmtDate, debounce } from '../utils/formatters.js';
+import { fmtDate, formatAgeSex, debounce } from '../utils/formatters.js';
 import { renderOrgBadge } from '../utils/organisms.js';
 
 export function sortIsolates(column) {
@@ -15,7 +15,38 @@ export function sortIsolates(column) {
   loadIsolates(1);
 }
 
+export function syncIsolateColCheckboxes() {
+  const vis = state.visibleIsolateCols || { esbl: false, carba: false, mrsa: false };
+  ['esbl', 'carba', 'mrsa'].forEach(key => {
+    const chk = document.getElementById(`col-toggle-${key}`);
+    if (chk) chk.checked = !!vis[key];
+  });
+}
+
+export function toggleIsolateCol(colKey) {
+  if (!state.visibleIsolateCols) {
+    state.visibleIsolateCols = { esbl: false, carba: false, mrsa: false };
+  }
+  state.visibleIsolateCols[colKey] = !state.visibleIsolateCols[colKey];
+  try {
+    localStorage.setItem('whonet-isolate-cols', JSON.stringify(state.visibleIsolateCols));
+  } catch (_) {}
+
+  // Update checkbox state in DOM if present
+  const chk = document.getElementById(`col-toggle-${colKey}`);
+  if (chk) chk.checked = state.visibleIsolateCols[colKey];
+
+  // Re-render table with current cached rows if table is populated
+  const isoBody = document.getElementById('isolates-table-body');
+  if (isoBody && state._lastIsolateRows) {
+    isoBody.innerHTML = renderIsolatesTable(state._lastIsolateRows);
+  } else {
+    loadIsolates(state.isolatesPage || 1);
+  }
+}
+
 export async function loadIsolates(page = 1) {
+  syncIsolateColCheckboxes();
   const isoBody = document.getElementById('isolates-table-body');
   const countEl = document.getElementById('isolates-count');
   if (!state.currentDb) {
@@ -39,6 +70,7 @@ export async function loadIsolates(page = 1) {
   if (datasetVersion !== state.datasetVersion || databaseName !== state.currentDb) return;
   if (data.error) return toast(data.error, 'error');
 
+  state._lastIsolateRows = data.rows || [];
   if (countEl) countEl.textContent = `${data.totalCount.toLocaleString()} records`;
 
   if (isoBody) {
@@ -55,42 +87,60 @@ export function renderIsolatesTable(rows) {
   }
   const sCol = state.isolatesSortCol;
   const sDir = state.isolatesSortDir;
+  const showEsbl = !!state.visibleIsolateCols?.esbl;
+  const showCarba = !!state.visibleIsolateCols?.carba;
+  const showMrsa = !!state.visibleIsolateCols?.mrsa;
+
   return `<table>
     <thead><tr>
       ${renderSortHeader('Row', 'ROW_IDX', sCol, sDir, 'sortIsolates')}
       ${renderSortHeader('Specimen #', 'SPEC_NUM', sCol, sDir, 'sortIsolates')}
+      <th class="col-name">Patient Name</th>
+      <th class="col-agesex">Age/Sex</th>
       ${renderSortHeader('Date', 'SPEC_DATE', sCol, sDir, 'sortIsolates')}
       ${renderSortHeader('Type', 'SPEC_TYPE', sCol, sDir, 'sortIsolates')}
       ${renderSortHeader('Organism', 'ORGANISM', sCol, sDir, 'sortIsolates')}
-      ${renderSortHeader('Sex', 'SEX', sCol, sDir, 'sortIsolates')}
-      ${renderSortHeader('Age', 'AGE', sCol, sDir, 'sortIsolates')}
       ${renderSortHeader('Ward', 'WARD', sCol, sDir, 'sortIsolates')}
-      ${renderSortHeader('ESBL', 'ESBL', sCol, sDir, 'sortIsolates')}
-      ${renderSortHeader('Carbapenem', 'CARBAPENEM', sCol, sDir, 'sortIsolates')}
-      ${renderSortHeader('MRSA', 'MRSA', sCol, sDir, 'sortIsolates')}
+      ${showEsbl ? renderSortHeader('ESBL', 'ESBL', sCol, sDir, 'sortIsolates') : ''}
+      ${showCarba ? renderSortHeader('Carbapenem', 'CARBAPENEM', sCol, sDir, 'sortIsolates') : ''}
+      ${showMrsa ? renderSortHeader('MRSA', 'MRSA', sCol, sDir, 'sortIsolates') : ''}
       <th>Actions</th>
     </tr></thead>
     <tbody>
-    ${rows.map(r => `<tr>
+    ${rows.map(r => {
+      const fullName = (r.FULL_NAME || '').trim() || '—';
+      const safeFullName = fullName.replace(/"/g, '&quot;');
+      const ageSex = formatAgeSex(r.AGE, r.SEX);
+      return `<tr>
       <td class="mono">${r.ROW_IDX}</td>
       <td class="mono">${r.SPEC_NUM || '—'}</td>
+      <td class="pt-name col-name" title="${safeFullName}"><span class="cell-truncate">${fullName}</span></td>
+      <td class="col-agesex">${ageSex}</td>
       <td>${fmtDate(r.SPEC_DATE)}</td>
       <td>${r.SPEC_TYPE || '—'}</td>
       <td>${renderOrgBadge(r.ORGANISM)}</td>
-      <td>${r.SEX || '—'}</td>
-      <td>${r.AGE || '—'}</td>
       <td>${r.WARD || '—'}</td>
-      <td>${r.ESBL ? `<span class="badge badge-${r.ESBL === '+' ? 'r' : 's'}">${r.ESBL}</span>` : '—'}</td>
-      <td>${r.CARBAPENEM ? `<span class="badge badge-${r.CARBAPENEM === '+' ? 'r' : 's'}">${r.CARBAPENEM}</span>` : '—'}</td>
-      <td>${r.MRSA ? `<span class="badge badge-${r.MRSA === '+' ? 'r' : 's'}">${r.MRSA}</span>` : '—'}</td>
-      <td>
-        <button class="btn btn-ghost btn-xs" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate">Edit</button>
-        <button class="btn btn-ghost btn-xs" onclick="viewDetail(${r.ROW_IDX})">View</button>
-        <button class="btn btn-danger btn-xs" onclick="confirmDeleteRow(${r.ROW_IDX}, '${(r.SPEC_NUM || '').replace(/'/g, "\\'")}')">Del</button>
+      ${showEsbl ? `<td>${r.ESBL ? `<span class="badge badge-${r.ESBL === '+' ? 'r' : 's'}">${r.ESBL}</span>` : '—'}</td>` : ''}
+      ${showCarba ? `<td>${r.CARBAPENEM ? `<span class="badge badge-${r.CARBAPENEM === '+' ? 'r' : 's'}">${r.CARBAPENEM}</span>` : '—'}</td>` : ''}
+      ${showMrsa ? `<td>${r.MRSA ? `<span class="badge badge-${r.MRSA === '+' ? 'r' : 's'}">${r.MRSA}</span>` : '—'}</td>` : ''}
+      <td class="col-actions">
+        <div class="row-actions-group">
+          <button class="btn btn-ghost btn-icon-sm" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+          <button class="btn btn-ghost btn-icon-sm" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
+            <i class="fa-solid fa-eye"></i>
+          </button>
+          <button class="btn btn-danger btn-icon-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, '${(r.SPEC_NUM || '').replace(/'/g, "\\'")}')" title="Delete this isolate" aria-label="Delete isolate">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
       </td>
-    </tr>`).join('')}
+    </tr>`;
+    }).join('')}
     </tbody>
   </table>`;
 }
 
 export const debouncedLoadIsolates = debounce(() => loadIsolates(1), 350);
+

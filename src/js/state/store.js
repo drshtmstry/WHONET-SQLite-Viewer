@@ -16,6 +16,19 @@ export const state = {
   isolatesPage: 1,
   isolatesSortCol: 'ROW_IDX',
   isolatesSortDir: 'desc',
+  visibleIsolateCols: (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('whonet-isolate-cols') || 'null');
+      if (saved && typeof saved === 'object') {
+        return {
+          esbl: !!saved.esbl,
+          carba: !!saved.carba,
+          mrsa: !!saved.mrsa
+        };
+      }
+    } catch (_) {}
+    return { esbl: false, carba: false, mrsa: false };
+  })(),
   dupsPage: 1,
   dupSortCol: null,
   dupSortDir: 'asc',
@@ -68,13 +81,14 @@ export function updateCurrentFileDisplay(filename) {
   if (dbLabel) {
     if (filename) {
       dbLabel.innerHTML = `
-        <div class="current-file-badge">
-          <span class="current-file-name" title="${escapeHtml(filename)}"><i class="fa-solid fa-database"></i> ${escapeHtml(filename)}</span>
+        <div class="current-file-pill">
+          <i class="fa-solid fa-database current-file-icon"></i>
+          <span class="current-file-name" title="${escapeHtml(filename)}">${escapeHtml(filename)}</span>
           <span class="current-file-status">Active</span>
         </div>
       `;
     } else {
-      dbLabel.textContent = 'No database loaded';
+      dbLabel.innerHTML = '';
     }
   }
 

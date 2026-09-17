@@ -285,15 +285,16 @@ select:focus:not(:focus-visible) {
 }
 
 .header-logo img {
-  height: 42px;
+  height: 56px;
   width: auto;
+  max-height: 58px;
   object-fit: contain;
   display: block;
   transition: transform var(--transition-bounce);
 }
 
 .header-logo:hover img {
-  transform: scale(1.06);
+  transform: scale(1.05);
 }
 
 .header-title-group {
@@ -302,7 +303,7 @@ select:focus:not(:focus-visible) {
 }
 
 .header-title {
-  font-size: 17px;
+  font-size: 17.5px;
   font-weight: 800;
   letter-spacing: -0.4px;
   background: var(--accent-gradient);
@@ -312,6 +313,7 @@ select:focus:not(:focus-visible) {
   display: flex;
   align-items: center;
   gap: 8px;
+  line-height: 1.15;
 }
 
 .header-sub {
@@ -319,6 +321,8 @@ select:focus:not(:focus-visible) {
   color: var(--text3);
   font-weight: 500;
   letter-spacing: -0.1px;
+  margin-top: 3px;
+  white-space: nowrap;
 }
 
 .db-selector {
@@ -605,13 +609,14 @@ select:focus:not(:focus-visible) {
 .dev-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: var(--bg3);
   border: 1px solid var(--border);
   padding: 4px 14px 4px 5px;
   border-radius: 9999px;
   color: var(--text2);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   text-decoration: none !important;
   transition: all var(--transition-smooth);
@@ -627,20 +632,24 @@ select:focus:not(:focus-visible) {
 }
 
 .dev-pill-icon {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   object-fit: cover;
   background: #ffffff;
   border: 1px solid var(--border);
   flex-shrink: 0;
+  display: block;
 }
 
 .dev-pill-name {
+  font-size: 13px;
   font-weight: 700;
   color: var(--text);
-  line-height: 1;
+  line-height: 1.2;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* ==========================================================================

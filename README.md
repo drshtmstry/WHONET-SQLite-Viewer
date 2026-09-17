@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.png" alt="WHONET SQLite Viewer Logo" width="128" />
+</p>
+
 # WHONET SQLite Viewer
 
 <p>High-performance, open-source utility for inspecting, deduplicating, sorting, and analyzing WHONET SQLite databases.</p>
@@ -12,7 +16,8 @@
 
 - **Deduplication** — Identify and resolve duplicate isolates clustered by `SPEC_NUM` (Specimen #) or `PATIENT_ID` with batch selection and deletion.
 - **Natural Column Sorting** — Interactive click-to-sort headers with intelligent alphanumeric ordering for specimen numbers (e.g. `CSR-1`, `CSR-2`, `CSR-10`, `CSR-151`, `-1/-2`, `-A/-B` suffixes) across Isolates, Duplicates, and SQL Workspace.
-- **Monthly AMR Surveillance Report** — Standard National AMR Containment C&S reporting matrix (OPD/IPD/ICU × specimen type) with instant TSV clipboard copy and CSV export.
+- **Customizable Clinical Tables** — Patient Full Name display, combined `Age/Sex` formatting (`19/f`), locale-aware dates, compact action icons, and user-configurable resistance phenotype columns (ESBL, Carbapenem, MRSA) with browser persistence.
+- **Monthly AMR Surveillance Report (SAPCAR-G)** — Standard Gujarat State Action Plan for Containment of Antimicrobial Resistance (SAPCAR-G) Culture & Sensitivity (C&S) reporting data (OPD / IPD / ICU × specimen types) with instant TSV clipboard copy and CSV export.
 - **Interactive Visual Analytics** — Real-time Chart.js distribution charts (Organisms, Specimen Types, Wards, Age Groups, Gender, AMR Phenotypes) with dynamic date range filtering and single/dual view toggles.
 - **In-Place Record Corrections** — Clean, inline field editing and full-record correction modals with immediate database sync.
 - **Bulk Data Cleansing** — One-click uppercase specimen normalization and whitespace sanitation.
@@ -24,14 +29,17 @@
 ## Usage
 
 ### Web / PWA App (In-Browser Engine (Client-side))
+
 Open **[whonet-tool.vercel.app](https://whonet-tool.vercel.app/)** in Chrome or Edge (or click the browser address bar icon to install as a desktop/mobile app):
+
 - **Direct Folder Access**: Connect your local data folder once (`C:\WHONET\Data`) → the browser remembers the link and saves changes straight to disk.
 - **Preloaded Sample Data**: Test immediately with bundled sample databases (`WHO-TST-2020-01.sqlite`, etc.).
 - **100% Private On-Device Processing**: The database engine runs directly inside your browser; zero patient data is uploaded to any cloud server.
 
 ### Local SQLite Server (Node.js) Mode
+
 1. Install [Node.js LTS](https://nodejs.org/) (v22+ recommended)
-2. Run `Start-WHONET.bat` or use the command line:
+2. Run `start.bat` or use the command line:
    ```bash
    npm start              # run local Node server on http://localhost:7890 (with auto-restart)
    ```
@@ -39,7 +47,9 @@ Open **[whonet-tool.vercel.app](https://whonet-tool.vercel.app/)** in Chrome or 
 4. Reads `.sqlite` files directly from `C:\WHONET\Data`. Mutations save straight to disk with on-demand connection locking.
 
 ### Web / PWA Mode (Vercel)
+
 For client-side Vite testing and building:
+
 ```bash
 npm run web:dev        # launch in-browser WASM dev server
 npm run web:build      # compile production bundle for Vercel (/dist)
@@ -74,7 +84,7 @@ The codebase is organized into a dual-runtime architecture supporting both local
 │       ├── utils/          # Natural sort, formatters, and organism badges
 │       └── pages/          # Dashboard, Isolates, Duplicates, AMR, SQL, Fixes
 ├── server.js               # Local Node.js server (native node:sqlite & auto-sync)
-├── Start-WHONET.bat        # Windows 1-click launcher for lab machines
+├── start.bat               # Windows 1-click launcher for lab machines
 ├── vite.config.js          # Vite configuration for production builds
 ├── vercel.json             # Vercel deployment routing & static build config
 └── package.json            # Project dependencies & operational scripts

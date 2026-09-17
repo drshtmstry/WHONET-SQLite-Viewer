@@ -10,20 +10,10 @@
   "theme_color": "#4f46e5",
   "icons": [
     {
-      "src": "/favicon.png",
-      "sizes": "64x64",
-      "type": "image/png"
-    },
-    {
-      "src": "/apple-touch-icon.png",
-      "sizes": "192x192",
+      "src": "/logo.png",
+      "sizes": "192x192 512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/whonet-logo.png",
-      "sizes": "512x512",
-      "type": "image/png"
     }
   ],
   "categories": ["medical", "productivity", "utilities"]

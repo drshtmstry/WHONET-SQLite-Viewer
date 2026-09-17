@@ -2,7 +2,7 @@ import { state } from "../state/store.js";
 import { api } from "../api/client.js";
 import { toast } from "../ui/toast.js";
 import { renderSortHeader, renderPagination } from "../ui/table.js";
-import { fmtDate, debounce } from "../utils/formatters.js";
+import { fmtDate, formatAgeSex, debounce } from "../utils/formatters.js";
 import { renderOrgBadge } from "../utils/organisms.js";
 
 export function setDupMode(mode) {
@@ -148,12 +148,11 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
           ${renderSortHeader("Row", "ROW_IDX", sCol, sDir, "sortDuplicates", 'class="col-row"')}
           ${renderSortHeader(matchedLabel, "MATCHED", sCol, sDir, "sortDuplicates", 'class="col-matched"')}
           ${renderSortHeader(otherLabel, "OTHER", sCol, sDir, "sortDuplicates", 'class="col-other"')}
-          ${renderSortHeader("Patient Name", "FULL_NAME", sCol, sDir, "sortDuplicates", 'class="col-name"')}
+          <th class="col-name">Patient Name</th>
+          <th class="col-agesex">Age/Sex</th>
           ${renderSortHeader("Date", "SPEC_DATE", sCol, sDir, "sortDuplicates", 'class="col-date"')}
           ${renderSortHeader("Type", "SPEC_TYPE", sCol, sDir, "sortDuplicates", 'class="col-type"')}
           ${renderSortHeader("Organism", "ORGANISM", sCol, sDir, "sortDuplicates", 'class="col-org"')}
-          ${renderSortHeader("Sex", "SEX", sCol, sDir, "sortDuplicates", 'class="col-sex"')}
-          ${renderSortHeader("Age", "AGE", sCol, sDir, "sortDuplicates", 'class="col-age"')}
           ${renderSortHeader("Ward", "WARD", sCol, sDir, "sortDuplicates", 'class="col-ward"')}
           <th class="col-actions">Actions</th>
         </tr>
@@ -181,6 +180,7 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
             const fullName = r.FULL_NAME || "—";
             const specType = r.SPEC_TYPE || "—";
             const ward = r.WARD || "—";
+            const ageSex = formatAgeSex(r.AGE, r.SEX);
 
             return `
             <tr class="dup-row ${clusterClass} ${startClass}">
@@ -191,17 +191,22 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
               <td class="mono col-matched" style="font-size:11.5px;font-weight:700;color:var(--accent)" title="${matchedVal}"><span class="cell-truncate">${matchedVal}</span></td>
               <td class="mono col-other" style="font-size:11.5px;color:var(--text2)" title="${otherVal}"><span class="cell-truncate">${otherVal}</span></td>
               <td class="pt-name col-name" title="${fullName}"><span class="cell-truncate">${fullName}</span></td>
+              <td class="col-agesex">${ageSex}</td>
               <td class="col-date" style="white-space:nowrap;font-size:11.5px">${fmtDate(r.SPEC_DATE)}</td>
               <td class="col-type" title="${specType}"><span class="cell-truncate">${specType}</span></td>
               <td class="col-org">${renderOrgBadge(r.ORGANISM)}</td>
-              <td class="col-sex" style="text-align:center;">${r.SEX || "—"}</td>
-              <td class="col-age" style="text-align:center;">${r.AGE || "—"}</td>
               <td class="col-ward" title="${ward}"><span class="cell-truncate">${ward}</span></td>
               <td class="col-actions" style="text-align: right; white-space: nowrap;">
-                <div class="dup-actions-group">
-                  <button class="btn btn-ghost btn-xs" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate">Edit</button>
-                  <button class="btn btn-ghost btn-xs" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details">View</button>
-                  <button class="btn btn-danger btn-xs" onclick="confirmDeleteRow(${r.ROW_IDX}, '${safeSpecNum}')" title="Delete this isolate">Del</button>
+                <div class="dup-actions-group row-actions-group">
+                  <button class="btn btn-ghost btn-icon-sm" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                  <button class="btn btn-ghost btn-icon-sm" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                  <button class="btn btn-danger btn-icon-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, '${safeSpecNum}')" title="Delete this isolate" aria-label="Delete isolate">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
                 </div>
               </td>
             </tr>`;

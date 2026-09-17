@@ -41,7 +41,7 @@ import {
   handleFileUpload, handleFileDrop
 } from './pages/dashboard.js';
 import {
-  sortIsolates, loadIsolates, renderIsolatesTable, debouncedLoadIsolates
+  sortIsolates, loadIsolates, renderIsolatesTable, debouncedLoadIsolates, toggleIsolateCol
 } from './pages/isolates.js';
 import {
   setDupMode, sortDuplicates, groupRows, loadDuplicates,
@@ -280,6 +280,16 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Close column visibility dropdown when clicking outside
+document.addEventListener('click', e => {
+  const dropdown = document.getElementById('isolate-col-dropdown');
+  if (dropdown && dropdown.classList.contains('open')) {
+    if (!dropdown.contains(e.target)) {
+      dropdown.classList.remove('open');
+    }
+  }
+});
+
 // Drag & Drop
 window.addEventListener('dragover', e => {
   e.preventDefault();
@@ -329,6 +339,7 @@ Object.assign(window, {
   sortIsolates,
   loadIsolates,
   debouncedLoadIsolates,
+  toggleIsolateCol,
   setDupMode,
   sortDuplicates,
   loadDuplicates,
