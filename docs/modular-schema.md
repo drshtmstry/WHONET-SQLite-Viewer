@@ -9,7 +9,7 @@ Comprehensive architectural guide and modular schema reference for developers ma
 WHONET SQLite Viewer utilizes a **hybrid execution model** designed to function in two operational modes with zero code duplication:
 
 1. **Local SQLite Server (Node.js)**: Runs locally with `npm start` (`node --watch server.js`) on `http://localhost:7890`. Direct file I/O to `C:\WHONET\Data` via Node's native `DatabaseSync` (`node:sqlite`). Zero security dialogs or browser sandbox restrictions.
-2. **In-Browser Engine (Client-side)**: Runs statically on [whonet-tool.vercel.app](https://whonet-tool.vercel.app/) using `sql.js` in the browser. Supports installation as a desktop/mobile PWA with a zero-cache service worker (`public/sw.js`) for instant deployment rollouts. Uses the **File System Access API** with IndexedDB persistent handles to read and save changes directly to local `.sqlite` files on disk without cloud transmission.
+2. **In-Browser Engine (Client-side)**: Runs statically on [whonet-sqlite-viewer.vercel.app](https://whonet-sqlite-viewer.vercel.app/) using `sql.js` in the browser. Supports installation as a desktop/mobile PWA with a zero-cache service worker (`public/sw.js`) for instant deployment rollouts. Uses the **File System Access API** with IndexedDB persistent handles to read and save changes directly to local `.sqlite` files on disk without cloud transmission.
 
 ```
                   ┌────────────────────────────────────────────────────────┐

@@ -5,12 +5,13 @@
 # WHONET SQLite Viewer
 
 <p>High-performance, open-source utility for inspecting, deduplicating, sorting, and analyzing WHONET SQLite databases.</p>
-<p><a href="https://whonet-tool.vercel.app/"><strong>whonet-tool.vercel.app</strong></a></p>
+<p><a href="https://whonet-sqlite-viewer.vercel.app/"><strong>whonet-sqlite-viewer.vercel.app</strong></a></p>
 
 ---
 
 > [!IMPORTANT]
-> All data is processed **locally** — nothing is uploaded to any cloud server. Verify all generated figures before submitting to any surveillance body.
+> All data is processed **locally** — nothing is uploaded to any cloud server.
+> Verify all generated figures before submitting to any surveillance body.
 
 ## Features
 
@@ -30,7 +31,7 @@
 
 ### Web / PWA App (In-Browser Engine (Client-side))
 
-Open **[whonet-tool.vercel.app](https://whonet-tool.vercel.app/)** in Chrome or Edge (or click the browser address bar icon to install as a desktop/mobile app):
+Open **[whonet-sqlite-viewer.vercel.app](https://whonet-sqlite-viewer.vercel.app/)** in Chrome or Edge (or click the browser address bar icon to install as a desktop/mobile app):
 
 - **Direct Folder Access**: Connect your local data folder once (`C:\WHONET\Data`) → the browser remembers the link and saves changes straight to disk.
 - **Preloaded Sample Data**: Test immediately with bundled sample databases (`WHO-TST-2020-01.sqlite`, etc.).
