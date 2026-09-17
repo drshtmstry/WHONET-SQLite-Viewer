@@ -1,0 +1,30 @@
+{
+  "name": "whonet-sqlite-viewer",
+  "version": "1.0.0",
+  "description": "WHONET Laboratory Database Management, Deduplication & AMR Surveillance Tool",
+  "type": "module",
+  "scripts": {
+    "start": "node --watch server.js",
+    "web:dev": "vite",
+    "web:build": "vite build",
+    "web:preview": "vite preview",
+    "build": "vite build"
+  },
+  "keywords": [
+    "whonet",
+    "amr",
+    "microbiology",
+    "surveillance",
+    "sqlite",
+    "deduplication",
+    "data-quality"
+  ],
+  "author": "Dr. Darshit Mistry",
+  "license": "MIT",
+  "dependencies": {
+    "sql.js": "^1.14.2"
+  },
+  "devDependencies": {
+    "vite": "^7.3.6"
+  }
+}
