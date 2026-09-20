@@ -114,11 +114,13 @@ export function toggleMobileSidebar(force) {
   const sidebar = document.getElementById('app-sidebar');
   const toggle = document.querySelector('.mobile-nav-toggle');
   const backdrop = document.querySelector('.mobile-sidebar-backdrop');
+  const closeBtn = document.querySelector('.mobile-sidebar-close');
   if (!sidebar || !toggle || !backdrop) return;
 
   const isOpen = typeof force === 'boolean' ? force : !sidebar.classList.contains('open');
   sidebar.classList.toggle('open', isOpen);
   backdrop.classList.toggle('open', isOpen);
+  if (closeBtn) closeBtn.classList.toggle('open', isOpen);
   toggle.setAttribute('aria-expanded', String(isOpen));
   toggle.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
   toggle.setAttribute('title', isOpen ? 'Close navigation' : 'Open navigation');
