@@ -6,6 +6,16 @@
 import { state } from '../state/store.js';
 import { wasmSelect, wasmRun, normaliseSchema } from '../db/wasm.js';
 
+// Single source of truth for editable fields (mirrors server.js EDITABLE_FIELDS)
+const EDITABLE_FIELDS = [
+  'SPEC_NUM', 'PATIENT_ID', 'SPEC_DATE', 'SPEC_TYPE', 'ORGANISM',
+  'FULL_NAME', 'SEX', 'AGE', 'WARD', 'DEPARTMENT', 'INSTITUT',
+  'DATE_ADMIS', 'DATE_DATA', 'COMMENT', 'ESBL', 'CARBAPENEM',
+  'MRSA', 'URINECOUNT', 'SEROTYPE', 'BETA_LACT', 'INDUC_CLI'
+];
+
+const WASM_CUSTOM_SQL_ROW_LIMIT = 10000;
+
 export function handleWasmApi(path, options = {}) {
   try {
     normaliseSchema();
@@ -89,9 +99,9 @@ export function handleWasmApi(path, options = {}) {
       let whereClauses = [];
       let params = [];
       if (search) {
-        whereClauses.push("(SPEC_NUM LIKE ? OR PATIENT_ID LIKE ? OR FULL_NAME LIKE ? OR ORGANISM LIKE ?)");
-        const s = `%${search}%`;
-        params.push(s, s, s, s);
+        whereClauses.push("(UPPER(SPEC_NUM) LIKE ? OR UPPER(PATIENT_ID) LIKE ? OR UPPER(FULL_NAME) LIKE ?)");
+        const s = `%${search.toUpperCase()}%`;
+        params.push(s, s, s);
       }
       if (organism) {
         whereClauses.push("ORGANISM = ?");
@@ -318,12 +328,6 @@ export function handleWasmApi(path, options = {}) {
 
     if (pathname === '/api/update-field') {
       const { row_idx, field, value } = body;
-      const EDITABLE_FIELDS = [
-        'SPEC_NUM', 'PATIENT_ID', 'SPEC_DATE', 'SPEC_TYPE', 'ORGANISM',
-        'FULL_NAME', 'SEX', 'AGE', 'WARD', 'DEPARTMENT', 'INSTITUT',
-        'DATE_ADMIS', 'DATE_DATA', 'COMMENT', 'ESBL', 'CARBAPENEM',
-        'MRSA', 'URINECOUNT', 'SEROTYPE', 'BETA_LACT', 'INDUC_CLI'
-      ];
       if (!EDITABLE_FIELDS.includes(field)) return { error: 'Field not editable' };
       const res = wasmRun(`UPDATE Isolates SET ${field} = ? WHERE ROW_IDX = ?`, [value, row_idx]);
       return { ok: true, changes: res.changes };
@@ -332,12 +336,6 @@ export function handleWasmApi(path, options = {}) {
     if (pathname === '/api/update-row') {
       const { row_idx, fields } = body;
       if (!row_idx || !fields) return { error: 'Missing row_idx or fields' };
-      const EDITABLE_FIELDS = [
-        'SPEC_NUM', 'PATIENT_ID', 'SPEC_DATE', 'SPEC_TYPE', 'ORGANISM',
-        'FULL_NAME', 'SEX', 'AGE', 'WARD', 'DEPARTMENT', 'INSTITUT',
-        'DATE_ADMIS', 'DATE_DATA', 'COMMENT', 'ESBL', 'CARBAPENEM',
-        'MRSA', 'URINECOUNT', 'SEROTYPE', 'BETA_LACT', 'INDUC_CLI'
-      ];
       const updates = [];
       const params = [];
       for (const [key, val] of Object.entries(fields)) {
@@ -358,8 +356,10 @@ export function handleWasmApi(path, options = {}) {
       const trimmed = sql.trim().toUpperCase();
       if (trimmed.startsWith('SELECT') || trimmed.startsWith('WITH')) {
         const rows = wasmSelect(sql);
-        const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-        return { type: 'select', rows, columns, count: rows.length };
+        const truncated = rows.length >= WASM_CUSTOM_SQL_ROW_LIMIT;
+        const limited = truncated ? rows.slice(0, WASM_CUSTOM_SQL_ROW_LIMIT) : rows;
+        const columns = limited.length > 0 ? Object.keys(limited[0]) : [];
+        return { type: 'select', rows: limited, columns, count: limited.length, truncated };
       } else {
         const res = wasmRun(sql);
         return { type: 'update', changes: res.changes };

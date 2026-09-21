@@ -449,6 +449,7 @@ export async function loadSampleDatabase(sampleFilename) {
     state.isWasmMode = true;
     state.wasmDb = db;
     state.currentDb = sampleFilename;
+    state._schemaNormalised = false; // Reset so normaliseSchema runs on the new DB
     markDatabaseActivated();
     if (!state.databases.includes(sampleFilename)) {
       state.databases.push(sampleFilename);
@@ -473,8 +474,8 @@ export async function loadSampleDatabase(sampleFilename) {
 
 export async function handleFileUpload(file, fileHandle = null) {
   if (!file) return;
-  if (!file.name.toLowerCase().endsWith('.sqlite')) {
-    return toast('Please drop/upload a valid .sqlite file', 'error');
+  if (!file.name.toLowerCase().endsWith('.sqlite') && !file.name.toLowerCase().endsWith('.sqlite3')) {
+    return toast('Please drop/upload a valid .sqlite or .sqlite3 file', 'error');
   }
 
   toast(`Reading ${file.name}…`, 'info');
@@ -511,6 +512,7 @@ export async function handleFileUpload(file, fileHandle = null) {
     state.isWasmMode = true;
     state.wasmDb = db;
     state.currentDb = file.name;
+    state._schemaNormalised = false; // Reset so normaliseSchema runs on the new DB
     markDatabaseActivated();
     state.activeFileHandle = fileHandle;
     state.fileHandles[file.name] = fileHandle || file;

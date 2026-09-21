@@ -42,7 +42,9 @@ export const state = {
   dirHandle: null,
   fileHandles: {}, // filename -> FileSystemFileHandle or File
   activeFileHandle: null,
-  isModified: false
+  isModified: false,
+  /** Set to true after normaliseSchema() runs so it only executes once per DB load */
+  _schemaNormalised: false
 };
 
 // Simple event bus for state changes

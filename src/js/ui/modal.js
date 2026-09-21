@@ -90,10 +90,22 @@ export function closeModal() {
 export function startEdit(rowIdx, field) {
   const el = document.getElementById(`fv-${rowIdx}-${field}`);
   if (!el) return;
+  // Read current display text — use '' if the placeholder dash is shown
   const current = el.textContent.trim() === '—' ? '' : el.textContent.trim();
-  el.innerHTML = `<input class="field-input" id="fi-${rowIdx}-${field}" value="${current.replace(/"/g, '&quot;')}" onblur="saveEdit(${rowIdx},'${field}')" onkeydown="if(event.key==='Enter')saveEdit(${rowIdx},'${field}');if(event.key==='Escape')cancelEdit(${rowIdx},'${field}','${current}')">`;
-  const fi = document.getElementById(`fi-${rowIdx}-${field}`);
-  if (fi) fi.focus();
+
+  const input = document.createElement('input');
+  input.className = 'field-input';
+  input.id = `fi-${rowIdx}-${field}`;
+  input.value = current;
+  // Use event listeners instead of inline handlers to avoid XSS from raw DB values
+  input.addEventListener('blur', () => saveEdit(rowIdx, field));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); saveEdit(rowIdx, field); }
+    if (e.key === 'Escape') cancelEdit(rowIdx, field, current);
+  });
+
+  el.replaceChildren(input);
+  input.focus();
 }
 
 export async function saveEdit(rowIdx, field) {
@@ -118,7 +130,12 @@ export async function saveEdit(rowIdx, field) {
 
 export function cancelEdit(rowIdx, field, original) {
   const el = document.getElementById(`fv-${rowIdx}-${field}`);
-  if (el) el.innerHTML = original || '<span style="color:var(--text3)">—</span>';
+  if (!el) return;
+  if (original) {
+    el.textContent = original;
+  } else {
+    el.innerHTML = '<span style="color:var(--text3)">—</span>';
+  }
 }
 
 // ── Edit Modal for Corrections ──

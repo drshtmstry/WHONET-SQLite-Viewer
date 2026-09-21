@@ -2,7 +2,7 @@ import { state } from '../state/store.js';
 import { api } from '../api/client.js';
 import { toast } from '../ui/toast.js';
 import { renderSortHeader, renderPagination } from '../ui/table.js';
-import { fmtDate, formatAgeSex, debounce } from '../utils/formatters.js';
+import { fmtDate, formatAgeSex, debounce, escapeHtml } from '../utils/formatters.js';
 import { renderOrgBadge } from '../utils/organisms.js';
 
 export function sortIsolates(column) {
@@ -109,17 +109,18 @@ export function renderIsolatesTable(rows) {
     <tbody>
     ${rows.map(r => {
       const fullName = (r.FULL_NAME || '').trim() || '—';
-      const safeFullName = fullName.replace(/"/g, '&quot;');
+      const safeFullName = escapeHtml(fullName);
+      const safeSpecNum = JSON.stringify(r.SPEC_NUM || '');
       const ageSex = formatAgeSex(r.AGE, r.SEX);
       return `<tr>
       <td class="mono">${r.ROW_IDX}</td>
-      <td class="mono">${r.SPEC_NUM || '—'}</td>
-      <td class="pt-name col-name" title="${safeFullName}"><span class="cell-truncate">${fullName}</span></td>
+      <td class="mono">${escapeHtml(r.SPEC_NUM || '—')}</td>
+      <td class="pt-name col-name" title="${safeFullName}"><span class="cell-truncate">${safeFullName}</span></td>
       <td class="col-agesex">${ageSex}</td>
       <td>${fmtDate(r.SPEC_DATE)}</td>
-      <td>${r.SPEC_TYPE || '—'}</td>
+      <td>${escapeHtml(r.SPEC_TYPE || '—')}</td>
       <td>${renderOrgBadge(r.ORGANISM)}</td>
-      <td>${r.WARD || '—'}</td>
+      <td>${escapeHtml(r.WARD || '—')}</td>
       ${showEsbl ? `<td>${r.ESBL ? `<span class="badge badge-${r.ESBL === '+' ? 'r' : 's'}">${r.ESBL}</span>` : '—'}</td>` : ''}
       ${showCarba ? `<td>${r.CARBAPENEM ? `<span class="badge badge-${r.CARBAPENEM === '+' ? 'r' : 's'}">${r.CARBAPENEM}</span>` : '—'}</td>` : ''}
       ${showMrsa ? `<td>${r.MRSA ? `<span class="badge badge-${r.MRSA === '+' ? 'r' : 's'}">${r.MRSA}</span>` : '—'}</td>` : ''}
@@ -131,7 +132,7 @@ export function renderIsolatesTable(rows) {
           <button class="btn btn-ghost btn-icon-sm" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
             <i class="fa-solid fa-eye"></i>
           </button>
-          <button class="btn btn-danger btn-icon-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, '${(r.SPEC_NUM || '').replace(/'/g, "\\'")}')" title="Delete this isolate" aria-label="Delete isolate">
+          <button class="btn btn-danger btn-icon-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, ${safeSpecNum})" title="Delete this isolate" aria-label="Delete isolate">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </div>

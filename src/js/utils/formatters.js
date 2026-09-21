@@ -95,7 +95,9 @@ export function debounce(fn, ms) {
  * @returns {boolean}
  */
 export function isSqliteDatabase(filename) {
-  return typeof filename === 'string' && filename.toLowerCase().endsWith('.sqlite');
+  if (typeof filename !== 'string') return false;
+  const lower = filename.toLowerCase();
+  return lower.endsWith('.sqlite') || lower.endsWith('.sqlite3');
 }
 
 /**

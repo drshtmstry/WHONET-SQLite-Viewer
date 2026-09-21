@@ -2,7 +2,7 @@ import { state } from "../state/store.js";
 import { api } from "../api/client.js";
 import { toast } from "../ui/toast.js";
 import { renderSortHeader, renderPagination } from "../ui/table.js";
-import { fmtDate, formatAgeSex, debounce } from "../utils/formatters.js";
+import { fmtDate, formatAgeSex, debounce, escapeHtml } from "../utils/formatters.js";
 import { renderOrgBadge } from "../utils/organisms.js";
 
 export function setDupMode(mode) {
@@ -176,11 +176,17 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
               mode === "patient" ? r.PATIENT_ID || "—" : r.SPEC_NUM || "—";
             const otherVal =
               mode === "patient" ? r.SPEC_NUM || "—" : r.PATIENT_ID || "—";
-            const safeSpecNum = (r.SPEC_NUM || "").replace(/'/g, "\\'");
-            const fullName = r.FULL_NAME || "—";
-            const specType = r.SPEC_TYPE || "—";
-            const ward = r.WARD || "—";
+            const safeSpecNum = JSON.stringify(r.SPEC_NUM || '');
+            const fullName = r.FULL_NAME || '—';
+            const specType = r.SPEC_TYPE || '—';
+            const ward = r.WARD || '—';
             const ageSex = formatAgeSex(r.AGE, r.SEX);
+
+            const safeMatchedVal = escapeHtml(matchedVal);
+            const safeOtherVal = escapeHtml(otherVal);
+            const safeFullName = escapeHtml(fullName);
+            const safeSpecType = escapeHtml(specType);
+            const safeWard = escapeHtml(ward);
 
             return `
             <tr class="dup-row ${clusterClass} ${startClass}">
@@ -188,14 +194,14 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
                 <input type="checkbox" class="dup-row-check" value="${r.ROW_IDX}" onchange="updateDupSelectedState()" />
               </td>
               <td class="mono col-row" style="color:var(--text3);font-size:11px">#${r.ROW_IDX}</td>
-              <td class="mono col-matched" style="font-size:11.5px;font-weight:700;color:var(--accent)" title="${matchedVal}"><span class="cell-truncate">${matchedVal}</span></td>
-              <td class="mono col-other" style="font-size:11.5px;color:var(--text2)" title="${otherVal}"><span class="cell-truncate">${otherVal}</span></td>
-              <td class="pt-name col-name" title="${fullName}"><span class="cell-truncate">${fullName}</span></td>
+              <td class="mono col-matched" style="font-size:11.5px;font-weight:700;color:var(--accent)" title="${safeMatchedVal}"><span class="cell-truncate">${safeMatchedVal}</span></td>
+              <td class="mono col-other" style="font-size:11.5px;color:var(--text2)" title="${safeOtherVal}"><span class="cell-truncate">${safeOtherVal}</span></td>
+              <td class="pt-name col-name" title="${safeFullName}"><span class="cell-truncate">${safeFullName}</span></td>
               <td class="col-agesex">${ageSex}</td>
               <td class="col-date" style="white-space:nowrap;font-size:11.5px">${fmtDate(r.SPEC_DATE)}</td>
-              <td class="col-type" title="${specType}"><span class="cell-truncate">${specType}</span></td>
+              <td class="col-type" title="${safeSpecType}"><span class="cell-truncate">${safeSpecType}</span></td>
               <td class="col-org">${renderOrgBadge(r.ORGANISM)}</td>
-              <td class="col-ward" title="${ward}"><span class="cell-truncate">${ward}</span></td>
+              <td class="col-ward" title="${safeWard}"><span class="cell-truncate">${safeWard}</span></td>
               <td class="col-actions" style="text-align: right; white-space: nowrap;">
                 <div class="dup-actions-group row-actions-group">
                   <button class="btn btn-ghost btn-icon-sm" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
@@ -204,7 +210,7 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
                   <button class="btn btn-ghost btn-icon-sm" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
                     <i class="fa-solid fa-eye"></i>
                   </button>
-                  <button class="btn btn-danger btn-icon-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, '${safeSpecNum}')" title="Delete this isolate" aria-label="Delete isolate">
+                  <button class="btn btn-danger btn-icon-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, ${safeSpecNum})" title="Delete this isolate" aria-label="Delete isolate">
                     <i class="fa-solid fa-trash-can"></i>
                   </button>
                 </div>

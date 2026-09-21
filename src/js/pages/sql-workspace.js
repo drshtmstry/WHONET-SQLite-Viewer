@@ -163,7 +163,7 @@ export function renderSqlAutocompleteList() {
   dropdown.querySelectorAll('.sql-autocomplete-item').forEach(el => {
     el.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      const idx = parseInt(el.getAttribute('data-idx'));
+      const idx = parseInt(el.getAttribute('data-idx'), 10);
       if (sqlAutocompleteState.items[idx]) {
         applySqlSuggestion(sqlAutocompleteState.items[idx]);
       }
@@ -400,8 +400,10 @@ export async function runSQL() {
   }
 
   if (data.type === 'select') {
+    const truncated = !!data.truncated;
     resultEl.className = 'sql-result success';
-    resultEl.textContent = `✓ ${data.count} row${data.count !== 1 ? 's' : ''} returned`;
+    resultEl.textContent = `✓ ${data.count} row${data.count !== 1 ? 's' : ''} returned${truncated ? ` (first 10,000 shown — add a LIMIT clause for more)` : ''}`;
+    if (truncated) resultEl.className = 'sql-result warn';
     if (data.rows.length > 0) {
       if (tableEl) {
         tableEl.style.display = 'block';

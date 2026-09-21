@@ -80,6 +80,8 @@ export function wasmRun(sql, params = []) {
 
 export function normaliseSchema() {
   if (!state.wasmDb) return;
+  // Guard: only run once per loaded database to avoid a PRAGMA query on every API call
+  if (state._schemaNormalised) return;
   try {
     const cols = wasmSelect("PRAGMA table_info(Isolates)").map(r => r.name);
     if (!cols.includes('FULL_NAME')) {
@@ -102,6 +104,7 @@ export function normaliseSchema() {
         state.wasmDb.run(`ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''`);
       }
     }
+    state._schemaNormalised = true;
   } catch (e) {
     console.warn('normaliseSchema:', e.message);
   }
