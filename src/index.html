@@ -1,831 +1,519 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WHONET SQLite Viewer</title>
 
-    <!-- Favicon: WHONET Official Icon -->
-    <link rel="icon" type="image/png" href="/logo.png" />
-    <link rel="apple-touch-icon" href="/logo.png" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#4f46e5" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WHONET SQLite Viewer</title>
 
-    <!-- Modern Clinical Fonts: Plus Jakarta Sans & JetBrains Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+  <!-- Favicon: WHONET Official Icon -->
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <link rel="apple-touch-icon" href="/logo.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-    <!-- Font Awesome Icons -->
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css"
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
-    />
+  <!-- Modern Clinical Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
 
-    <link rel="stylesheet" href="styles.css" />
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-    <!-- Instant Theme Initializer to prevent flicker -->
-    <script>
-      (function () {
-        try {
-          const saved = localStorage.getItem("whonet-theme");
-          const theme =
-            saved === "dark" ||
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Instant Theme Initializer to prevent flicker -->
+  <script>
+    (function () {
+      try {
+        const saved = localStorage.getItem("whonet-theme");
+        const theme =
+          saved === "dark" ||
             (!saved &&
               window.matchMedia("(prefers-color-scheme: dark)").matches)
-              ? "dark"
-              : "light";
-          document.documentElement.setAttribute("data-theme", theme);
-          const metaTheme = document.querySelector('meta[name="theme-color"]');
-          if (metaTheme)
-            metaTheme.setAttribute(
-              "content",
-              theme === "dark" ? "#0b0f19" : "#4f46e5",
-            );
-        } catch (e) {}
-      })();
-    </script>
+            ? "dark"
+            : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme)
+          metaTheme.setAttribute(
+            "content",
+            theme === "dark" ? "#0b0f19" : "#4f46e5",
+          );
+      } catch (e) { }
+    })();
+  </script>
 
-    <!-- sql.js WASM for 100% in-browser offline / web client support -->
-    <script src="/vendor/sql-wasm.js"></script>
-    <!-- WHONET Organism Code Dictionary -->
-    <script src="/organisms.js"></script>
-    <!-- Chart.js for dynamic surveillance analytics -->
-    <script
-      src="/chart.umd.min.js"
-      onerror="
+  <!-- sql.js WASM for 100% in-browser offline / web client support -->
+  <script src="/vendor/sql-wasm.js"></script>
+  <!-- WHONET Organism Code Dictionary -->
+  <script src="/organisms.js"></script>
+  <!-- Chart.js for dynamic surveillance analytics -->
+  <script src="/chart.umd.min.js" onerror="
         this.onerror = null;
         this.src = '/chart.umd.min.js';
-      "
-    ></script>
-  </head>
+      "></script>
+</head>
 
-  <body>
-    <!-- Header Architecture -->
-    <header class="header">
-      <div
-        class="header-logo"
-        onclick="showPage('dashboard')"
-        title="Go to Dashboard"
-      >
-        <img
-          src="/logo.png"
-          alt="WHONET Logo"
-          class="app-header-logo"
-          style="
+<body>
+  <!-- Header Architecture -->
+  <header class="header">
+    <div class="header-logo" onclick="showPage('dashboard')" title="Go to Dashboard">
+      <img src="/logo.png" alt="WHONET Logo" class="app-header-logo" style="
             height: 56px;
             width: 56px;
             max-height: 58px;
             object-fit: contain;
-          "
-        />
-        <div class="header-title-group">
-          <div class="header-title">
-            <span>WHONET SQLite Viewer</span>
-          </div>
-          <div class="header-sub">
-            Inspect, Deduplicate &amp; Analyze WHONET Databases
-          </div>
+          " />
+      <div class="header-title-group">
+        <div class="header-title">
+          <span>WHONET SQLite Viewer</span>
+        </div>
+        <div class="header-sub">
+          Inspect, Deduplicate &amp; Analyze WHONET Databases
         </div>
       </div>
+    </div>
 
-      <button
-        type="button"
-        class="mobile-nav-toggle"
-        onclick="toggleMobileSidebar()"
-        title="Open navigation"
-        aria-label="Open navigation"
-        aria-controls="app-sidebar"
-        aria-expanded="false"
-      >
-        <i class="fa-solid fa-bars"></i>
-      </button>
+    <button type="button" class="mobile-nav-toggle" onclick="toggleMobileSidebar()" title="Open navigation"
+      aria-label="Open navigation" aria-controls="app-sidebar" aria-expanded="false">
+      <i class="fa-solid fa-bars"></i>
+    </button>
 
-      <div class="db-selector" id="db-selector">
-        <span id="runtime-badge" class="connection-badge">Connecting…</span>
+    <div class="db-selector" id="db-selector">
+      <span id="runtime-badge" class="connection-badge">Connecting…</span>
 
-        <div class="db-select-wrapper">
-          <select
-            class="db-select"
-            id="db-select"
-            onchange="switchDb(this.value)"
-            title="Active SQLite Database"
-          >
-            <option value="">Loading…</option>
-          </select>
-        </div>
-
-        <button
-          class="btn btn-sm btn-success"
-          id="btn-save-file"
-          onclick="saveToFileHandle()"
-          title="Save changes directly back to the original .sqlite file on disk"
-          style="display: none"
-        >
-          <i class="fa-solid fa-floppy-disk"></i> Save to File
-        </button>
-
-        <button
-          class="btn btn-sm db-action-export"
-          id="btn-download-db"
-          onclick="exportSqliteDatabase()"
-          title="Download / Export modified .sqlite file to your computer"
-          style="display: none"
-        >
-          <i class="fa-solid fa-file-export"></i> Export SQLite
-        </button>
-
-        <input
-          type="file"
-          id="file-upload-input"
-          accept=".sqlite"
-          style="display: none"
-          onchange="handleFileUpload(this.files[0])"
-        />
+      <div class="db-select-wrapper">
+        <select class="db-select" id="db-select" onchange="switchDb(this.value)" title="Active SQLite Database">
+          <option value="">Loading…</option>
+        </select>
       </div>
-    </header>
 
-    <!-- Main Application Layout -->
-    <div class="layout">
-      <!-- Sidebar Navigation -->
-      <nav class="sidebar" id="app-sidebar" aria-label="Primary navigation">
-        <div class="nav-section">Overview</div>
-        <button
-          type="button"
-          class="nav-item active"
-          onclick="showPage('dashboard')"
-          id="nav-dashboard"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
-            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
-            <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
-            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
-          </svg>
-          Dashboard
-        </button>
-
-        <div class="nav-section">View and Analyze Data</div>
-        <button
-          type="button"
-          class="nav-item"
-          onclick="showPage('isolates')"
-          id="nav-isolates"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path
-              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-            ></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-          All Isolates
-        </button>
-
-        <button
-          type="button"
-          class="nav-item"
-          onclick="showPage('duplicates')"
-          id="nav-duplicates"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path
-              d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-            ></path>
-            <line x1="12" y1="9" x2="12" y2="13"></line>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-          Duplicates
-          <span class="nav-badge" id="dup-badge">—</span>
-        </button>
-
-        <button
-          type="button"
-          class="nav-item"
-          onclick="showPage('monthly-amr')"
-          id="nav-monthly-amr"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
-          Monthly AMR Report
-        </button>
-
-        <div class="nav-section">Data Quality</div>
-        <button
-          type="button"
-          class="nav-item"
-          onclick="showPage('fixes')"
-          id="nav-fixes"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path
-              d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
-            ></path>
-          </svg>
-          Bulk Fixes
-        </button>
-
-        <button
-          type="button"
-          class="nav-item"
-          onclick="showPage('sql')"
-          id="nav-sql"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="4 17 10 11 4 5"></polyline>
-            <line x1="12" y1="19" x2="20" y2="19"></line>
-          </svg>
-          SQL Console
-        </button>
-
-        <div class="nav-section">Theme</div>
-        <button
-          type="button"
-          class="nav-item theme-sidebar-entry"
-          id="theme-toggle-btn"
-          onclick="toggleTheme()"
-          title="Switch to Dark Mode"
-          aria-label="Switch to Dark Mode"
-        >
-          <i class="fa-solid fa-moon" aria-hidden="true"></i>
-          <span id="theme-toggle-label">Dark Mode</span>
-        </button>
-
-        <div class="sidebar-footer">
-          <div class="sidebar-footer-notice">
-            WHONET is property of the
-            <a
-              href="https://whonet.org/about.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              >WHO Collaborating Centre for Surveillance of Antimicrobial
-              Resistance</a
-            >
-            (Brigham &amp; Women's Hospital).<br />
-          </div>
-
-          <div class="sidebar-separator"></div>
-
-          <div class="sidebar-dev-credit">
-            <div class="sidebar-dev-label">Developed by</div>
-            <a
-              class="dev-pill"
-              href="https://drshtmstry.github.io/"
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Visit Dr. Darshit Mistry's portfolio"
-            >
-              <img src="/dev-icon.png" class="dev-pill-icon" alt="DM" />
-              <span class="dev-pill-name">Dr. Darshit Mistry</span>
-            </a>
-          </div>
-        </div>
-      </nav>
-      <div
-        class="mobile-sidebar-backdrop"
-        onclick="toggleMobileSidebar(false)"
-        aria-hidden="true"
-      ></div>
-      <button
-        type="button"
-        class="mobile-sidebar-close"
-        onclick="toggleMobileSidebar(false)"
-        aria-label="Collapse navigation"
-        title="Collapse navigation"
-      >
-        <i class="fa-solid fa-chevron-left"></i>
+      <button class="btn btn-sm btn-success" id="btn-save-file" onclick="saveToFileHandle()"
+        title="Save changes directly back to the original .sqlite file on disk" style="display: none">
+        <i class="fa-solid fa-floppy-disk"></i> Save to File
       </button>
 
-      <!-- Main Content Canvas -->
-      <main class="main">
-        <!-- Dashboard Page -->
-        <div class="page active" id="page-dashboard">
-          <!-- Compact Hero Dropzone -->
-          <div
-            class="db-dropzone"
-            id="global-dropzone"
-            ondragover="
+      <button class="btn btn-sm db-action-export" id="btn-download-db" onclick="exportSqliteDatabase()"
+        title="Download / Export modified .sqlite file to your computer" style="display: none">
+        <i class="fa-solid fa-file-export"></i> Export SQLite
+      </button>
+
+      <input type="file" id="file-upload-input" accept=".sqlite" style="display: none"
+        onchange="handleFileUpload(this.files[0])" />
+    </div>
+  </header>
+
+  <!-- Main Application Layout -->
+  <div class="layout">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="app-sidebar" aria-label="Primary navigation">
+      <div class="nav-section">Overview</div>
+      <button type="button" class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+        </svg>
+        Dashboard
+      </button>
+
+      <div class="nav-section">View and Analyze Data</div>
+      <button type="button" class="nav-item" onclick="showPage('isolates')" id="nav-isolates">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        All Isolates
+      </button>
+
+      <button type="button" class="nav-item" onclick="showPage('duplicates')" id="nav-duplicates">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        Duplicates
+        <span class="nav-badge" id="dup-badge">—</span>
+      </button>
+
+      <button type="button" class="nav-item" onclick="showPage('monthly-amr')" id="nav-monthly-amr">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"></line>
+          <line x1="12" y1="20" x2="12" y2="4"></line>
+          <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>
+        Monthly AMR Data
+      </button>
+
+      <div class="nav-section">Data Quality</div>
+      <button type="button" class="nav-item" onclick="showPage('fixes')" id="nav-fixes">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z">
+          </path>
+        </svg>
+        Bulk Fixes
+      </button>
+
+      <button type="button" class="nav-item" onclick="showPage('sql')" id="nav-sql">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 17 10 11 4 5"></polyline>
+          <line x1="12" y1="19" x2="20" y2="19"></line>
+        </svg>
+        SQL Console
+      </button>
+
+      <div class="nav-section">Theme</div>
+      <button type="button" class="nav-item theme-sidebar-entry" id="theme-toggle-btn" onclick="toggleTheme()"
+        title="Switch to Dark Mode" aria-label="Switch to Dark Mode">
+        <i class="fa-solid fa-moon" aria-hidden="true"></i>
+        <span id="theme-toggle-label">Dark Mode</span>
+      </button>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-notice">
+          WHONET is property of the
+          <a href="https://whonet.org/about.html" target="_blank" rel="noopener noreferrer">WHO Collaborating Centre for
+            Surveillance of Antimicrobial
+            Resistance</a>
+          (Brigham &amp; Women's Hospital).<br />
+        </div>
+
+        <div class="sidebar-separator"></div>
+
+        <div class="sidebar-dev-credit">
+          <div class="sidebar-dev-label">Developed by</div>
+          <a class="dev-pill" href="https://drshtmstry.github.io/" target="_blank" rel="noopener noreferrer"
+            title="Visit Dr. Darshit Mistry's portfolio">
+            <img src="/dev-icon.png" class="dev-pill-icon" alt="DM" />
+            <span class="dev-pill-name">Dr. Darshit Mistry</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+    <div class="mobile-sidebar-backdrop" onclick="toggleMobileSidebar(false)" aria-hidden="true"></div>
+    <button type="button" class="mobile-sidebar-close" onclick="toggleMobileSidebar(false)"
+      aria-label="Collapse navigation" title="Collapse navigation">
+      <i class="fa-solid fa-chevron-left"></i>
+    </button>
+
+    <!-- Main Content Canvas -->
+    <main class="main">
+      <!-- Dashboard Page -->
+      <div class="page active" id="page-dashboard">
+        <!-- Compact Hero Dropzone -->
+        <div class="db-dropzone" id="global-dropzone" ondragover="
               event.preventDefault();
               this.classList.add('dragover');
-            "
-            ondragleave="this.classList.remove('dragover')"
-            ondrop="handleFileDrop(event)"
-            onclick="document.getElementById('file-upload-input').click()"
-          >
-            <div class="db-dropzone-content">
-              <div class="db-dropzone-icon">
-                <i class="fa-solid fa-upload"></i>
+            " ondragleave="this.classList.remove('dragover')" ondrop="handleFileDrop(event)"
+          onclick="document.getElementById('file-upload-input').click()">
+          <div class="db-dropzone-content">
+            <div class="db-dropzone-icon">
+              <i class="fa-solid fa-upload"></i>
+            </div>
+            <div class="db-dropzone-text">
+              <div class="db-dropzone-title">
+                Drag &amp; Drop any WHONET <code>.sqlite</code> file here, or
+                click to upload
               </div>
-              <div class="db-dropzone-text">
-                <div class="db-dropzone-title">
-                  Drag &amp; Drop any WHONET <code>.sqlite</code> file here, or
-                  click to upload
-                </div>
-                <div class="db-dropzone-sub" id="dropzone-sub">
-                  Works directly with standard WHONET files from
-                  <code>C:\WHONET\Data</code> or custom folders/downloads.
-                </div>
+              <div class="db-dropzone-sub" id="dropzone-sub">
+                Works directly with standard WHONET files from
+                <code>C:\WHONET\Data</code> or custom folders/downloads.
               </div>
             </div>
-            <div class="db-source-tabs" onclick="event.stopPropagation()">
-              <button
-                class="btn btn-sm btn-primary"
-                onclick="document.getElementById('file-upload-input').click()"
-              >
-                <i class="fa-solid fa-upload"></i> Choose SQLite File
-              </button>
-              <button
-                class="btn btn-sm btn-ghost"
-                onclick="loadSampleDatabase('WHO-TST-2020-01.sqlite')"
-                title="Load bundled sample dataset"
-              >
-                <i class="fa-solid fa-database"></i> WHO-TST-2020-01.sqlite
-              </button>
-              <button
-                class="btn btn-sm btn-ghost"
-                onclick="loadSampleDatabase('WHO-TST-2020-OneHealth.sqlite')"
-                title="Load bundled sample dataset"
-              >
-                <i class="fa-solid fa-database"></i>
-                WHO-TST-2020-OneHealth.sqlite
-              </button>
+          </div>
+          <div class="db-source-tabs" onclick="event.stopPropagation()">
+            <button class="btn btn-sm btn-primary" onclick="document.getElementById('file-upload-input').click()">
+              <i class="fa-solid fa-upload"></i> Choose SQLite File
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="loadSampleDatabase('WHO-TST-2020-01.sqlite')"
+              title="Load bundled sample dataset">
+              <i class="fa-solid fa-database"></i> WHO-TST-2020-01.sqlite
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="loadSampleDatabase('WHO-TST-2020-OneHealth.sqlite')"
+              title="Load bundled sample dataset">
+              <i class="fa-solid fa-database"></i>
+              WHO-TST-2020-OneHealth.sqlite
+            </button>
+          </div>
+        </div>
+
+        <!-- Section Header -->
+        <div class="section-header">
+          <div class="section-title">
+            <i class="fa-solid fa-chart-column"></i>
+            <span>Overview</span>
+          </div>
+          <div class="dashboard-file-row">
+            <div id="db-label"></div>
+            <button type="button" class="btn-icon" onclick="loadStats()" title="Refresh Surveillance Data"
+              aria-label="Refresh Data">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Visual Analytics Hub -->
+        <div class="chart-analytics-card" id="chart-analytics-card">
+          <div class="chart-controls-bar">
+            <div class="chart-controls-left">
+              <div class="chart-card-title">
+                <span><i class="fa-solid fa-chart-line"></i> Analytics</span>
+              </div>
+              <div class="chart-card-sub" id="chart-filtered-sub">
+                Visual distribution across selected clinical parameters
+              </div>
+            </div>
+
+            <div class="chart-controls-right">
+              <!-- Parameter Selection -->
+              <div class="chart-control-group">
+                <label for="chart-param-select">Parameter</label>
+                <select id="chart-param-select" class="chart-filter-select" onchange="updateDashboardCharts()">
+                  <option value="ORGANISM" selected>
+                    Organism Distribution
+                  </option>
+                  <option value="SPEC_TYPE">Specimen Type (SPEC_TYPE)</option>
+                  <option value="WARD">Location (WARD)</option>
+                  <option value="WARD_TYPE">Location Type (WARD_TYPE)</option>
+                  <option value="DEPARTMENT">Department</option>
+                  <option value="SEX">Gender</option>
+                  <option value="AGE_GROUP">Age Demographics</option>
+                  <option value="ESBL">ESBL Status</option>
+                  <option value="CARBAPENEM">Carbapenem Resistance</option>
+                  <option value="MRSA">MRSA Status</option>
+                </select>
+              </div>
+
+              <!-- Period / Range Filter -->
+              <div class="chart-control-group">
+                <label for="chart-period-select">Time Horizon</label>
+                <select id="chart-period-select" class="chart-filter-select" onchange="onPeriodFilterChange()">
+                  <option value="all" selected>All Time</option>
+                  <option value="3m">Last 3 Months</option>
+                  <option value="6m">Last 6 Months</option>
+                  <option value="12m">Last 12 Months</option>
+                  <option value="custom">Custom Date Range…</option>
+                </select>
+              </div>
+
+              <!-- Custom Date Range Inputs -->
+              <div class="chart-control-group" id="chart-custom-dates" style="display: none">
+                <label>Date Range</label>
+                <div style="display: flex; gap: 6px; align-items: center">
+                  <input type="date" id="chart-date-start" class="chart-date-input"
+                    onchange="updateDashboardCharts()" />
+                  <span style="color: var(--text3); font-size: 11px">to</span>
+                  <input type="date" id="chart-date-end" class="chart-date-input" onchange="updateDashboardCharts()" />
+                </div>
+              </div>
+
+              <!-- Chart Style Toggle -->
+              <div class="chart-control-group">
+                <label>Chart Mode</label>
+                <div class="chart-type-toggle">
+                  <button type="button" class="btn-toggle-type active" id="btn-chart-both"
+                    onclick="setChartTypeMode('both')" title="Show both Bar & Pie charts">
+                    Both
+                  </button>
+                  <button type="button" class="btn-toggle-type" id="btn-chart-bar" onclick="setChartTypeMode('bar')"
+                    title="Show Bar Chart only">
+                    Bar
+                  </button>
+                  <button type="button" class="btn-toggle-type" id="btn-chart-pie" onclick="setChartTypeMode('pie')"
+                    title="Show Pie Chart only">
+                    Pie
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Section Header -->
-          <div class="section-header">
-            <div class="section-title">
-              <i class="fa-solid fa-chart-column"></i>
-              <span>Overview</span>
-            </div>
-            <div class="dashboard-file-row">
-              <div id="db-label"></div>
-              <button
-                type="button"
-                class="btn-icon"
-                onclick="loadStats()"
-                title="Refresh Surveillance Data"
-                aria-label="Refresh Data"
-              >
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- Dynamic Visual Analytics Hub -->
-          <div class="chart-analytics-card" id="chart-analytics-card">
-            <div class="chart-controls-bar">
-              <div class="chart-controls-left">
-                <div class="chart-card-title">
-                  <span><i class="fa-solid fa-chart-line"></i> Analytics</span>
-                </div>
-                <div class="chart-card-sub" id="chart-filtered-sub">
-                  Visual distribution across selected clinical parameters
+          <!-- Charts Display Grid -->
+          <div class="charts-view-grid" id="charts-view-grid">
+            <!-- Bar Chart Card -->
+            <div class="chart-box" id="chart-box-bar">
+              <div class="chart-box-header">
+                <div class="chart-box-title" id="bar-chart-title">
+                  <i class="fa-solid fa-chart-column"></i> Frequency
                 </div>
               </div>
-
-              <div class="chart-controls-right">
-                <!-- Parameter Selection -->
-                <div class="chart-control-group">
-                  <label for="chart-param-select">Parameter</label>
-                  <select
-                    id="chart-param-select"
-                    class="chart-filter-select"
-                    onchange="updateDashboardCharts()"
-                  >
-                    <option value="ORGANISM" selected>
-                      Organism Distribution
-                    </option>
-                    <option value="SPEC_TYPE">Specimen Type (SPEC_TYPE)</option>
-                    <option value="WARD">Location (WARD)</option>
-                    <option value="WARD_TYPE">Location Type (WARD_TYPE)</option>
-                    <option value="DEPARTMENT">Department</option>
-                    <option value="SEX">Gender</option>
-                    <option value="AGE_GROUP">Age Demographics</option>
-                    <option value="ESBL">ESBL Status</option>
-                    <option value="CARBAPENEM">Carbapenem Resistance</option>
-                    <option value="MRSA">MRSA Status</option>
-                  </select>
-                </div>
-
-                <!-- Period / Range Filter -->
-                <div class="chart-control-group">
-                  <label for="chart-period-select">Time Horizon</label>
-                  <select
-                    id="chart-period-select"
-                    class="chart-filter-select"
-                    onchange="onPeriodFilterChange()"
-                  >
-                    <option value="all" selected>All Time</option>
-                    <option value="3m">Last 3 Months</option>
-                    <option value="6m">Last 6 Months</option>
-                    <option value="12m">Last 12 Months</option>
-                    <option value="custom">Custom Date Range…</option>
-                  </select>
-                </div>
-
-                <!-- Custom Date Range Inputs -->
-                <div
-                  class="chart-control-group"
-                  id="chart-custom-dates"
-                  style="display: none"
-                >
-                  <label>Date Range</label>
-                  <div style="display: flex; gap: 6px; align-items: center">
-                    <input
-                      type="date"
-                      id="chart-date-start"
-                      class="chart-date-input"
-                      onchange="updateDashboardCharts()"
-                    />
-                    <span style="color: var(--text3); font-size: 11px">to</span>
-                    <input
-                      type="date"
-                      id="chart-date-end"
-                      class="chart-date-input"
-                      onchange="updateDashboardCharts()"
-                    />
-                  </div>
-                </div>
-
-                <!-- Chart Style Toggle -->
-                <div class="chart-control-group">
-                  <label>Chart Mode</label>
-                  <div class="chart-type-toggle">
-                    <button
-                      type="button"
-                      class="btn-toggle-type active"
-                      id="btn-chart-both"
-                      onclick="setChartTypeMode('both')"
-                      title="Show both Bar & Pie charts"
-                    >
-                      Both
-                    </button>
-                    <button
-                      type="button"
-                      class="btn-toggle-type"
-                      id="btn-chart-bar"
-                      onclick="setChartTypeMode('bar')"
-                      title="Show Bar Chart only"
-                    >
-                      Bar
-                    </button>
-                    <button
-                      type="button"
-                      class="btn-toggle-type"
-                      id="btn-chart-pie"
-                      onclick="setChartTypeMode('pie')"
-                      title="Show Pie Chart only"
-                    >
-                      Pie
-                    </button>
-                  </div>
-                </div>
+              <div class="chart-canvas-container">
+                <canvas id="dashboard-bar-chart"></canvas>
               </div>
             </div>
 
-            <!-- Charts Display Grid -->
-            <div class="charts-view-grid" id="charts-view-grid">
-              <!-- Bar Chart Card -->
-              <div class="chart-box" id="chart-box-bar">
-                <div class="chart-box-header">
-                  <div class="chart-box-title" id="bar-chart-title">
-                    <i class="fa-solid fa-chart-column"></i> Frequency
-                  </div>
+            <!-- Pie / Doughnut Chart Card -->
+            <div class="chart-box" id="chart-box-pie">
+              <div class="chart-box-header">
+                <div class="chart-box-title" id="pie-chart-title">
+                  <i class="fa-solid fa-chart-pie"></i> Breakdown (%)
                 </div>
-                <div class="chart-canvas-container">
-                  <canvas id="dashboard-bar-chart"></canvas>
-                </div>
-              </div>
-
-              <!-- Pie / Doughnut Chart Card -->
-              <div class="chart-box" id="chart-box-pie">
-                <div class="chart-box-header">
-                  <div class="chart-box-title" id="pie-chart-title">
-                    <i class="fa-solid fa-chart-pie"></i> Breakdown (%)
-                  </div>
-                  <div class="chart-box-actions">
-                    <span
-                      class="badge"
-                      id="pie-total-badge"
-                      style="
+                <div class="chart-box-actions">
+                  <span class="badge" id="pie-total-badge" style="
                         background: var(--bg4);
                         color: var(--text2);
                         font-size: 11px;
-                      "
-                      >0 records</span
-                    >
-                  </div>
+                      ">0 records</span>
                 </div>
-                <div class="chart-canvas-container">
-                  <canvas id="dashboard-pie-chart"></canvas>
-                </div>
+              </div>
+              <div class="chart-canvas-container">
+                <canvas id="dashboard-pie-chart"></canvas>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- All Isolates Page -->
-        <div class="page" id="page-isolates">
-          <div class="section-header">
-            <div>
-              <div class="section-title">
-                <i class="fa-solid fa-microscope"></i> All Laboratory Isolates
-              </div>
-              <div class="section-sub" id="isolates-count">
-                Loading isolates…
-              </div>
+      <!-- All Isolates Page -->
+      <div class="page" id="page-isolates">
+        <div class="section-header">
+          <div>
+            <div class="section-title">
+              <i class="fa-solid fa-microscope"></i> All Laboratory Isolates
+            </div>
+            <div class="section-sub" id="isolates-count">
+              Loading isolates…
             </div>
           </div>
-          <div class="table-wrap">
-            <div class="table-toolbar">
-              <div class="search-box">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                <input
-                  type="text"
-                  id="isolates-search"
-                  placeholder="Search by Specimen #, Patient ID, Organism, Name…"
-                  aria-label="Search isolates by specimen number, patient ID, organism, or patient name"
-                  oninput="debouncedLoadIsolates()"
-                />
-              </div>
-              <select
-                class="filter-select"
-                id="isolates-month-filter"
-                aria-label="Filter isolates by month"
-                onchange="loadIsolates(1)"
-              >
-                <option value="">All Months</option>
-              </select>
-              <select
-                class="filter-select"
-                id="isolates-org-filter"
-                aria-label="Filter isolates by organism"
-                onchange="loadIsolates(1)"
-              >
-                <option value="">All Organisms</option>
-              </select>
-              <select
-                class="filter-select"
-                id="isolates-ward-filter"
-                aria-label="Filter isolates by ward or location"
-                onchange="loadIsolates(1)"
-              >
-                <option value="">All Wards</option>
-              </select>
-              <div class="col-visibility-dropdown" id="isolate-col-dropdown">
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-sm col-visibility-btn"
-                  id="col-visibility-trigger"
-                  onclick="
+        </div>
+        <div class="table-wrap">
+          <div class="table-toolbar">
+            <div class="search-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="isolates-search" placeholder="Search by Specimen #, Patient ID, Organism, Name…"
+                aria-label="Search isolates by specimen number, patient ID, organism, or patient name"
+                oninput="debouncedLoadIsolates()" />
+            </div>
+            <select class="filter-select" id="isolates-month-filter" aria-label="Filter isolates by month"
+              onchange="loadIsolates(1)">
+              <option value="">All Months</option>
+            </select>
+            <select class="filter-select" id="isolates-org-filter" aria-label="Filter isolates by organism"
+              onchange="loadIsolates(1)">
+              <option value="">All Organisms</option>
+            </select>
+            <select class="filter-select" id="isolates-ward-filter" aria-label="Filter isolates by ward or location"
+              onchange="loadIsolates(1)">
+              <option value="">All Wards</option>
+            </select>
+            <div class="col-visibility-dropdown" id="isolate-col-dropdown">
+              <button type="button" class="btn btn-ghost btn-sm col-visibility-btn" id="col-visibility-trigger" onclick="
                     document
                       .getElementById('isolate-col-dropdown')
                       .classList.toggle('open')
-                  "
-                  title="Choose visible columns"
-                >
-                  <i class="fa-solid fa-table-columns"></i>
-                  <span>Columns</span>
-                  <i
-                    class="fa-solid fa-chevron-down"
-                    style="font-size: 10px; margin-left: 2px"
-                  ></i>
-                </button>
-                <div
-                  class="col-visibility-menu"
-                  onclick="event.stopPropagation()"
-                >
-                  <div class="col-visibility-header">Phenotype Columns</div>
-                  <label class="col-visibility-item">
-                    <input
-                      type="checkbox"
-                      id="col-toggle-esbl"
-                      onchange="toggleIsolateCol('esbl')"
-                    />
-                    <span>ESBL</span>
-                  </label>
-                  <label class="col-visibility-item">
-                    <input
-                      type="checkbox"
-                      id="col-toggle-carba"
-                      onchange="toggleIsolateCol('carba')"
-                    />
-                    <span>Carbapenem</span>
-                  </label>
-                  <label class="col-visibility-item">
-                    <input
-                      type="checkbox"
-                      id="col-toggle-mrsa"
-                      onchange="toggleIsolateCol('mrsa')"
-                    />
-                    <span>MRSA</span>
-                  </label>
-                </div>
+                  " title="Choose visible columns">
+                <i class="fa-solid fa-table-columns"></i>
+                <span>Columns</span>
+                <i class="fa-solid fa-chevron-down" style="font-size: 10px; margin-left: 2px"></i>
+              </button>
+              <div class="col-visibility-menu" onclick="event.stopPropagation()">
+                <div class="col-visibility-header">Phenotype Columns</div>
+                <label class="col-visibility-item">
+                  <input type="checkbox" id="col-toggle-esbl" onchange="toggleIsolateCol('esbl')" />
+                  <span>ESBL</span>
+                </label>
+                <label class="col-visibility-item">
+                  <input type="checkbox" id="col-toggle-carba" onchange="toggleIsolateCol('carba')" />
+                  <span>Carbapenem</span>
+                </label>
+                <label class="col-visibility-item">
+                  <input type="checkbox" id="col-toggle-mrsa" onchange="toggleIsolateCol('mrsa')" />
+                  <span>MRSA</span>
+                </label>
               </div>
             </div>
-            <div id="isolates-table-body">
-              <div class="empty">
-                <div class="empty-icon">
-                  <i class="fa-solid fa-database"></i>
-                </div>
-                <div class="empty-title">No database loaded</div>
-                <div class="empty-desc">
-                  Please open or upload a WHONET SQLite database to view
-                  isolates.
-                </div>
-              </div>
-            </div>
-            <div class="pagination" id="isolates-pagination"></div>
           </div>
-        </div>
-
-        <!-- Duplicates Page -->
-        <div class="page" id="page-duplicates">
-          <div class="section-header">
-            <div>
-              <div class="section-title">
-                <i class="fa-solid fa-triangle-exclamation"></i> Duplicate
-                Isolates
+          <div id="isolates-table-body">
+            <div class="empty">
+              <div class="empty-icon">
+                <i class="fa-solid fa-database"></i>
               </div>
-              <div class="section-sub" id="dup-count">
-                Grouped by Specimen ID (case-insensitive)
+              <div class="empty-title">No database loaded</div>
+              <div class="empty-desc">
+                Please open or upload a WHONET SQLite database to view
+                isolates.
               </div>
             </div>
-            <div
-              style="
+          </div>
+          <div class="pagination" id="isolates-pagination"></div>
+        </div>
+      </div>
+
+      <!-- Duplicates Page -->
+      <div class="page" id="page-duplicates">
+        <div class="section-header">
+          <div>
+            <div class="section-title">
+              <i class="fa-solid fa-triangle-exclamation"></i> Duplicate
+              Isolates
+            </div>
+            <div class="section-sub" id="dup-count">
+              Grouped by Specimen ID (case-insensitive)
+            </div>
+          </div>
+          <div style="
                 display: flex;
                 align-items: center;
                 gap: 12px;
                 margin-left: auto;
                 flex-wrap: wrap;
-              "
-            >
-              <div class="seg-control" id="dup-mode-toggle">
-                <button
-                  class="seg-btn active"
-                  id="mode-btn-spec"
-                  onclick="setDupMode('spec')"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                    <line x1="3" y1="9" x2="21" y2="9"></line>
-                  </svg>
-                  By Specimen ID
-                </button>
-                <button
-                  class="seg-btn"
-                  id="mode-btn-patient"
-                  onclick="setDupMode('patient')"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                  </svg>
-                  By Patient ID
-                </button>
-              </div>
-              <button
-                class="btn btn-danger"
-                id="dup-delete-selected-btn"
-                onclick="confirmDeleteSelectedDups()"
-                disabled
-                style="opacity: 0.5; cursor: not-allowed"
-              >
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path
-                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                  ></path>
-                  <line x1="10" y1="11" x2="10" y2="17"></line>
-                  <line x1="14" y1="11" x2="14" y2="17"></line>
+              ">
+            <div class="seg-control" id="dup-mode-toggle">
+              <button class="seg-btn active" id="mode-btn-spec" onclick="setDupMode('spec')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                  <line x1="3" y1="9" x2="21" y2="9"></line>
                 </svg>
-                Delete Selected (<span id="dup-selected-count">0</span>)
+                By Specimen ID
+              </button>
+              <button class="seg-btn" id="mode-btn-patient" onclick="setDupMode('patient')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                By Patient ID
               </button>
             </div>
+            <button class="btn btn-danger" id="dup-delete-selected-btn" onclick="confirmDeleteSelectedDups()" disabled
+              style="opacity: 0.5; cursor: not-allowed">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+              </svg>
+              Delete Selected (<span id="dup-selected-count">0</span>)
+            </button>
           </div>
+        </div>
 
-          <!-- Casing fix notice banner -->
-          <div
-            id="casing-banner"
-            style="
+        <!-- Casing fix notice banner -->
+        <div id="casing-banner" style="
               display: none;
               background: var(--yellow-bg);
               border: 1px solid var(--yellow-border);
@@ -834,460 +522,356 @@
               margin-bottom: 18px;
               align-items: center;
               gap: 14px;
-            "
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--yellow)"
-              stroke-width="2"
-            >
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-            <div style="flex: 1; font-size: 13.5px; color: var(--text)">
-              <strong>Mixed-case SPEC_NUMs detected</strong> — e.g.
-              <code
-                style="
+            ">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--yellow)" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <div style="flex: 1; font-size: 13.5px; color: var(--text)">
+            <strong>Mixed-case SPEC_NUMs detected</strong> — e.g.
+            <code style="
                   font-family: &quot;JetBrains Mono&quot;, monospace;
                   font-size: 12px;
                   background: var(--bg2);
                   padding: 2px 6px;
                   border-radius: 4px;
                   border: 1px solid var(--border);
-                "
-                >csbl-135</code
-              >
-              ≠
-              <code
-                style="
+                ">csbl-135</code>
+            ≠
+            <code style="
                   font-family: &quot;JetBrains Mono&quot;, monospace;
                   font-size: 12px;
                   background: var(--bg2);
                   padding: 2px 6px;
                   border-radius: 4px;
                   border: 1px solid var(--border);
-                "
-                >CSBL-135</code
-              >. Normalize first for accurate duplicate detection.
-            </div>
-            <button
-              class="btn btn-sm btn-ghost"
-              onclick="fixCasingAndRefresh()"
-              style="
+                ">CSBL-135</code>. Normalize first for accurate duplicate detection.
+          </div>
+          <button class="btn btn-sm btn-ghost" onclick="fixCasingAndRefresh()" style="
                 font-weight: 700;
                 white-space: nowrap;
                 color: var(--yellow);
                 border-color: var(--yellow-border);
-              "
-            >
-              <i class="fa-solid fa-bolt"></i> UPPER(SPEC_NUM)
+              ">
+            <i class="fa-solid fa-bolt"></i> UPPER(SPEC_NUM)
+          </button>
+        </div>
+
+        <div class="table-wrap">
+          <div class="table-toolbar">
+            <div class="search-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="dup-search" placeholder="Search by Specimen # or Patient ID…"
+                aria-label="Search duplicates by specimen number or patient ID" oninput="debouncedLoadDups()" />
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="fixCasingAndRefresh()"
+              title="UPDATE Isolates SET SPEC_NUM = UPPER(SPEC_NUM)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              Normalize Casing
             </button>
           </div>
-
-          <div class="table-wrap">
-            <div class="table-toolbar">
-              <div class="search-box">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                <input
-                  type="text"
-                  id="dup-search"
-                  placeholder="Search by Specimen # or Patient ID…"
-                  aria-label="Search duplicates by specimen number or patient ID"
-                  oninput="debouncedLoadDups()"
-                />
+          <div id="dup-table-body">
+            <div class="empty">
+              <div class="empty-icon">
+                <i class="fa-solid fa-database"></i>
               </div>
-              <button
-                class="btn btn-ghost btn-sm"
-                onclick="fixCasingAndRefresh()"
-                title="UPDATE Isolates SET SPEC_NUM = UPPER(SPEC_NUM)"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <polyline points="23 4 23 10 17 10"></polyline>
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                </svg>
-                Normalize Casing
-              </button>
-            </div>
-            <div id="dup-table-body">
-              <div class="empty">
-                <div class="empty-icon">
-                  <i class="fa-solid fa-database"></i>
-                </div>
-                <div class="empty-title">No database loaded</div>
-                <div class="empty-desc">
-                  Please open or upload a WHONET SQLite database to inspect
-                  duplicate records.
-                </div>
+              <div class="empty-title">No database loaded</div>
+              <div class="empty-desc">
+                Please open or upload a WHONET SQLite database to inspect
+                duplicate records.
               </div>
             </div>
-            <div class="pagination" id="dup-pagination"></div>
           </div>
+          <div class="pagination" id="dup-pagination"></div>
         </div>
+      </div>
 
-        <!-- Bulk Fixes Page -->
-        <div class="page" id="page-fixes">
-          <div class="section-header">
-            <div>
-              <div class="section-title">
-                <i class="fa-solid fa-wrench"></i> Bulk Data Corrections
-              </div>
-              <div class="section-sub">
-                Apply standardized quality fixes across all database records
-              </div>
+      <!-- Bulk Fixes Page -->
+      <div class="page" id="page-fixes">
+        <div class="section-header">
+          <div>
+            <div class="section-title">
+              <i class="fa-solid fa-wrench"></i> Bulk Data Corrections
             </div>
-          </div>
-          <div class="fix-grid">
-            <div class="fix-card">
-              <div class="fix-title">SPEC_NUM → Uppercase</div>
-              <div class="fix-desc">
-                Normalize all specimen numbers to uppercase to prevent
-                case-sensitive duplicate mismatches.
-              </div>
-              <div class="fix-sql">
-                UPDATE Isolates SET SPEC_NUM = UPPER(SPEC_NUM)
-              </div>
-              <button
-                class="btn btn-primary btn-sm"
-                onclick="bulkFix('upper_spec_num')"
-              >
-                Apply Fix
-              </button>
-            </div>
-            <div class="fix-card">
-              <div class="fix-title">PATIENT_ID → Uppercase</div>
-              <div class="fix-desc">
-                Normalize Patient IDs to uppercase for consistent lookups and
-                deduplication.
-              </div>
-              <div class="fix-sql">
-                UPDATE Isolates SET PATIENT_ID = UPPER(PATIENT_ID)
-              </div>
-              <button
-                class="btn btn-primary btn-sm"
-                onclick="bulkFix('upper_patient_id')"
-              >
-                Apply Fix
-              </button>
-            </div>
-            <div class="fix-card">
-              <div class="fix-title">Trim Whitespace</div>
-              <div class="fix-desc">
-                Remove leading and trailing spaces from SPEC_NUM, PATIENT_ID,
-                WARD, and DEPARTMENT (plus FULL_NAME when stored as a plain
-                column).
-              </div>
-              <div class="fix-sql">UPDATE Isolates SET field = TRIM(field)</div>
-              <button
-                class="btn btn-primary btn-sm"
-                onclick="bulkFix('trim_all')"
-              >
-                Apply Fix
-              </button>
-            </div>
-            <div class="fix-card">
-              <div class="fix-title">ORGANISM → Lowercase</div>
-              <div class="fix-desc">
-                Standardize organism codes to lowercase as used in official
-                WHONET code lists.
-              </div>
-              <div class="fix-sql">
-                UPDATE Isolates SET ORGANISM = LOWER(ORGANISM)
-              </div>
-              <button
-                class="btn btn-primary btn-sm"
-                onclick="bulkFix('lower_organism')"
-              >
-                Apply Fix
-              </button>
-            </div>
-          </div>
-
-          <div class="section-header" style="margin-top: 12px">
-            <div>
-              <div class="section-title" style="font-size: 16px">
-                <i class="fa-solid fa-clipboard-list"></i> Fix History (This
-                Session)
-              </div>
-            </div>
-          </div>
-          <div
-            id="fix-history"
-            style="display: flex; flex-direction: column; gap: 10px"
-          >
-            <div class="empty" style="padding: 28px">
-              <div class="empty-icon" style="font-size: 36px">
-                <i class="fa-solid fa-clipboard-check"></i>
-              </div>
-              <div class="empty-title">No fixes applied yet</div>
+            <div class="section-sub">
+              Apply standardized quality fixes across all database records
             </div>
           </div>
         </div>
+        <div class="fix-grid">
+          <div class="fix-card">
+            <div class="fix-title">SPEC_NUM → Uppercase</div>
+            <div class="fix-desc">
+              Normalize all specimen numbers to uppercase to prevent
+              case-sensitive duplicate mismatches.
+            </div>
+            <div class="fix-sql">
+              UPDATE Isolates SET SPEC_NUM = UPPER(SPEC_NUM)
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="bulkFix('upper_spec_num')">
+              Apply Fix
+            </button>
+          </div>
+          <div class="fix-card">
+            <div class="fix-title">PATIENT_ID → Uppercase</div>
+            <div class="fix-desc">
+              Normalize Patient IDs to uppercase for consistent lookups and
+              deduplication.
+            </div>
+            <div class="fix-sql">
+              UPDATE Isolates SET PATIENT_ID = UPPER(PATIENT_ID)
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="bulkFix('upper_patient_id')">
+              Apply Fix
+            </button>
+          </div>
+          <div class="fix-card">
+            <div class="fix-title">Trim Whitespace</div>
+            <div class="fix-desc">
+              Remove leading and trailing spaces from SPEC_NUM, PATIENT_ID,
+              WARD, and DEPARTMENT (plus FULL_NAME when stored as a plain
+              column).
+            </div>
+            <div class="fix-sql">UPDATE Isolates SET field = TRIM(field)</div>
+            <button class="btn btn-primary btn-sm" onclick="bulkFix('trim_all')">
+              Apply Fix
+            </button>
+          </div>
+          <div class="fix-card">
+            <div class="fix-title">ORGANISM → Lowercase</div>
+            <div class="fix-desc">
+              Standardize organism codes to lowercase as used in official
+              WHONET code lists.
+            </div>
+            <div class="fix-sql">
+              UPDATE Isolates SET ORGANISM = LOWER(ORGANISM)
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="bulkFix('lower_organism')">
+              Apply Fix
+            </button>
+          </div>
+        </div>
 
-        <!-- SQL Console Page -->
-        <div class="page" id="page-sql">
-          <div class="section-header">
-            <div>
-              <div class="section-title">
-                <i class="fa-solid fa-terminal"></i> SQL Query Console
-              </div>
-              <div class="section-sub">
-                Execute arbitrary SELECT or UPDATE queries directly on the
-                current database (Ctrl+Enter to run)
-              </div>
+        <div class="section-header" style="margin-top: 12px">
+          <div>
+            <div class="section-title" style="font-size: 16px">
+              <i class="fa-solid fa-clipboard-list"></i> Fix History (This
+              Session)
             </div>
           </div>
-          <div class="sql-editor-wrap">
-            <div class="sql-toolbar">
-              <button class="btn btn-primary btn-sm" onclick="runSQL()">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                </svg>
-                Run Query
-              </button>
-              <button class="btn btn-ghost btn-sm" onclick="clearSQL()">
-                Clear
-              </button>
-              <div class="sql-shortcuts">
-                <div
-                  class="sql-shortcut"
-                  onclick="
+        </div>
+        <div id="fix-history" style="display: flex; flex-direction: column; gap: 10px">
+          <div class="empty" style="padding: 28px">
+            <div class="empty-icon" style="font-size: 36px">
+              <i class="fa-solid fa-clipboard-check"></i>
+            </div>
+            <div class="empty-title">No fixes applied yet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SQL Console Page -->
+      <div class="page" id="page-sql">
+        <div class="section-header">
+          <div>
+            <div class="section-title">
+              <i class="fa-solid fa-terminal"></i> SQL Query Console
+            </div>
+            <div class="section-sub">
+              Execute arbitrary SELECT or UPDATE queries directly on the
+              current database (Ctrl+Enter to run)
+            </div>
+          </div>
+        </div>
+        <div class="sql-editor-wrap">
+          <div class="sql-toolbar">
+            <button class="btn btn-primary btn-sm" onclick="runSQL()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Run Query
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="clearSQL()">
+              Clear
+            </button>
+            <div class="sql-shortcuts">
+              <div class="sql-shortcut" onclick="
                     insertSQL(
                       'SELECT * FROM Isolates WHERE UPPER(SPEC_NUM) IN (SELECT UPPER(SPEC_NUM) FROM Isolates GROUP BY UPPER(SPEC_NUM) HAVING COUNT(*) > 1) ORDER BY SPEC_NUM',
                     )
-                  "
-                >
-                  Duplicates
-                </div>
-                <div
-                  class="sql-shortcut"
-                  onclick="
+                  ">
+                Duplicates
+              </div>
+              <div class="sql-shortcut" onclick="
                     insertSQL(
                       'SELECT SPEC_NUM, COUNT(*) as cnt FROM Isolates GROUP BY UPPER(SPEC_NUM) HAVING COUNT(*) > 1 ORDER BY cnt DESC',
                     )
-                  "
-                >
-                  Dup Groups
-                </div>
-                <div
-                  class="sql-shortcut"
-                  onclick="
+                  ">
+                Dup Groups
+              </div>
+              <div class="sql-shortcut" onclick="
                     insertSQL(
                       'UPDATE Isolates SET SPEC_NUM = UPPER(SPEC_NUM) WHERE SPEC_NUM != UPPER(SPEC_NUM)',
                     )
-                  "
-                >
-                  UPPER SPEC_NUM
-                </div>
-                <div
-                  class="sql-shortcut"
-                  onclick="
+                  ">
+                UPPER SPEC_NUM
+              </div>
+              <div class="sql-shortcut" onclick="
                     insertSQL(
                       `WITH RankedIsolates AS (\n  SELECT *,\n         ROW_NUMBER() OVER (PARTITION BY SPEC_NUM ORDER BY (SELECT NULL)) AS row_num,\n         COUNT(*) OVER (PARTITION BY SPEC_NUM) AS total_duplicates\n  FROM Isolates\n)\nSELECT *\nFROM RankedIsolates\nWHERE total_duplicates > 1\nORDER BY SPEC_NUM, row_num`,
                     )
-                  "
-                >
-                  Full Dup Query
-                </div>
+                  ">
+                Full Dup Query
               </div>
             </div>
-            <div class="sql-input-container">
-              <textarea
-                class="sql-input"
-                id="sql-input"
-                placeholder="-- Enter your SQL query here (press Ctrl+Enter to execute)&#10;SELECT * FROM Isolates LIMIT 10;"
-                spellcheck="false"
-                autocomplete="off"
-                autocapitalize="off"
-              ></textarea>
-              <div
-                class="sql-autocomplete-dropdown"
-                id="sql-autocomplete-dropdown"
-                style="display: none"
-              ></div>
-            </div>
-            <div class="sql-result" id="sql-result">
-              <span style="color: var(--text3)">Results will appear here…</span>
-            </div>
-            <div
-              class="result-table-wrap"
-              id="sql-result-table"
-              style="display: none"
-            ></div>
           </div>
+          <div class="sql-input-container">
+            <textarea class="sql-input" id="sql-input"
+              placeholder="-- Enter your SQL query here (press Ctrl+Enter to execute)&#10;SELECT * FROM Isolates LIMIT 10;"
+              spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+            <div class="sql-autocomplete-dropdown" id="sql-autocomplete-dropdown" style="display: none"></div>
+          </div>
+          <div class="sql-result" id="sql-result">
+            <span style="color: var(--text3)">Results will appear here…</span>
+          </div>
+          <div class="result-table-wrap" id="sql-result-table" style="display: none"></div>
         </div>
+      </div>
 
-        <!-- Monthly AMR Report Page -->
-        <div class="page" id="page-monthly-amr">
-          <div class="section-header">
-            <div>
-              <div class="section-title">
-                <i class="fa-solid fa-table-cells"></i> Monthly AMR Data
-                (SAPCAR-G)
-              </div>
+      <!-- Monthly AMR Data Page -->
+      <div class="page" id="page-monthly-amr">
+        <div class="section-header">
+          <div>
+            <div class="section-title">
+              <i class="fa-solid fa-table-cells"></i> Monthly AMR Data
+              (SAPCAR-G)
             </div>
-            <div
-              style="
+          </div>
+          <div style="
                 display: flex;
                 gap: 12px;
                 align-items: center;
                 margin-left: auto;
                 flex-wrap: wrap;
-              "
-            >
-              <button class="btn btn-primary btn-sm" onclick="exportAmrCsv()">
-                <i class="fa-solid fa-file-arrow-down"></i> Export All (CSV)
-              </button>
-              <button class="btn btn-ghost btn-sm" onclick="copyAmrTableTsv()">
-                <i class="fa-solid fa-copy"></i> Copy Table
-              </button>
-            </div>
+              ">
+            <button class="btn btn-primary btn-sm" onclick="exportAmrCsv()">
+              <i class="fa-solid fa-file-arrow-down"></i> Export All (CSV)
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="copyAmrTableTsv()">
+              <i class="fa-solid fa-copy"></i> Copy Table
+            </button>
           </div>
+        </div>
 
-          <!-- Official Standard Reporting Matrix -->
-          <div class="table-wrap">
-            <div
-              style="
+        <!-- Official Standard Reporting Matrix -->
+        <div class="table-wrap">
+          <div style="
                 padding: 16px 20px;
                 background: var(--bg3);
                 border-bottom: 1px solid var(--border);
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-              "
-            >
-              <div
-                style="
+              ">
+            <div style="
                   font-weight: 800;
                   font-size: 14px;
                   color: var(--text);
                   letter-spacing: -0.2px;
-                "
-              >
-                Culture &amp; Sensitivity (C&amp;S) Surveillance Data
-              </div>
+                ">
+              Culture &amp; Sensitivity (C&amp;S) Surveillance Data
             </div>
+          </div>
 
-            <div class="amr-table-scroll">
-              <table class="amr-report-table">
-                <thead>
-                  <tr class="amr-th-primary">
-                    <th rowspan="2" class="th-month">Month,<br />Year</th>
-                    <th colspan="4" class="th-group-samples-src">
-                      Total no. of samples received for culture<br /><span
-                        class="th-sub-label"
-                        >(Source of sample)</span
-                      >
-                    </th>
-                    <th rowspan="2" class="th-total-col">Total<br />Sample</th>
-                    <th colspan="4" class="th-group-pos-src">
-                      Total no. of<br />Culture Positive Samples
-                    </th>
-                    <th rowspan="2" class="th-total-pos-col">
-                      Total<br />Positive<br />Sample
-                    </th>
-                    <th colspan="5" class="th-group-samples-type">
-                      Total no. of Samples received for culture<br /><span
-                        class="th-sub-label"
-                        >(Type of sample)</span
-                      >
-                    </th>
-                    <th rowspan="2" class="th-total-col">Total<br />Sample</th>
-                    <th colspan="5" class="th-group-pos-type">
-                      Total no. of<br />Culture Positive Samples
-                    </th>
-                    <th rowspan="2" class="th-total-pos-col">
-                      Total<br />Positive<br />Sample
-                    </th>
-                  </tr>
-                  <tr class="amr-th-sub">
-                    <!-- Source of Sample -->
-                    <th>OPD</th>
-                    <th>IPD</th>
-                    <th>ICU</th>
-                    <th>Others</th>
+          <div class="amr-table-scroll">
+            <table class="amr-report-table">
+              <thead>
+                <tr class="amr-th-primary">
+                  <th rowspan="2" class="th-month">Month,<br />Year</th>
+                  <th colspan="4" class="th-group-samples-src">
+                    Total no. of samples received for culture<br /><span class="th-sub-label">(Source of sample)</span>
+                  </th>
+                  <th rowspan="2" class="th-total-col">Total<br />Sample</th>
+                  <th colspan="4" class="th-group-pos-src">
+                    Total no. of<br />Culture Positive Samples
+                  </th>
+                  <th rowspan="2" class="th-total-pos-col">
+                    Total<br />Positive<br />Sample
+                  </th>
+                  <th colspan="5" class="th-group-samples-type">
+                    Total no. of Samples received for culture<br /><span class="th-sub-label">(Type of sample)</span>
+                  </th>
+                  <th rowspan="2" class="th-total-col">Total<br />Sample</th>
+                  <th colspan="5" class="th-group-pos-type">
+                    Total no. of<br />Culture Positive Samples
+                  </th>
+                  <th rowspan="2" class="th-total-pos-col">
+                    Total<br />Positive<br />Sample
+                  </th>
+                </tr>
+                <tr class="amr-th-sub">
+                  <!-- Source of Sample -->
+                  <th>OPD</th>
+                  <th>IPD</th>
+                  <th>ICU</th>
+                  <th>Others</th>
 
-                    <!-- Positive by Source -->
-                    <th>OPD</th>
-                    <th>IPD</th>
-                    <th>ICU</th>
-                    <th>Others</th>
+                  <!-- Positive by Source -->
+                  <th>OPD</th>
+                  <th>IPD</th>
+                  <th>ICU</th>
+                  <th>Others</th>
 
-                    <!-- Type of sample -->
-                    <th>Blood</th>
-                    <th>Pus</th>
-                    <th>Sputum</th>
-                    <th>Urine</th>
-                    <th>Others</th>
+                  <!-- Type of sample -->
+                  <th>Blood</th>
+                  <th>Pus</th>
+                  <th>Sputum</th>
+                  <th>Urine</th>
+                  <th>Others</th>
 
-                    <!-- Positive by Type -->
-                    <th>Blood</th>
-                    <th>Pus</th>
-                    <th>Sputum</th>
-                    <th>Urine</th>
-                    <th>Others</th>
-                  </tr>
-                </thead>
-                <tbody id="amr-table-body">
-                  <tr>
-                    <td
-                      colspan="23"
-                      style="
+                  <!-- Positive by Type -->
+                  <th>Blood</th>
+                  <th>Pus</th>
+                  <th>Sputum</th>
+                  <th>Urine</th>
+                  <th>Others</th>
+                </tr>
+              </thead>
+              <tbody id="amr-table-body">
+                <tr>
+                  <td colspan="23" style="
                         padding: 32px;
                         text-align: center;
                         color: var(--text3);
                         font-weight: 500;
-                      "
-                    >
-                      No database loaded — please open or select a WHONET
-                      database to view surveillance data.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                      ">
+                    No database loaded — please open or select a WHONET
+                    database to view surveillance data.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+        </div>
 
-          <!-- Instructions Card -->
-          <div
-            style="
+        <!-- Instructions Card -->
+        <div style="
               margin-top: 28px;
               background: var(--bg2);
               border: 1px solid var(--border);
               border-radius: var(--radius);
               padding: 22px 24px;
               box-shadow: var(--shadow-card);
-            "
-          >
-            <div
-              style="
+            ">
+          <div style="
                 font-weight: 800;
                 font-size: 14px;
                 color: var(--text);
@@ -1295,471 +879,306 @@
                 display: flex;
                 align-items: center;
                 gap: 8px;
-              "
-            >
-              <span
-                ><i
-                  class="fa-solid fa-circle-info"
-                  style="color: var(--accent)"
-                ></i
-              ></span>
-              Sample Definitions:
-            </div>
-            <ul
-              style="
+              ">
+            <span><i class="fa-solid fa-circle-info" style="color: var(--accent)"></i></span>
+            Sample Definitions:
+          </div>
+          <ul style="
                 padding-left: 20px;
                 font-size: 13px;
                 line-height: 1.7;
                 color: var(--text2);
-              "
-            >
-              <li>
-                No growth / normal commensals are defined as:
-                <ul
-                  style="
+              ">
+            <li>
+              No growth / normal commensals are defined as:
+              <ul style="
                     margin: 6px 0 8px;
                     padding-left: 24px;
                     list-style-type: circle;
-                  "
-                >
-                  <li>
-                    <strong>Blood:</strong> <code>xxx</code> (no growth),
-                    <code>xpa</code>, <code>xep</code>, <code>xsg</code>,
-                    <code>nor</code> (normal flora), or
-                    <code>scn</code> (CoNS/skin contaminant).
-                  </li>
-                  <li>
-                    <strong>Other Sample Types:</strong> <code>xxx</code>,
-                    <code>xpa</code>, <code>xep</code>, <code>xsg</code>,
-                    <code>nor</code>, <code>ora</code>, or <code>vag</code>.
-                  </li>
-                </ul>
-              </li>
-              <li>
-                All other pathogens are identified and counted as positive
-                growth.
-              </li>
-            </ul>
-          </div>
+                  ">
+                <li>
+                  <strong>Blood:</strong> <code>xxx</code> (no growth),
+                  <code>xpa</code>, <code>xep</code>, <code>xsg</code>,
+                  <code>nor</code> (normal flora), or
+                  <code>scn</code> (CoNS/skin contaminant).
+                </li>
+                <li>
+                  <strong>Other Sample Types:</strong> <code>xxx</code>,
+                  <code>xpa</code>, <code>xep</code>, <code>xsg</code>,
+                  <code>nor</code>, <code>ora</code>, or <code>vag</code>.
+                </li>
+              </ul>
+            </li>
+            <li>
+              All other pathogens are identified and counted as positive
+              growth.
+            </li>
+          </ul>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
+  </div>
 
-    <!-- Toast Notification Container -->
-    <div id="toast-container"></div>
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
 
-    <!-- Edit Isolate Modal -->
-    <div
-      class="modal-overlay"
-      id="edit-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="edit-modal-title"
-    >
-      <div class="modal" style="max-width: 680px">
-        <div class="modal-header">
-          <div class="modal-title" id="edit-modal-title">
-            <i class="fa-solid fa-pen-to-square"></i> Edit Isolate Record
-          </div>
-          <button
-            type="button"
-            class="modal-close"
-            onclick="closeEditModal()"
-            aria-label="Close edit dialog"
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
+  <!-- Edit Isolate Modal -->
+  <div class="modal-overlay" id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+    <div class="modal" style="max-width: 680px">
+      <div class="modal-header">
+        <div class="modal-title" id="edit-modal-title">
+          <i class="fa-solid fa-pen-to-square"></i> Edit Isolate Record
         </div>
-        <div class="modal-body" style="padding: 22px 24px">
-          <form id="edit-isolate-form" onsubmit="saveEditModal(event)">
-            <input type="hidden" id="edit-row-idx" />
-            <div
-              style="
+        <button type="button" class="modal-close" onclick="closeEditModal()" aria-label="Close edit dialog">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 22px 24px">
+        <form id="edit-isolate-form" onsubmit="saveEditModal(event)">
+          <input type="hidden" id="edit-row-idx" />
+          <div style="
                 display: grid;
                 grid-template-columns: 1fr 1fr;
                 gap: 14px;
                 margin-bottom: 18px;
-              "
-            >
-              <div class="form-group">
-                <label
-                  for="edit-spec-num"
-                  style="
+              ">
+            <div class="form-group">
+              <label for="edit-spec-num" style="
                     display: block;
                     font-size: 11px;
                     font-weight: 700;
                     color: var(--text3);
                     text-transform: uppercase;
                     margin-bottom: 5px;
-                  "
-                  >Specimen # (SPEC_NUM)</label
-                >
-                <input
-                  type="text"
-                  id="edit-spec-num"
-                  class="form-input"
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace"
-                  required
-                />
-              </div>
-              <div class="form-group">
-                <label
-                  for="edit-patient-id"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Patient ID (PATIENT_ID)</label
-                >
-                <input
-                  type="text"
-                  id="edit-patient-id"
-                  class="form-input"
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace"
-                />
-              </div>
-              <div class="form-group" style="grid-column: span 2">
-                <label
-                  for="edit-full-name"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Patient Full Name</label
-                >
-                <input type="text" id="edit-full-name" class="form-input" />
-              </div>
-              <div class="form-group">
-                <label
-                  for="edit-spec-date"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Specimen Date</label
-                >
-                <input
-                  type="date"
-                  id="edit-spec-date"
-                  class="form-input"
-                  placeholder="YYYY-MM-DD"
-                />
-              </div>
-              <div class="form-group">
-                <label
-                  for="edit-spec-type"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Specimen Type</label
-                >
-                <input
-                  type="text"
-                  id="edit-spec-type"
-                  class="form-input"
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace"
-                />
-              </div>
-              <div class="form-group">
-                <label
-                  for="edit-organism"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Organism Code</label
-                >
-                <input
-                  type="text"
-                  id="edit-organism"
-                  class="form-input"
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace"
-                />
-              </div>
-              <div class="form-group">
-                <label
-                  for="edit-ward"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Ward / Location</label
-                >
-                <input type="text" id="edit-ward" class="form-input" />
-              </div>
-              <div class="form-group">
-                <label
-                  for="edit-sex"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Sex</label
-                >
-                <select id="edit-sex" class="form-input">
-                  <option value="">—</option>
-                  <option value="m">Male (m)</option>
-                  <option value="f">Female (f)</option>
-                  <option value="u">Unknown (u)</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label
-                  for="edit-age"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Age</label
-                >
-                <input
-                  type="text"
-                  id="edit-age"
-                  class="form-input"
-                  placeholder="e.g. 45, 7d, 3m"
-                />
-              </div>
-              <div class="form-group" style="grid-column: span 2">
-                <label
-                  for="edit-department"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Department</label
-                >
-                <input type="text" id="edit-department" class="form-input" />
-              </div>
-              <div class="form-group" style="grid-column: span 2">
-                <label
-                  for="edit-comment"
-                  style="
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    text-transform: uppercase;
-                    margin-bottom: 5px;
-                  "
-                  >Clinical / Correction Comment</label
-                >
-                <input
-                  type="text"
-                  id="edit-comment"
-                  class="form-input"
-                  placeholder="Notes about this correction"
-                />
-              </div>
+                  ">Specimen # (SPEC_NUM)</label>
+              <input type="text" id="edit-spec-num" class="form-input"
+                style="font-family: &quot;JetBrains Mono&quot;, monospace" required />
             </div>
-            <div
-              style="
+            <div class="form-group">
+              <label for="edit-patient-id" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Patient ID (PATIENT_ID)</label>
+              <input type="text" id="edit-patient-id" class="form-input"
+                style="font-family: &quot;JetBrains Mono&quot;, monospace" />
+            </div>
+            <div class="form-group" style="grid-column: span 2">
+              <label for="edit-full-name" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Patient Full Name</label>
+              <input type="text" id="edit-full-name" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label for="edit-spec-date" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Specimen Date</label>
+              <input type="date" id="edit-spec-date" class="form-input" placeholder="YYYY-MM-DD" />
+            </div>
+            <div class="form-group">
+              <label for="edit-spec-type" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Specimen Type</label>
+              <input type="text" id="edit-spec-type" class="form-input"
+                style="font-family: &quot;JetBrains Mono&quot;, monospace" />
+            </div>
+            <div class="form-group">
+              <label for="edit-organism" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Organism Code</label>
+              <input type="text" id="edit-organism" class="form-input"
+                style="font-family: &quot;JetBrains Mono&quot;, monospace" />
+            </div>
+            <div class="form-group">
+              <label for="edit-ward" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Ward / Location</label>
+              <input type="text" id="edit-ward" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label for="edit-sex" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Sex</label>
+              <select id="edit-sex" class="form-input">
+                <option value="">—</option>
+                <option value="m">Male (m)</option>
+                <option value="f">Female (f)</option>
+                <option value="u">Unknown (u)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-age" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Age</label>
+              <input type="text" id="edit-age" class="form-input" placeholder="e.g. 45, 7d, 3m" />
+            </div>
+            <div class="form-group" style="grid-column: span 2">
+              <label for="edit-department" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Department</label>
+              <input type="text" id="edit-department" class="form-input" />
+            </div>
+            <div class="form-group" style="grid-column: span 2">
+              <label for="edit-comment" style="
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--text3);
+                    text-transform: uppercase;
+                    margin-bottom: 5px;
+                  ">Clinical / Correction Comment</label>
+              <input type="text" id="edit-comment" class="form-input" placeholder="Notes about this correction" />
+            </div>
+          </div>
+          <div style="
                 display: flex;
                 gap: 10px;
                 justify-content: flex-end;
                 padding-top: 14px;
                 border-top: 1px solid var(--border);
-              "
-            >
-              <button
-                type="button"
-                class="btn btn-ghost"
-                onclick="closeEditModal()"
-              >
-                Cancel
-              </button>
-              <button type="submit" class="btn btn-primary" id="edit-save-btn">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                Save Corrections
-              </button>
-            </div>
-          </form>
-        </div>
+              ">
+            <button type="button" class="btn btn-ghost" onclick="closeEditModal()">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary" id="edit-save-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Save Corrections
+            </button>
+          </div>
+        </form>
       </div>
     </div>
+  </div>
 
-    <!-- Isolate Detail Modal -->
-    <div
-      class="modal-overlay"
-      id="detail-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
-    >
-      <div class="modal">
-        <div class="modal-header">
-          <div class="modal-title" id="modal-title">Isolate Detail</div>
-          <button
-            type="button"
-            class="modal-close"
-            onclick="closeModal()"
-            aria-label="Close isolate details"
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div class="modal-body" id="modal-body"></div>
+  <!-- Isolate Detail Modal -->
+  <div class="modal-overlay" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">Isolate Detail</div>
+        <button type="button" class="modal-close" onclick="closeModal()" aria-label="Close isolate details">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
+      <div class="modal-body" id="modal-body"></div>
     </div>
+  </div>
 
-    <!-- Confirm Action Modal -->
-    <div
-      class="modal-overlay"
-      id="confirm-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-title"
-    >
-      <div class="modal" style="max-width: 480px">
-        <div class="modal-header">
-          <div class="modal-title" id="confirm-title">Confirm Action</div>
-          <button
-            type="button"
-            class="modal-close"
-            onclick="closeConfirm()"
-            aria-label="Close confirm dialog"
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div id="confirm-body"></div>
-          <div
-            style="
+  <!-- Confirm Action Modal -->
+  <div class="modal-overlay" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="modal" style="max-width: 480px">
+      <div class="modal-header">
+        <div class="modal-title" id="confirm-title">Confirm Action</div>
+        <button type="button" class="modal-close" onclick="closeConfirm()" aria-label="Close confirm dialog">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="confirm-body"></div>
+        <div style="
               display: flex;
               gap: 12px;
               margin-top: 22px;
               justify-content: flex-end;
-            "
-          >
-            <button class="btn btn-ghost" onclick="closeConfirm()">
-              Cancel
-            </button>
-            <button
-              class="btn btn-danger"
-              id="confirm-ok-btn"
-              onclick="executeConfirm()"
-            >
-              Confirm
-            </button>
-          </div>
+            ">
+          <button class="btn btn-ghost" onclick="closeConfirm()">
+            Cancel
+          </button>
+          <button class="btn btn-danger" id="confirm-ok-btn" onclick="executeConfirm()">
+            Confirm
+          </button>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Initial Disclaimer Modal -->
-    <div
-      class="modal-overlay"
-      id="disclaimer-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="disclaimer-modal-title"
-    >
-      <div class="modal" style="max-width: 580px">
-        <div class="modal-header" style="padding: 14px 20px">
-          <div
-            class="modal-title"
-            id="disclaimer-modal-title"
-            style="display: flex; align-items: center; gap: 12px"
-          >
-            <img
-              src="/logo.png"
-              style="height: 48px; width: auto; display: block"
-              alt="WHONET SQLite Viewer"
-            />
-            <span
-              style="
+  <!-- Initial Disclaimer Modal -->
+  <div class="modal-overlay" id="disclaimer-modal" role="dialog" aria-modal="true"
+    aria-labelledby="disclaimer-modal-title">
+    <div class="modal" style="max-width: 580px">
+      <div class="modal-header" style="padding: 14px 20px">
+        <div class="modal-title" id="disclaimer-modal-title" style="display: flex; align-items: center; gap: 12px">
+          <img src="/logo.png" style="height: 48px; width: auto; display: block" alt="WHONET SQLite Viewer" />
+          <span style="
                 font-size: 18px;
                 font-weight: 700;
                 color: var(--text);
                 letter-spacing: -0.01em;
-              "
-            >
-              WHONET SQLite Viewer
-            </span>
-          </div>
-          <button
-            type="button"
-            class="modal-close"
-            onclick="
+              ">
+            WHONET SQLite Viewer
+          </span>
+        </div>
+        <button type="button" class="modal-close" onclick="
               document
                 .getElementById('disclaimer-modal')
                 ?.classList.remove('open')
-            "
-            aria-label="Close welcome dialog"
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div class="modal-body" style="padding: 16px 20px">
-          <div
-            style="
+            " aria-label="Close welcome dialog">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px">
+        <div style="
               font-size: 13.5px;
               line-height: 1.5;
               color: var(--text2);
               margin-bottom: 14px;
-            "
-          >
-            Explore, visualize, and analyze WHONET SQLite databases directly
-            within your browser.
-          </div>
+            ">
+          Explore, visualize, and analyze WHONET SQLite databases directly
+          within your browser.
+        </div>
 
-          <!-- 2-Card Feature Grid -->
-          <div
-            style="
+        <!-- 2-Card Feature Grid -->
+        <div style="
               display: grid;
               grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
               gap: 10px;
               margin-bottom: 14px;
-            "
-          >
-            <div
-              style="
+            ">
+          <div style="
                 background: var(--bg2);
                 border: 1px solid var(--border);
                 border-radius: var(--radius-sm);
@@ -1767,56 +1186,38 @@
                 display: flex;
                 flex-direction: column;
                 gap: 6px;
-              "
-            >
-              <div style="display: flex; align-items: center; gap: 8px">
-                <i
-                  class="fa-solid fa-shield-halved"
-                  style="color: var(--accent); font-size: 15px"
-                ></i>
-                <strong style="font-size: 12.5px; color: var(--text)"
-                  >100% Client-Side</strong
-                >
-              </div>
-              <span
-                style="font-size: 11.5px; color: var(--text3); line-height: 1.4"
-              >
-                Zero server upload. All laboratory records stay confidential in
-                your local browser runtime.
-              </span>
+              ">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <i class="fa-solid fa-shield-halved" style="color: var(--accent); font-size: 15px"></i>
+              <strong style="font-size: 12.5px; color: var(--text)">100% Client-Side</strong>
             </div>
-
-            <div
-              style="
-                background: var(--bg2);
-                border: 1px solid var(--border);
-                border-radius: var(--radius-sm);
-                padding: 10px 12px;
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-              "
-            >
-              <div style="display: flex; align-items: center; gap: 8px">
-                <i
-                  class="fa-solid fa-bolt-lightning"
-                  style="color: #f59e0b; font-size: 15px"
-                ></i>
-                <strong style="font-size: 12.5px; color: var(--text)"
-                  >Local SQLite Engine</strong
-                >
-              </div>
-              <span
-                style="font-size: 11.5px; color: var(--text3); line-height: 1.4"
-              >
-                High-speed in-browser SQL queries and calculations powered by
-                WebAssembly.
-              </span>
-            </div>
+            <span style="font-size: 11.5px; color: var(--text3); line-height: 1.4">
+              Zero server upload. All laboratory records stay confidential in
+              your local browser runtime.
+            </span>
           </div>
 
-          <div
-            style="
+          <div style="
+                background: var(--bg2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-sm);
+                padding: 10px 12px;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+              ">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <i class="fa-solid fa-bolt-lightning" style="color: #f59e0b; font-size: 15px"></i>
+              <strong style="font-size: 12.5px; color: var(--text)">Local SQLite Engine</strong>
+            </div>
+            <span style="font-size: 11.5px; color: var(--text3); line-height: 1.4">
+              High-speed in-browser SQL queries and calculations powered by
+              WebAssembly.
+            </span>
+          </div>
+        </div>
+
+        <div style="
               font-size: 11.5px;
               color: var(--text3);
               line-height: 1.5;
@@ -1825,105 +1226,66 @@
               border-radius: var(--radius-xs);
               border: 1px solid var(--border);
               margin-bottom: 16px;
-            "
-          >
-            <strong>Disclaimer:</strong> WHONET is the property of the
-            <strong
-              >WHO Collaborating Centre for Surveillance of Antimicrobial
-              Resistance</strong
-            >
-            (Brigham and Women's Hospital).<br /><br />
-            This tool is an independent open-source utility developed by
-            <a
-              href="https://drshtmstry.github.io/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style="
+            ">
+          <strong>Disclaimer:</strong> WHONET is the property of the
+          <strong>WHO Collaborating Centre for Surveillance of Antimicrobial
+            Resistance</strong>
+          (Brigham and Women's Hospital).<br /><br />
+          This tool is an independent open-source utility developed by
+          <a href="https://drshtmstry.github.io/" target="_blank" rel="noopener noreferrer" style="
                 color: var(--accent);
                 font-weight: 700;
                 text-decoration: none;
-              "
-              >Dr. Darshit Mistry</a
-            >
-            as a community tool and is not affiliated with, endorsed by, or
-            sponsored by WHONET.
-          </div>
-          <div style="display: flex; gap: 12px; justify-content: flex-end">
-            <button
-              class="btn btn-primary"
-              onclick="proceedToDataSourceModal()"
-              style="
+              ">Dr. Darshit Mistry</a>
+          as a community tool and is not affiliated with, endorsed by, or
+          sponsored by WHONET.
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end">
+          <button class="btn btn-primary" onclick="proceedToDataSourceModal()" style="
                 padding: 8px 22px;
                 font-size: 13.5px;
                 font-weight: 700;
                 display: inline-flex;
                 align-items: center;
                 gap: 8px;
-              "
-            >
-              <span>Continue</span>
-              <i class="fa-solid fa-arrow-right" style="font-size: 12px"></i>
-            </button>
-          </div>
+              ">
+            <span>Continue</span>
+            <i class="fa-solid fa-arrow-right" style="font-size: 12px"></i>
+          </button>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Data Source Selection Modal -->
-    <div
-      class="modal-overlay"
-      id="source-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="source-modal-title"
-    >
-      <div class="modal" style="max-width: 640px">
-        <div class="modal-header">
-          <div
-            class="modal-title"
-            id="source-modal-title"
-            style="display: flex; align-items: center; gap: 10px"
-          >
-            <span
-              ><i
-                class="fa-solid fa-folder-open"
-                style="color: var(--accent)"
-              ></i
-            ></span>
-            <span>Select WHONET Database to Open</span>
-          </div>
-          <button
-            type="button"
-            class="modal-close"
-            onclick="
-              document.getElementById('source-modal')?.classList.remove('open')
-            "
-            aria-label="Close data source dialog"
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
+  <!-- Data Source Selection Modal -->
+  <div class="modal-overlay" id="source-modal" role="dialog" aria-modal="true" aria-labelledby="source-modal-title">
+    <div class="modal" style="max-width: 640px">
+      <div class="modal-header">
+        <div class="modal-title" id="source-modal-title" style="display: flex; align-items: center; gap: 10px">
+          <span><i class="fa-solid fa-folder-open" style="color: var(--accent)"></i></span>
+          <span>Select WHONET Database to Open</span>
         </div>
-        <div class="modal-body" style="padding: 24px 28px">
-          <div
-            style="font-size: 14px; color: var(--text2); margin-bottom: 20px"
-          >
-            Choose how you would like to load your WHONET laboratory database:
-          </div>
+        <button type="button" class="modal-close" onclick="
+              document.getElementById('source-modal')?.classList.remove('open')
+            " aria-label="Close data source dialog">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 24px 28px">
+        <div style="font-size: 14px; color: var(--text2); margin-bottom: 20px">
+          Choose how you would like to load your WHONET laboratory database:
+        </div>
 
-          <!-- Interactive Option Cards -->
-          <div style="display: flex; flex-direction: column; gap: 16px">
-            <!-- Option 1: Select from default path (Local Server) -->
-            <div
-              id="launch-option-local"
-              style="
+        <!-- Interactive Option Cards -->
+        <div style="display: flex; flex-direction: column; gap: 16px">
+          <!-- Option 1: Select from default path (Local Server) -->
+          <div id="launch-option-local" style="
                 background: var(--bg3);
                 border: 1px solid var(--border);
                 border-radius: var(--radius);
                 padding: 18px;
-              "
-            >
-              <div
-                style="
+              ">
+            <div style="
                   font-weight: 800;
                   font-size: 14px;
                   color: var(--accent);
@@ -1931,94 +1293,59 @@
                   display: flex;
                   align-items: center;
                   gap: 8px;
-                "
-              >
-                <span
-                  ><i
-                    class="fa-solid fa-folder"
-                    style="color: var(--accent)"
-                  ></i
-                ></span>
-                Option 1: Select file from WHONET Data Folder
-              </div>
-              <div
-                id="launch-local-desc"
-                style="
+                ">
+              <span><i class="fa-solid fa-folder" style="color: var(--accent)"></i></span>
+              Option 1: Select file from WHONET Data Folder
+            </div>
+            <div id="launch-local-desc" style="
                   font-size: 12.5px;
                   color: var(--text3);
                   margin-bottom: 12px;
-                "
-              >
-                Folder:
-                <code
-                  style="
+                ">
+              Folder:
+              <code style="
                     background: var(--bg2);
                     padding: 2px 7px;
                     border-radius: 4px;
                     border: 1px solid var(--border);
                     color: var(--text);
-                  "
-                  >C:\WHONET\Data</code
-                >
-              </div>
-              <div id="launch-local-file-row" class="launch-select-row">
-                <select
-                  id="launch-db-select"
-                  class="filter-select launch-db-select"
-                >
-                  <option value="">Scanning folder…</option>
-                </select>
-                <button
-                  id="btn-open-launch-file"
-                  class="btn btn-primary btn-sm launch-open-btn"
-                  onclick="selectFromLaunchList()"
-                >
-                  Open File
-                </button>
-              </div>
-              <div
-                id="launch-dir-actions"
-                style="
+                  ">C:\WHONET\Data</code>
+            </div>
+            <div id="launch-local-file-row" class="launch-select-row">
+              <select id="launch-db-select" class="filter-select launch-db-select">
+                <option value="">Scanning folder…</option>
+              </select>
+              <button id="btn-open-launch-file" class="btn btn-primary btn-sm launch-open-btn"
+                onclick="selectFromLaunchList()">
+                Open File
+              </button>
+            </div>
+            <div id="launch-dir-actions" style="
                   margin-top: 12px;
                   display: flex;
                   gap: 8px;
                   flex-wrap: wrap;
                   align-items: center;
-                "
-              >
-                <button
-                  type="button"
-                  id="btn-pick-folder"
-                  class="btn btn-sm btn-primary"
-                  onclick="chooseWhonetFolder()"
-                  style="padding: 7px 16px; font-size: 12.5px; display: none"
-                >
-                  <i class="fa-solid fa-folder-open"></i> Select WHONET Folder
-                  (C:\WHONET\Data)
-                </button>
-                <input
-                  type="file"
-                  id="folder-input-fallback"
-                  webkitdirectory
-                  directory
-                  style="display: none"
-                  onchange="handleFolderSelected(this.files)"
-                />
-              </div>
+                ">
+              <button type="button" id="btn-pick-folder" class="btn btn-sm btn-primary" onclick="chooseWhonetFolder()"
+                style="padding: 7px 16px; font-size: 12.5px; display: none">
+                <i class="fa-solid fa-folder-open"></i> Select WHONET Folder
+                (C:\WHONET\Data)
+              </button>
+              <input type="file" id="folder-input-fallback" webkitdirectory directory style="display: none"
+                onchange="handleFolderSelected(this.files)" />
             </div>
+          </div>
 
-            <!-- Option 2: Upload / Browse file -->
-            <div
-              style="
+          <!-- Option 2: Upload / Browse file -->
+          <div style="
                 background: var(--bg3);
                 border: 1px solid var(--border);
                 border-radius: var(--radius);
                 padding: 18px;
                 text-align: center;
-              "
-            >
-              <div
-                style="
+              ">
+            <div style="
                   font-weight: 800;
                   font-size: 14px;
                   color: var(--green);
@@ -2027,54 +1354,35 @@
                   align-items: center;
                   justify-content: center;
                   gap: 8px;
-                "
-              >
-                <span
-                  ><i
-                    class="fa-solid fa-cloud-arrow-up"
-                    style="color: var(--green)"
-                  ></i
-                ></span>
-                Option 2: Browse a Specific File
-              </div>
-              <div
-                style="
+                ">
+              <span><i class="fa-solid fa-cloud-arrow-up" style="color: var(--green)"></i></span>
+              Option 2: Browse a Specific File
+            </div>
+            <div style="
                   font-size: 12.5px;
                   color: var(--text2);
                   margin-bottom: 14px;
-                "
-              >
-                Select one <strong>.sqlite</strong> file from any folder. Modern
-                browsers can save changes directly back to that file.
-              </div>
-              <button
-                class="btn btn-success btn-sm"
-                onclick="triggerBrowseFile()"
-                style="padding: 9px 24px; font-size: 13.5px"
-              >
-                <i class="fa-solid fa-folder-open"></i> Browse &amp; Open
-                .sqlite File
-              </button>
-              <input
-                type="file"
-                id="launch-file-input"
-                accept=".sqlite"
-                style="display: none"
-                onchange="handleLaunchFileUpload(this.files[0])"
-              />
+                ">
+              Select one <strong>.sqlite</strong> file from any folder. Modern
+              browsers can save changes directly back to that file.
             </div>
+            <button class="btn btn-success btn-sm" onclick="triggerBrowseFile()"
+              style="padding: 9px 24px; font-size: 13.5px">
+              <i class="fa-solid fa-folder-open"></i> Browse &amp; Open
+              .sqlite File
+            </button>
+            <input type="file" id="launch-file-input" accept=".sqlite" style="display: none"
+              onchange="handleLaunchFileUpload(this.files[0])" />
+          </div>
 
-            <!-- Option 3: Bundled WHO Sample Databases -->
-            <div
-              style="
+          <!-- Option 3: Bundled WHO Sample Databases -->
+          <div style="
                 background: var(--bg3);
                 border: 1px solid var(--border);
                 border-radius: var(--radius);
                 padding: 18px;
-              "
-            >
-              <div
-                style="
+              ">
+            <div style="
                   font-weight: 800;
                   font-size: 14px;
                   color: var(--purple);
@@ -2082,93 +1390,81 @@
                   display: flex;
                   align-items: center;
                   gap: 8px;
-                "
-              >
-                <span
-                  ><i class="fa-solid fa-flask" style="color: var(--purple)"></i
-                ></span>
-                Option 3: Bundled Sample Data (Online / Demo)
-              </div>
-              <div
-                style="
+                ">
+              <span><i class="fa-solid fa-flask" style="color: var(--purple)"></i></span>
+              Option 3: Bundled Sample Data (Online / Demo)
+            </div>
+            <div style="
                   font-size: 12.5px;
                   color: var(--text3);
                   margin-bottom: 12px;
-                "
-              >
-                Official WHO-TST test datasets bundled for instant testing
-                without uploading files:
-              </div>
-              <div style="display: flex; gap: 12px; flex-wrap: wrap">
-                <button
-                  class="btn btn-ghost btn-sm"
-                  onclick="loadSampleFromLaunch('WHO-TST-2020-01.sqlite')"
-                  style="
+                ">
+              Official WHO-TST test datasets bundled for instant testing
+              without uploading files:
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap">
+              <button class="btn btn-ghost btn-sm" onclick="loadSampleFromLaunch('WHO-TST-2020-01.sqlite')" style="
                     flex: 1;
                     min-width: 180px;
                     justify-content: center;
                     border-color: rgba(139, 92, 246, 0.3);
                     color: var(--purple);
-                  "
-                >
-                  <i class="fa-solid fa-database"></i> WHO-TST-2020-01.sqlite
-                </button>
-                <button
-                  class="btn btn-ghost btn-sm"
-                  onclick="
+                  ">
+                <i class="fa-solid fa-database"></i> WHO-TST-2020-01.sqlite
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="
                     loadSampleFromLaunch('WHO-TST-2020-OneHealth.sqlite')
-                  "
-                  style="
+                  " style="
                     flex: 1;
                     min-width: 180px;
                     justify-content: center;
                     border-color: rgba(139, 92, 246, 0.3);
                     color: var(--purple);
-                  "
-                >
-                  <i class="fa-solid fa-database"></i>
-                  WHO-TST-2020-OneHealth.sqlite
-                </button>
-              </div>
+                  ">
+                <i class="fa-solid fa-database"></i>
+                WHO-TST-2020-OneHealth.sqlite
+              </button>
             </div>
           </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <script src="/organisms.js"></script>
-    <script type="module" src="js/main.js"></script>
-    <script>
-      // Register Service Worker for PWA (Vercel / web deployments)
-      if (
-        "serviceWorker" in navigator &&
-        window.location.protocol.startsWith("http")
-      ) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker.register("/sw.js").catch((err) => {
-            console.info("SW registration skipped or failed:", err.message);
-          });
+  <script src="/organisms.js"></script>
+  <script type="module" src="js/main.js"></script>
+  <script>
+    // Register Service Worker for PWA (Vercel / web deployments)
+    if (
+      "serviceWorker" in navigator &&
+      window.location.protocol.startsWith("http")
+    ) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch((err) => {
+          console.info("SW registration skipped or failed:", err.message);
         });
-      }
+      });
+    }
 
-      // Live reload client for active local dev tabs
-      (function () {
-        if (
-          window.location.hostname === "localhost" ||
-          window.location.hostname === "127.0.0.1"
-        ) {
-          const es = new EventSource("/api/live-reload");
-          es.onmessage = function (e) {
-            if (e.data === "reload") {
-              console.log("[LiveReload] Refreshing...");
-              window.location.reload();
-            }
-          };
-          es.onerror = function () {
-            // Reconnect silently if disconnected
-          };
-        }
-      })();
-    </script>
-  </body>
+    // Live reload client for active local dev tabs
+    (function () {
+      if (
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+      ) {
+        const es = new EventSource("/api/live-reload");
+        es.onmessage = function (e) {
+          if (e.data === "reload") {
+            console.log("[LiveReload] Refreshing...");
+            window.location.reload();
+          }
+        };
+        es.onerror = function () {
+          // Reconnect silently if disconnected
+        };
+      }
+    })();
+  </script>
+</body>
+
 </html>
