@@ -404,8 +404,10 @@
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-              <input type="text" id="isolates-search" placeholder="Search by Specimen #, Patient ID, Organism, Name…"
+              <input type="search" id="isolates-search" name="isolates_search_query"
+                placeholder="Search by Specimen #, Patient ID, Organism, Name…"
                 aria-label="Search isolates by specimen number, patient ID, organism, or patient name"
+                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                 oninput="debouncedLoadIsolates()" />
             </div>
             <select class="filter-select" id="isolates-month-filter" aria-label="Filter isolates by month"
@@ -566,8 +568,11 @@
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-              <input type="text" id="dup-search" placeholder="Search by Specimen # or Patient ID…"
-                aria-label="Search duplicates by specimen number or patient ID" oninput="debouncedLoadDups()" />
+              <input type="search" id="dup-search" name="dup_search_query"
+                placeholder="Search by Specimen # or Patient ID…"
+                aria-label="Search duplicates by specimen number or patient ID"
+                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                oninput="debouncedLoadDups()" />
             </div>
             <button class="btn btn-ghost btn-sm" onclick="fixCasingAndRefresh()"
               title="UPDATE Isolates SET SPEC_NUM = UPPER(SPEC_NUM)">
