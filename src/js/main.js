@@ -210,6 +210,44 @@ onDataMutated((hint) => {
   }
 });
 
+// ── Real-Time External Database Auto-Refresh ──
+export function handleExternalDbUpdate() {
+  if (!state.currentDb) return;
+  toast('Database modified on disk — refreshed data', 'info');
+  loadStats();
+  if (state.currentPage === 'isolates') {
+    loadIsolates(state.isolatesPage || 1);
+  } else if (state.currentPage === 'duplicates') {
+    loadDuplicates(state.dupsPage || 1);
+  } else if (state.currentPage === 'monthly-amr') {
+    loadMonthlyAmrData();
+  } else if (state.currentPage === 'dashboard') {
+    updateDashboardCharts();
+  }
+}
+
+// Check for file modifications on disk when window regains focus (WASM mode)
+window.addEventListener('focus', async () => {
+  if (state.isWasmMode && state.activeFileHandle && !state.isModified) {
+    try {
+      const file = await state.activeFileHandle.getFile();
+      if (state._lastFileMtime && file.lastModified > state._lastFileMtime) {
+        state._lastFileMtime = file.lastModified;
+        const buffer = await file.arrayBuffer();
+        const SQL = await getSqlJs();
+        if (state.wasmDb) {
+          try { state.wasmDb.close(); } catch (_) {}
+        }
+        state.wasmDb = new SQL.Database(new Uint8Array(buffer));
+        state._schemaNormalised = false;
+        ensureWasmFunctions();
+        normaliseSchema();
+        handleExternalDbUpdate();
+      }
+    } catch (_) {}
+  }
+});
+
 // ── App Initialization ──
 export async function init() {
   initTheme();
@@ -378,6 +416,7 @@ Object.assign(window, {
   handleLaunchFileUpload,
   loadSampleFromLaunch,
   proceedToDataSourceModal,
+  handleExternalDbUpdate,
   toast
 });
 

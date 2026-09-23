@@ -517,6 +517,7 @@ export async function handleFileUpload(file, fileHandle = null) {
     state.activeFileHandle = fileHandle;
     state.fileHandles[file.name] = fileHandle || file;
     state.isModified = false;
+    state._lastFileMtime = file.lastModified || Date.now();
 
     if (!state.databases.includes(file.name)) {
       state.databases.push(file.name);

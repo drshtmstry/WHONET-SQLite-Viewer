@@ -71,7 +71,7 @@ export async function viewDetail(rowIdx) {
         <button class="btn btn-ghost btn-sm" onclick="closeModal();openEditModal(${r.ROW_IDX})">
           <i class="fa-solid fa-pen-to-square"></i> Edit All Fields
         </button>
-        <button class="btn btn-danger btn-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, '${(r.SPEC_NUM || '').replace(/'/g, "\\'")}');closeModal()">
+        <button class="btn btn-danger btn-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, ${escapeHtml(JSON.stringify(r.SPEC_NUM || ''))});closeModal()">
           Delete This Record
         </button>
       </div>
@@ -223,22 +223,24 @@ export async function saveEditModal(e) {
 
 // ── Confirm Modal ──
 export function confirmDeleteRow(rowIdx, specNum) {
+  const numericRowIdx = parseInt(rowIdx, 10);
   const title = document.getElementById('confirm-title');
   const body = document.getElementById('confirm-body');
   if (title) title.textContent = 'Delete Record';
+  const displaySpec = specNum ? escapeHtml(String(specNum)) : '—';
   if (body) {
     body.innerHTML = `
-      <div class="confirm-danger"><i class="fa-solid fa-triangle-exclamation"></i> This will permanently delete isolate <strong>#${rowIdx}</strong> (Specimen: <strong>${escapeHtml(specNum)}</strong>).<br><br>This action cannot be undone.</div>
+      <div class="confirm-danger"><i class="fa-solid fa-triangle-exclamation"></i> This will permanently delete isolate <strong>#${numericRowIdx}</strong> (Specimen: <strong>${displaySpec}</strong>).<br><br>This action cannot be undone.</div>
     `;
   }
   state.confirmAction = async () => {
     const data = await api('/api/delete-row', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ row_idx: rowIdx })
+      body: JSON.stringify({ row_idx: numericRowIdx })
     });
     if (data.error) return toast(data.error, 'error');
-    toast(`Row #${rowIdx} deleted`, 'success');
+    toast(`Row #${numericRowIdx} deleted`, 'success');
     notifyDataMutated('delete-row');
   };
   const confirmModal = document.getElementById('confirm-modal');
@@ -307,6 +309,20 @@ export function closeConfirm() {
 }
 
 export async function executeConfirm() {
-  if (state.confirmAction) await state.confirmAction();
-  closeConfirm();
+  const confirmBtn = document.getElementById('confirm-ok-btn');
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting…';
+  }
+  try {
+    if (state.confirmAction) await state.confirmAction();
+  } catch (err) {
+    toast(`Action failed: ${err.message}`, 'error');
+  } finally {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = 'Confirm';
+    }
+    closeConfirm();
+  }
 }

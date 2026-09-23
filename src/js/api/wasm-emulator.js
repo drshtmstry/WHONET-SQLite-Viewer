@@ -250,7 +250,9 @@ export function handleWasmApi(path, options = {}) {
 
     if (pathname === '/api/delete-row') {
       const { row_idx } = body;
-      const res = wasmRun('DELETE FROM Isolates WHERE ROW_IDX = ?', [row_idx]);
+      const numIdx = parseInt(row_idx, 10);
+      if (isNaN(numIdx)) return { error: 'Invalid row_idx' };
+      const res = wasmRun('DELETE FROM Isolates WHERE ROW_IDX = ?', [numIdx]);
       return { ok: true, changes: res.changes };
     }
 
@@ -259,8 +261,10 @@ export function handleWasmApi(path, options = {}) {
       if (!Array.isArray(row_indices) || !row_indices.length) {
         return { ok: true, changes: 0 };
       }
-      const placeholders = row_indices.map(() => '?').join(',');
-      const res = wasmRun(`DELETE FROM Isolates WHERE ROW_IDX IN (${placeholders})`, row_indices);
+      const numIndices = row_indices.map(n => parseInt(n, 10)).filter(n => !isNaN(n));
+      if (!numIndices.length) return { ok: true, changes: 0 };
+      const placeholders = numIndices.map(() => '?').join(',');
+      const res = wasmRun(`DELETE FROM Isolates WHERE ROW_IDX IN (${placeholders})`, numIndices);
       return { ok: true, changes: res.changes };
     }
 

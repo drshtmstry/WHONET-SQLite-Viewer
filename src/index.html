@@ -1455,8 +1455,13 @@
         const es = new EventSource("/api/live-reload");
         es.onmessage = function (e) {
           if (e.data === "reload") {
-            console.log("[LiveReload] Refreshing...");
+            console.log("[LiveReload] Refreshing application...");
             window.location.reload();
+          } else if (e.data === "data-refresh") {
+            console.log("[Auto-Sync] Database updated on disk, refreshing views...");
+            if (typeof window.handleExternalDbUpdate === "function") {
+              window.handleExternalDbUpdate();
+            }
           }
         };
         es.onerror = function () {

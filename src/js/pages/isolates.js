@@ -46,6 +46,7 @@ export function toggleIsolateCol(colKey) {
 }
 
 export async function loadIsolates(page = 1) {
+  const numPage = parseInt(page, 10) || 1;
   syncIsolateColCheckboxes();
   const isoBody = document.getElementById('isolates-table-body');
   const countEl = document.getElementById('isolates-count');
@@ -55,7 +56,7 @@ export async function loadIsolates(page = 1) {
     return;
   }
 
-  state.isolatesPage = page;
+  state.isolatesPage = numPage;
   const datasetVersion = state.datasetVersion;
   const databaseName = state.currentDb;
   const search = encodeURIComponent(document.getElementById('isolates-search')?.value || '');
@@ -66,7 +67,7 @@ export async function loadIsolates(page = 1) {
   const sortDir = state.isolatesSortDir || 'desc';
 
   if (isoBody) isoBody.innerHTML = '<div class="loading"><div class="spinner"></div>Loading isolates…</div>';
-  const data = await api(`/api/isolates?page=${page}&pageSize=25&search=${search}&month=${month}&organism=${org}&ward=${ward}&sortCol=${sortCol}&sortDir=${sortDir}`);
+  const data = await api(`/api/isolates?page=${numPage}&pageSize=25&search=${search}&month=${month}&organism=${org}&ward=${ward}&sortCol=${sortCol}&sortDir=${sortDir}`);
   if (datasetVersion !== state.datasetVersion || databaseName !== state.currentDb) return;
   if (data.error) return toast(data.error, 'error');
 
@@ -77,8 +78,35 @@ export async function loadIsolates(page = 1) {
     isoBody.innerHTML = renderIsolatesTable(data.rows);
     isoBody.scrollTop = 0;
     isoBody.scrollLeft = 0;
+    attachIsolatesTableListeners(isoBody);
   }
-  renderPagination('isolates-pagination', page, data.totalCount, 25, loadIsolates);
+  renderPagination('isolates-pagination', numPage, data.totalCount, 25, loadIsolates);
+}
+
+function attachIsolatesTableListeners(container) {
+  if (!container || container._hasActionsListener) return;
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const rowIdx = parseInt(btn.dataset.rowIdx, 10);
+    if (isNaN(rowIdx)) return;
+    if (action === 'delete') {
+      const specNum = btn.dataset.specNum || '';
+      if (typeof confirmDeleteRow === 'function') {
+        confirmDeleteRow(rowIdx, specNum);
+      } else if (typeof window.confirmDeleteRow === 'function') {
+        window.confirmDeleteRow(rowIdx, specNum);
+      }
+    } else if (action === 'edit') {
+      if (typeof openEditModal === 'function') openEditModal(rowIdx);
+      else if (typeof window.openEditModal === 'function') window.openEditModal(rowIdx);
+    } else if (action === 'view') {
+      if (typeof viewDetail === 'function') viewDetail(rowIdx);
+      else if (typeof window.viewDetail === 'function') window.viewDetail(rowIdx);
+    }
+  });
+  container._hasActionsListener = true;
 }
 
 export function renderIsolatesTable(rows) {
@@ -110,7 +138,8 @@ export function renderIsolatesTable(rows) {
     ${rows.map(r => {
       const fullName = (r.FULL_NAME || '').trim() || '—';
       const safeFullName = escapeHtml(fullName);
-      const safeSpecNum = JSON.stringify(r.SPEC_NUM || '');
+      const safeSpecNum = escapeHtml(JSON.stringify(r.SPEC_NUM || ''));
+      const safeSpecNumAttr = escapeHtml(r.SPEC_NUM || '');
       const ageSex = formatAgeSex(r.AGE, r.SEX);
       return `<tr>
       <td class="mono">${r.ROW_IDX}</td>
@@ -126,13 +155,13 @@ export function renderIsolatesTable(rows) {
       ${showMrsa ? `<td>${r.MRSA ? `<span class="badge badge-${r.MRSA === '+' ? 'r' : 's'}">${r.MRSA}</span>` : '—'}</td>` : ''}
       <td class="col-actions">
         <div class="row-actions-group">
-          <button class="btn btn-ghost btn-icon-sm" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
+          <button type="button" class="btn btn-ghost btn-icon-sm" data-action="edit" data-row-idx="${r.ROW_IDX}" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
             <i class="fa-solid fa-pen-to-square"></i>
           </button>
-          <button class="btn btn-ghost btn-icon-sm" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
+          <button type="button" class="btn btn-ghost btn-icon-sm" data-action="view" data-row-idx="${r.ROW_IDX}" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
             <i class="fa-solid fa-eye"></i>
           </button>
-          <button class="btn btn-danger btn-icon-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, ${safeSpecNum})" title="Delete this isolate" aria-label="Delete isolate">
+          <button type="button" class="btn btn-danger btn-icon-sm" data-action="delete" data-row-idx="${r.ROW_IDX}" data-spec-num="${safeSpecNumAttr}" onclick="confirmDeleteRow(${r.ROW_IDX}, ${safeSpecNum})" title="Delete this isolate" aria-label="Delete isolate">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </div>

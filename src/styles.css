@@ -227,7 +227,7 @@ input[type="checkbox"] {
 }
 
 /* WCAG 2.1 AA High-Contrast Focus-Visible Rings */
-:focus-visible {
+:focus-visible:not(.search-box input) {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px !important;
 }
@@ -1511,11 +1511,14 @@ td.col-actions {
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
-.search-box input {
+.search-box input,
+.search-box input:focus,
+.search-box input:focus-visible {
   flex: 1;
   background: none;
-  border: none;
-  outline: none;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   color: var(--text);
   font-size: 13.5px;
   font-family: inherit;

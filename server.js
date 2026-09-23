@@ -82,16 +82,75 @@ let DB_FILES = getDbFiles();
 
 let currentDbFile = null;
 let currentDbFullPath = null;
+let dbWatcher = null;
+let dbDebounceTimer = null;
+let lastSelfWriteTime = 0;
+
+function broadcastDataChange() {
+  for (const client of liveReloadClients) {
+    try {
+      client.write("data: data-refresh\n\n");
+    } catch (_) {
+      liveReloadClients.delete(client);
+    }
+  }
+}
+
+function watchActiveDb() {
+  if (dbWatcher) {
+    try {
+      dbWatcher.close();
+    } catch (_) {}
+    dbWatcher = null;
+  }
+  if (!currentDbFullPath || !existsSync(currentDbFullPath)) return;
+
+  try {
+    const targetFile = currentDbFullPath;
+    const targetDir = dirname(targetFile);
+    const targetBase = basename(targetFile).toLowerCase();
+
+    dbWatcher = watch(targetDir, (eventType, filename) => {
+      if (!filename) return;
+      const lower = filename.toLowerCase();
+      // Match the main sqlite file, wal, or journal
+      if (
+        lower === targetBase ||
+        lower === targetBase + "-wal" ||
+        lower === targetBase + "-journal"
+      ) {
+        // Skip if this change was triggered by our own API write within the last 1500ms
+        if (Date.now() - lastSelfWriteTime < 1500) return;
+
+        clearTimeout(dbDebounceTimer);
+        dbDebounceTimer = setTimeout(() => {
+          console.log(
+            `[Auto-Sync] Database file updated externally on disk: ${filename}. Broadcasting data-refresh...`,
+          );
+          broadcastDataChange();
+        }, 350);
+      }
+    });
+
+    dbWatcher.on("error", (err) => {
+      console.warn("DB watcher error:", err.message);
+    });
+  } catch (err) {
+    console.warn("Could not start DB watcher:", err.message);
+  }
+}
 
 function setTargetDb(filename, customPath = null) {
   currentDbFile = filename;
   if (customPath && existsSync(customPath)) {
     currentDbFullPath = customPath;
+    watchActiveDb();
     return;
   }
   const defaultPath = join(WHONET_DIR, filename);
   if (existsSync(defaultPath)) {
     currentDbFullPath = defaultPath;
+    watchActiveDb();
     return;
   }
   const sampleCandidates = [
@@ -103,10 +162,12 @@ function setTargetDb(filename, customPath = null) {
   for (const cand of sampleCandidates) {
     if (existsSync(cand)) {
       currentDbFullPath = cand;
+      watchActiveDb();
       return;
     }
   }
   currentDbFullPath = defaultPath;
+  watchActiveDb();
 }
 
 // Execute query with on-demand connection that closes immediately, freeing the file lock
@@ -293,6 +354,10 @@ function handleRequest(req, res) {
 async function handleApi(req, res) {
   const urlObj = new URL(req.url, `http://localhost`);
   const path = urlObj.pathname;
+
+  if (req.method === "POST") {
+    lastSelfWriteTime = Date.now();
+  }
 
   if (path === "/api/schema" && req.method === "GET") {
     if (!currentDbFullPath)
@@ -1062,8 +1127,11 @@ async function handleApi(req, res) {
       return sendJson(res, { error: "No database open" }, 400);
     const body = await readBody(req);
     const { row_idx } = JSON.parse(body);
+    const numIdx = parseInt(row_idx, 10);
+    if (isNaN(numIdx))
+      return sendJson(res, { error: "Invalid row_idx" }, 400);
     withDb((db) => {
-      const result = db.prepare("DELETE FROM Isolates WHERE ROW_IDX = ?").run(row_idx);
+      const result = db.prepare("DELETE FROM Isolates WHERE ROW_IDX = ?").run(numIdx);
       sendJson(res, { ok: true, changes: result.changes });
     });
     return;
@@ -1077,9 +1145,12 @@ async function handleApi(req, res) {
     const { row_indices } = JSON.parse(body);
     if (!Array.isArray(row_indices) || !row_indices.length)
       return sendJson(res, { ok: true, changes: 0 });
+    const numIndices = row_indices.map(n => parseInt(n, 10)).filter(n => !isNaN(n));
+    if (!numIndices.length)
+      return sendJson(res, { ok: true, changes: 0 });
     withDb((db) => {
-      const placeholders = row_indices.map(() => "?").join(",");
-      const result = db.prepare(`DELETE FROM Isolates WHERE ROW_IDX IN (${placeholders})`).run(...row_indices);
+      const placeholders = numIndices.map(() => "?").join(",");
+      const result = db.prepare(`DELETE FROM Isolates WHERE ROW_IDX IN (${placeholders})`).run(...numIndices);
       sendJson(res, { ok: true, changes: result.changes });
     });
     return;

@@ -58,6 +58,7 @@ export function groupRows(rows, mode = state.dupMode) {
 }
 
 export async function loadDuplicates(page = 1) {
+  const numPage = parseInt(page, 10) || 1;
   const dupBody = document.getElementById("dup-table-body");
   const countEl = document.getElementById("dup-count");
   const casingBanner = document.getElementById("casing-banner");
@@ -68,20 +69,21 @@ export async function loadDuplicates(page = 1) {
     return;
   }
 
-  state.dupsPage = page;
+  state.dupsPage = numPage;
   const datasetVersion = state.datasetVersion;
   const databaseName = state.currentDb;
   const search = encodeURIComponent(
     document.getElementById("dup-search")?.value || "",
   );
-  const mode = state.dupMode;
-  const sortParam = state.dupSortCol
-    ? `&sortCol=${encodeURIComponent(state.dupSortCol)}&sortDir=${encodeURIComponent(state.dupSortDir)}`
-    : "";
+  const mode = state.dupMode || "spec";
+  const sortCol = state.dupSortCol || "";
+  const sortDir = state.dupSortDir || "asc";
 
   // Check for mixed-case SPEC_NUMs and show/hide warning banner
   if (casingBanner) casingBanner.style.display = "none";
-  if (dupBody) dupBody.innerHTML = '<div class="loading"><div class="spinner"></div>Loading duplicates…</div>';
+  if (dupBody) {
+    dupBody.innerHTML = '<div class="loading"><div class="spinner"></div>Finding duplicate records…</div>';
+  }
 
   const casingCheck = await api("/api/custom-sql", {
     method: "POST",
@@ -100,7 +102,7 @@ export async function loadDuplicates(page = 1) {
   }
 
   const data = await api(
-    `/api/duplicates?page=${page}&pageSize=50&search=${search}&mode=${mode}${sortParam}`,
+    `/api/duplicates?page=${numPage}&pageSize=50&mode=${mode}&search=${search}&sortCol=${sortCol}&sortDir=${sortDir}`,
   );
   if (datasetVersion !== state.datasetVersion || databaseName !== state.currentDb) return;
   if (data.error) return toast(data.error, "error");
@@ -120,9 +122,36 @@ export async function loadDuplicates(page = 1) {
     dupBody.innerHTML = renderDuplicatesTable(data.rows, mode);
     dupBody.scrollTop = 0;
     dupBody.scrollLeft = 0;
+    attachDuplicatesTableListeners(dupBody);
   }
   updateDupSelectedState();
-  renderPagination("dup-pagination", page, data.totalCount, 50, loadDuplicates);
+  renderPagination("dup-pagination", numPage, data.totalCount, 50, loadDuplicates);
+}
+
+function attachDuplicatesTableListeners(container) {
+  if (!container || container._hasActionsListener) return;
+  container.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const rowIdx = parseInt(btn.dataset.rowIdx, 10);
+    if (isNaN(rowIdx)) return;
+    if (action === "delete") {
+      const specNum = btn.dataset.specNum || "";
+      if (typeof confirmDeleteRow === "function") {
+        confirmDeleteRow(rowIdx, specNum);
+      } else if (typeof window.confirmDeleteRow === "function") {
+        window.confirmDeleteRow(rowIdx, specNum);
+      }
+    } else if (action === "edit") {
+      if (typeof openEditModal === "function") openEditModal(rowIdx);
+      else if (typeof window.openEditModal === "function") window.openEditModal(rowIdx);
+    } else if (action === "view") {
+      if (typeof viewDetail === "function") viewDetail(rowIdx);
+      else if (typeof window.viewDetail === "function") window.viewDetail(rowIdx);
+    }
+  });
+  container._hasActionsListener = true;
 }
 
 export function renderDuplicatesTable(rows, mode = state.dupMode) {
@@ -176,7 +205,8 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
               mode === "patient" ? r.PATIENT_ID || "—" : r.SPEC_NUM || "—";
             const otherVal =
               mode === "patient" ? r.SPEC_NUM || "—" : r.PATIENT_ID || "—";
-            const safeSpecNum = JSON.stringify(r.SPEC_NUM || '');
+            const safeSpecNum = escapeHtml(JSON.stringify(r.SPEC_NUM || ''));
+            const safeSpecNumAttr = escapeHtml(r.SPEC_NUM || '');
             const fullName = r.FULL_NAME || '—';
             const specType = r.SPEC_TYPE || '—';
             const ward = r.WARD || '—';
@@ -204,13 +234,13 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
               <td class="col-ward" title="${safeWard}"><span class="cell-truncate">${safeWard}</span></td>
               <td class="col-actions" style="text-align: right; white-space: nowrap;">
                 <div class="dup-actions-group row-actions-group">
-                  <button class="btn btn-ghost btn-icon-sm" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
+                  <button type="button" class="btn btn-ghost btn-icon-sm" data-action="edit" data-row-idx="${r.ROW_IDX}" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
                     <i class="fa-solid fa-pen-to-square"></i>
                   </button>
-                  <button class="btn btn-ghost btn-icon-sm" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
+                  <button type="button" class="btn btn-ghost btn-icon-sm" data-action="view" data-row-idx="${r.ROW_IDX}" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
                     <i class="fa-solid fa-eye"></i>
                   </button>
-                  <button class="btn btn-danger btn-icon-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, ${safeSpecNum})" title="Delete this isolate" aria-label="Delete isolate">
+                  <button type="button" class="btn btn-danger btn-icon-sm" data-action="delete" data-row-idx="${r.ROW_IDX}" data-spec-num="${safeSpecNumAttr}" onclick="confirmDeleteRow(${r.ROW_IDX}, ${safeSpecNum})" title="Delete this isolate" aria-label="Delete isolate">
                     <i class="fa-solid fa-trash-can"></i>
                   </button>
                 </div>
