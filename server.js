@@ -71,7 +71,7 @@ function getDbFiles() {
         for (const f of readdirSync(dir)) {
           if (f.toLowerCase().endsWith(".sqlite")) found.add(f);
         }
-      } catch (_) {}
+      } catch (_) { }
     }
   }
 
@@ -100,7 +100,7 @@ function watchActiveDb() {
   if (dbWatcher) {
     try {
       dbWatcher.close();
-    } catch (_) {}
+    } catch (_) { }
     dbWatcher = null;
   }
   if (!currentDbFullPath || !existsSync(currentDbFullPath)) return;
@@ -181,7 +181,7 @@ function ensureDatabaseSchema(db) {
       if (cols.includes("FIRST_NAME") && cols.includes("LAST_NAME")) {
         db.exec(
           `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS ` +
-            `(TRIM(COALESCE(FIRST_NAME,'') || ' ' || COALESCE(LAST_NAME,''))) VIRTUAL`,
+          `(TRIM(COALESCE(FIRST_NAME,'') || ' ' || COALESCE(LAST_NAME,''))) VIRTUAL`,
         );
       } else if (cols.includes("LAST_NAME")) {
         db.exec(
@@ -195,7 +195,7 @@ function ensureDatabaseSchema(db) {
         db.exec(`ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''`);
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function withDb(callback) {
@@ -219,7 +219,7 @@ function withDb(callback) {
   } finally {
     try {
       db.close();
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -342,7 +342,7 @@ function handleRequest(req, res) {
           "Content-Length": Buffer.byteLength(data),
         });
         return res.end(data);
-      } catch (_) {}
+      } catch (_) { }
     }
   }
 
@@ -662,8 +662,8 @@ async function handleApi(req, res) {
         queryParams.push(s, s, s);
       }
       if (organism) { conditions.push("ORGANISM = ?"); queryParams.push(organism); }
-      if (ward)     { conditions.push("WARD = ?");     queryParams.push(ward); }
-      if (month)    { conditions.push("SUBSTR(SPEC_DATE, 1, 7) = ?"); queryParams.push(month); }
+      if (ward) { conditions.push("WARD = ?"); queryParams.push(ward); }
+      if (month) { conditions.push("SUBSTR(SPEC_DATE, 1, 7) = ?"); queryParams.push(month); }
       const where = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
 
       withDb((db) => {
@@ -723,9 +723,9 @@ async function handleApi(req, res) {
         const monthMap = {};
 
         // Negative & commensal definitions:
-        // Blood: 'xxx' (no growth), 'xpa', 'xep', 'xsg', 'nor' (normal flora), 'scn' (CoNS/skin contaminant)
+        // Blood: 'xxx' (no growth), 'xpa', 'nor' (normal flora), 'scn' (CoNS/skin contaminant)
         // Others: 'xxx', 'xpa', 'xep', 'xsg', 'nor', 'ora', 'vag'
-        const bloodNoGrowth = ["xxx", "xpa", "xep", "xsg", "nor", "scn", ""];
+        const bloodNoGrowth = ["xxx", "xpa", "nor", "scn", ""];
         const othersNoGrowth = [
           "xxx",
           "xpa",
@@ -774,7 +774,7 @@ async function handleApi(req, res) {
           const org = (r.ORGANISM || "").toLowerCase().trim();
 
           // Growth rule:
-          // Blood (st === 'bl'): 'xxx', 'xpa', 'xep', 'xsg', 'nor', 'scn' are no growth / contaminants
+          // Blood (st === 'bl'): 'xxx', 'xpa', 'nor', 'scn' are no growth / contaminants
           // Others (st !== 'bl'): 'xxx', 'xpa', 'xep', 'xsg', 'nor', 'ora', 'vag' are no growth
           const isPos =
             st === "bl"
@@ -942,7 +942,7 @@ async function handleApi(req, res) {
 
         const whereSql = whereClauses.length
           ? `WHERE ${selectExpr} IS NOT NULL AND ${selectExpr} != '' AND ` +
-            whereClauses.join(" AND ")
+          whereClauses.join(" AND ")
           : `WHERE ${selectExpr} IS NOT NULL AND ${selectExpr} != ''`;
 
         const querySql = `
@@ -1207,13 +1207,13 @@ function openBrowser(url) {
     if (process.platform === "win32") {
       exec(`cmd.exe /c start "" "${url}"`, (err) => {
         if (err) {
-          exec(`powershell.exe -Command "Start-Process '${url}'"`, () => {});
+          exec(`powershell.exe -Command "Start-Process '${url}'"`, () => { });
         }
       });
     } else if (process.platform === "darwin") {
-      exec(`open "${url}"`, () => {});
+      exec(`open "${url}"`, () => { });
     } else {
-      exec(`xdg-open "${url}"`, () => {});
+      exec(`xdg-open "${url}"`, () => { });
     }
   } catch (e) {
     console.error("Auto-open failed:", e.message);

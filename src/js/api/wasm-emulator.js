@@ -378,7 +378,7 @@ export function handleWasmApi(path, options = {}) {
       `);
 
       const monthMap = {};
-      const bloodNoGrowth = ['xxx', 'xpa', 'xep', 'xsg', 'nor', 'scn', ''];
+      const bloodNoGrowth = ['xxx', 'xpa', 'nor', 'scn', ''];
       const othersNoGrowth = ['xxx', 'xpa', 'xep', 'xsg', 'nor', 'ora', 'vag', ''];
 
       for (const r of rows) {
