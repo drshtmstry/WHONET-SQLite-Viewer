@@ -235,12 +235,14 @@ export async function updateDashboardCharts() {
         datasets: [{
           label: 'Isolates Count',
           data: counts,
-          backgroundColor: bgColors.map(c => c + 'cc'),
+          backgroundColor: bgColors,
           borderColor: bgColors,
-          borderWidth: 1.5,
+          borderWidth: 1,
           hoverBackgroundColor: bgColors,
-          hoverBorderColor: bgColors,
-          borderRadius: 6,
+          hoverBorderColor: isDark ? '#ffffff' : '#0f172a',
+          hoverBorderWidth: 2,
+          borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+          borderSkipped: 'bottom',
           maxBarThickness: 40
         }]
       },
@@ -248,6 +250,9 @@ export async function updateDashboardCharts() {
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 350 },
+        layout: {
+          padding: { top: 14, right: 8, bottom: 4, left: 4 }
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -281,6 +286,7 @@ export async function updateDashboardCharts() {
           },
           y: {
             beginAtZero: true,
+            grace: '8%',
             grid: { color: gridColor },
             ticks: {
               font: { family: 'JetBrains Mono', size: 11, weight: '500' },
@@ -307,16 +313,20 @@ export async function updateDashboardCharts() {
           data: counts,
           backgroundColor: bgColors,
           borderColor: doughnutBorder,
-          borderWidth: 2.5,
+          borderWidth: 1.5,
           hoverBackgroundColor: bgColors,
-          hoverBorderColor: doughnutBorder,
-          hoverOffset: 8
+          hoverBorderColor: isDark ? '#ffffff' : '#0f172a',
+          hoverBorderWidth: 2.5,
+          hoverOffset: 6
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 350 },
+        layout: {
+          padding: 14
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
