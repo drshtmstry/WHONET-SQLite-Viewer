@@ -85,18 +85,24 @@ export async function loadDuplicates(page = 1) {
     dupBody.innerHTML = '<div class="loading"><div class="spinner"></div>Finding duplicate records…</div>';
   }
 
-  const casingCheck = await api("/api/custom-sql", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sql: "SELECT COUNT(*) as c FROM Isolates WHERE SPEC_NUM != UPPER(SPEC_NUM) AND SPEC_NUM != ''",
-    }),
-  });
+  let hasMixedCase = false;
+  try {
+    const casingCheck = await api("/api/custom-sql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sql: "SELECT COUNT(*) as c FROM Isolates WHERE SPEC_NUM != UPPER(SPEC_NUM) AND SPEC_NUM != ''",
+      }),
+    });
+    if (!casingCheck?.error) {
+      hasMixedCase = (casingCheck?.rows?.[0]?.c || 0) > 0;
+    }
+  } catch (_) {}
+
   if (datasetVersion !== state.datasetVersion || databaseName !== state.currentDb || !state.currentDb) {
     if (casingBanner) casingBanner.style.display = "none";
     return;
   }
-  const hasMixedCase = (casingCheck?.rows?.[0]?.c || 0) > 0;
   if (casingBanner) {
     casingBanner.style.display = (hasMixedCase && state.currentDb) ? "flex" : "none";
   }

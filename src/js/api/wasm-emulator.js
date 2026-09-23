@@ -24,28 +24,38 @@ export function handleWasmApi(path, options = {}) {
     const body = options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {};
 
     if (pathname === '/api/stats') {
+      const cols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name.toUpperCase());
+      const hasSpecNum = cols.includes('SPEC_NUM');
+      const hasPatientId = cols.includes('PATIENT_ID');
+
       const total = wasmSelect('SELECT COUNT(*) as c FROM Isolates')[0]?.c || 0;
-      const dupRows = wasmSelect(`
+      const dupRows = hasSpecNum ? (wasmSelect(`
         SELECT COUNT(*) as c FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' AND UPPER(SPEC_NUM) IN (
           SELECT UPPER(SPEC_NUM) FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' GROUP BY UPPER(SPEC_NUM) HAVING COUNT(*) > 1
         )
-      `)[0]?.c || 0;
-      const dupGroups = wasmSelect(`
+      `)[0]?.c || 0) : 0;
+      const dupGroups = hasSpecNum ? (wasmSelect(`
         SELECT COUNT(DISTINCT UPPER(SPEC_NUM)) as c FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' GROUP BY UPPER(SPEC_NUM) HAVING COUNT(*) > 1
-      `).length || 0;
+      `).length || 0) : 0;
 
-      const dupPtRows = wasmSelect(`
+      const dupPtRows = hasPatientId ? (wasmSelect(`
         SELECT COUNT(*) as c FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' AND UPPER(PATIENT_ID) IN (
           SELECT UPPER(PATIENT_ID) FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' GROUP BY UPPER(PATIENT_ID) HAVING COUNT(*) > 1
         )
-      `)[0]?.c || 0;
-      const dupPtGroups = wasmSelect(`
+      `)[0]?.c || 0) : 0;
+      const dupPtGroups = hasPatientId ? (wasmSelect(`
         SELECT COUNT(DISTINCT UPPER(PATIENT_ID)) as c FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' GROUP BY UPPER(PATIENT_ID) HAVING COUNT(*) > 1
-      `).length || 0;
+      `).length || 0) : 0;
 
-      const organisms = wasmSelect("SELECT DISTINCT ORGANISM FROM Isolates WHERE ORGANISM IS NOT NULL AND ORGANISM != '' ORDER BY ORGANISM").map(r => r.ORGANISM);
-      const wards = wasmSelect("SELECT DISTINCT WARD FROM Isolates WHERE WARD IS NOT NULL AND WARD != '' ORDER BY WARD").map(r => r.WARD);
-      const months = wasmSelect("SELECT DISTINCT SUBSTR(SPEC_DATE, 1, 7) as ym FROM Isolates WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7 AND SUBSTR(SPEC_DATE, 1, 7) GLOB '[1-2][0-9][0-9][0-9]-[0-1][0-9]' AND SUBSTR(SPEC_DATE, 6, 2) BETWEEN '01' AND '12' ORDER BY ym DESC").map(r => r.ym);
+      const organisms = cols.includes('ORGANISM')
+        ? wasmSelect("SELECT DISTINCT ORGANISM FROM Isolates WHERE ORGANISM IS NOT NULL AND ORGANISM != '' ORDER BY ORGANISM").map(r => r.ORGANISM)
+        : [];
+      const wards = cols.includes('WARD')
+        ? wasmSelect("SELECT DISTINCT WARD FROM Isolates WHERE WARD IS NOT NULL AND WARD != '' ORDER BY WARD").map(r => r.WARD)
+        : [];
+      const months = cols.includes('SPEC_DATE')
+        ? wasmSelect("SELECT DISTINCT SUBSTR(SPEC_DATE, 1, 7) as ym FROM Isolates WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7 AND SUBSTR(SPEC_DATE, 1, 7) GLOB '[1-2][0-9][0-9][0-9]-[0-1][0-9]' AND SUBSTR(SPEC_DATE, 6, 2) BETWEEN '01' AND '12' ORDER BY ym DESC").map(r => r.ym)
+        : [];
 
       return { total, dupRows, dupGroups, dupPtRows, dupPtGroups, organisms, wards, months };
     }
@@ -96,22 +106,32 @@ export function handleWasmApi(path, options = {}) {
         ? `ORDER BY ROW_IDX ${sortDir}`
         : `ORDER BY CASE WHEN ${sortCol} IS NULL OR ${sortCol} = '' THEN 1 ELSE 0 END, NATURAL_KEY(${sortCol}) ${sortDir}, ROW_IDX DESC`;
 
+      const cols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
+      const upperCols = cols.map(c => c.toUpperCase());
+      const colExpr = (name, fallback = "NULL") => cols.includes(name) ? name : `${fallback} AS ${name}`;
+
       let whereClauses = [];
       let params = [];
       if (search) {
-        whereClauses.push("(UPPER(SPEC_NUM) LIKE ? OR UPPER(PATIENT_ID) LIKE ? OR UPPER(FULL_NAME) LIKE ?)");
-        const s = `%${search.toUpperCase()}%`;
-        params.push(s, s, s);
+        const searchParts = [];
+        if (upperCols.includes('SPEC_NUM')) searchParts.push('UPPER(SPEC_NUM) LIKE ?');
+        if (upperCols.includes('PATIENT_ID')) searchParts.push('UPPER(PATIENT_ID) LIKE ?');
+        if (upperCols.includes('FULL_NAME')) searchParts.push('UPPER(FULL_NAME) LIKE ?');
+        if (searchParts.length) {
+          whereClauses.push(`(${searchParts.join(' OR ')})`);
+          const s = `%${search.toUpperCase()}%`;
+          for (let i = 0; i < searchParts.length; i++) params.push(s);
+        }
       }
-      if (organism) {
+      if (organism && upperCols.includes('ORGANISM')) {
         whereClauses.push("ORGANISM = ?");
         params.push(organism);
       }
-      if (ward) {
+      if (ward && upperCols.includes('WARD')) {
         whereClauses.push("WARD = ?");
         params.push(ward);
       }
-      if (month) {
+      if (month && upperCols.includes('SPEC_DATE')) {
         whereClauses.push("SUBSTR(SPEC_DATE, 1, 7) = ?");
         params.push(month);
       }
@@ -120,11 +140,8 @@ export function handleWasmApi(path, options = {}) {
       const countSql = `SELECT COUNT(*) as c FROM Isolates ${whereSql}`;
       const totalCount = wasmSelect(countSql, params)[0]?.c || 0;
 
-      const cols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
-      const colExpr = (name, fallback = "NULL") => cols.includes(name) ? name : `${fallback} AS ${name}`;
-
       const rowsSql = `
-        SELECT ROW_IDX,
+        SELECT ${colExpr('ROW_IDX', 'rowid')},
                ${colExpr('PATIENT_ID', "''")},
                ${colExpr('SPEC_NUM', "''")},
                ${colExpr('SPEC_DATE', "''")},
@@ -154,29 +171,48 @@ export function handleWasmApi(path, options = {}) {
       const search = (url.searchParams.get('search') || '').trim();
       const offset = (page - 1) * pageSize;
 
-      const groupCol = mode === 'patient' ? 'UPPER(PATIENT_ID)' : 'UPPER(SPEC_NUM)';
-      const notEmptyCond = mode === 'patient' ? "PATIENT_ID IS NOT NULL AND PATIENT_ID != ''" : "SPEC_NUM IS NOT NULL AND SPEC_NUM != ''";
+      const dupCols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
+      const upperCols = dupCols.map(c => c.toUpperCase());
+      const hasSpecNum = upperCols.includes('SPEC_NUM');
+      const hasPatientId = upperCols.includes('PATIENT_ID');
+      const hasFullName = upperCols.includes('FULL_NAME');
+      const hasRowIdx = upperCols.includes('ROW_IDX');
+      const rowIdxExpr = hasRowIdx ? 'ROW_IDX' : 'rowid';
+
+      const groupCol = mode === 'patient'
+        ? (hasPatientId ? 'UPPER(PATIENT_ID)' : "''")
+        : (hasSpecNum ? 'UPPER(SPEC_NUM)' : "''");
+      const notEmptyCond = mode === 'patient'
+        ? (hasPatientId ? "PATIENT_ID IS NOT NULL AND PATIENT_ID != ''" : "0")
+        : (hasSpecNum ? "SPEC_NUM IS NOT NULL AND SPEC_NUM != ''" : "0");
 
       let searchCond = '';
       let params = [];
       if (search) {
-        searchCond = `AND (${groupCol} LIKE ? OR UPPER(FULL_NAME) LIKE ?)`;
-        params.push(`%${search.toUpperCase()}%`, `%${search.toUpperCase()}%`);
+        if (hasFullName) {
+          searchCond = `AND (${groupCol} LIKE ? OR UPPER(FULL_NAME) LIKE ?)`;
+          params.push(`%${search.toUpperCase()}%`, `%${search.toUpperCase()}%`);
+        } else {
+          searchCond = `AND (${groupCol} LIKE ?)`;
+          params.push(`%${search.toUpperCase()}%`);
+        }
       }
 
       const ALLOWED_DUP_COLS = {
-        ROW_IDX: 'ROW_IDX',
+        ROW_IDX: rowIdxExpr,
         MATCHED: groupCol,
-        OTHER: mode === 'patient' ? 'UPPER(SPEC_NUM)' : 'UPPER(PATIENT_ID)',
-        SPEC_NUM: 'SPEC_NUM',
-        PATIENT_ID: 'PATIENT_ID',
-        FULL_NAME: 'FULL_NAME',
-        SPEC_DATE: 'SPEC_DATE',
-        SPEC_TYPE: 'SPEC_TYPE',
-        ORGANISM: 'ORGANISM',
-        SEX: 'SEX',
-        AGE: 'AGE',
-        WARD: 'WARD'
+        OTHER: mode === 'patient'
+          ? (hasSpecNum ? 'UPPER(SPEC_NUM)' : "''")
+          : (hasPatientId ? 'UPPER(PATIENT_ID)' : "''"),
+        SPEC_NUM: hasSpecNum ? 'SPEC_NUM' : "''",
+        PATIENT_ID: hasPatientId ? 'PATIENT_ID' : "''",
+        FULL_NAME: hasFullName ? 'FULL_NAME' : "''",
+        SPEC_DATE: upperCols.includes('SPEC_DATE') ? 'SPEC_DATE' : "''",
+        SPEC_TYPE: upperCols.includes('SPEC_TYPE') ? 'SPEC_TYPE' : "''",
+        ORGANISM: upperCols.includes('ORGANISM') ? 'ORGANISM' : "''",
+        SEX: upperCols.includes('SEX') ? 'SEX' : "''",
+        AGE: upperCols.includes('AGE') ? 'AGE' : "''",
+        WARD: upperCols.includes('WARD') ? 'WARD' : "''"
       };
       const rawDupSort = url.searchParams.get('sortCol')?.toUpperCase();
       const dupSortExpr = ALLOWED_DUP_COLS[rawDupSort] || null;
@@ -200,18 +236,17 @@ export function handleWasmApi(path, options = {}) {
         }
       }
 
-      const dupCols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
       const dupColExpr = (name, fallback = "NULL") => dupCols.includes(name) ? name : `${fallback} AS ${name}`;
 
       const dupSql = `
         WITH RankedIsolates AS (
           SELECT *,
-                 ROW_NUMBER() OVER (PARTITION BY ${groupCol} ORDER BY ROW_IDX) AS row_num,
+                 ROW_NUMBER() OVER (PARTITION BY ${groupCol} ORDER BY ${rowIdxExpr}) AS row_num,
                  COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
           FROM Isolates
           WHERE ${notEmptyCond}
         )
-        SELECT ROW_IDX,
+        SELECT ${dupColExpr('ROW_IDX', 'rowid')},
                ${dupColExpr('PATIENT_ID', "''")},
                ${dupColExpr('SPEC_DATE', "''")},
                ${dupColExpr('SPEC_NUM', "''")},
@@ -232,7 +267,7 @@ export function handleWasmApi(path, options = {}) {
 
       const countSql = `
         SELECT COUNT(*) as c FROM (
-          SELECT ROW_IDX, COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
+          SELECT ${rowIdxExpr}, COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
           FROM Isolates
           WHERE ${notEmptyCond}
         ) WHERE total_duplicates > 1 ${searchCond}
@@ -270,25 +305,33 @@ export function handleWasmApi(path, options = {}) {
 
     if (pathname === '/api/delete-duplicates') {
       const { spec_num, patient_id, mode } = body;
+      const dupCols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name.toUpperCase());
+      const hasSpecNum = dupCols.includes('SPEC_NUM');
+      const hasPatientId = dupCols.includes('PATIENT_ID');
+      const hasRowIdx = dupCols.includes('ROW_IDX');
+      const rowIdxCol = hasRowIdx ? 'ROW_IDX' : 'rowid';
+
       let sql = '';
-      if (mode === 'patient') {
-        sql = `DELETE FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' AND ROW_IDX NOT IN (
-          SELECT MIN(ROW_IDX) FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' GROUP BY UPPER(PATIENT_ID)
+      if (mode === 'patient' && hasPatientId) {
+        sql = `DELETE FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' AND ${rowIdxCol} NOT IN (
+          SELECT MIN(${rowIdxCol}) FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' GROUP BY UPPER(PATIENT_ID)
         )`;
-      } else if (patient_id) {
+      } else if (patient_id && hasPatientId) {
         const safe = patient_id.replace(/'/g, "''");
-        sql = `DELETE FROM Isolates WHERE ROW_IDX NOT IN (
-          SELECT MIN(ROW_IDX) FROM Isolates WHERE UPPER(PATIENT_ID) = UPPER('${safe}')
+        sql = `DELETE FROM Isolates WHERE ${rowIdxCol} NOT IN (
+          SELECT MIN(${rowIdxCol}) FROM Isolates WHERE UPPER(PATIENT_ID) = UPPER('${safe}')
         ) AND UPPER(PATIENT_ID) = UPPER('${safe}')`;
-      } else if (spec_num) {
+      } else if (spec_num && hasSpecNum) {
         const safe = spec_num.replace(/'/g, "''");
-        sql = `DELETE FROM Isolates WHERE ROW_IDX NOT IN (
-          SELECT MIN(ROW_IDX) FROM Isolates WHERE UPPER(SPEC_NUM) = UPPER('${safe}')
+        sql = `DELETE FROM Isolates WHERE ${rowIdxCol} NOT IN (
+          SELECT MIN(${rowIdxCol}) FROM Isolates WHERE UPPER(SPEC_NUM) = UPPER('${safe}')
         ) AND UPPER(SPEC_NUM) = UPPER('${safe}')`;
-      } else {
-        sql = `DELETE FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' AND ROW_IDX NOT IN (
-          SELECT MIN(ROW_IDX) FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' GROUP BY UPPER(SPEC_NUM)
+      } else if (hasSpecNum) {
+        sql = `DELETE FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' AND ${rowIdxCol} NOT IN (
+          SELECT MIN(${rowIdxCol}) FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' GROUP BY UPPER(SPEC_NUM)
         )`;
+      } else {
+        return { ok: true, changes: 0 };
       }
       const res = wasmRun(sql);
       return { ok: true, changes: res.changes };
@@ -296,15 +339,21 @@ export function handleWasmApi(path, options = {}) {
 
     if (pathname === '/api/bulk-fix') {
       const { operation } = body;
+      const cols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name.toUpperCase());
       let sql = '';
       let description = '';
       if (operation === 'upper_spec_num') {
+        if (!cols.includes('SPEC_NUM')) {
+          return { ok: true, description: 'SPEC_NUM column not present', changes: 0 };
+        }
         sql = "UPDATE Isolates SET SPEC_NUM = UPPER(SPEC_NUM) WHERE SPEC_NUM != UPPER(SPEC_NUM)";
         description = 'SPEC_NUM → UPPERCASE';
       } else if (operation === 'trim_all') {
         // Include FULL_NAME only when it is a plain stored column.
         // PRAGMA table_xinfo: hidden 0/1 = normal; 2 = virtual generated; 3 = stored generated.
         let trimFields = ['SPEC_NUM', 'PATIENT_ID', 'WARD', 'DEPARTMENT'];
+        const existingCols = wasmSelect('PRAGMA table_info(Isolates)').map(c => c.name);
+        trimFields = trimFields.filter(f => existingCols.includes(f));
         try {
           const xinfo = wasmSelect('PRAGMA table_xinfo(Isolates)');
           const fullNameCol = xinfo.find((c) => c.name === 'FULL_NAME');
@@ -314,13 +363,20 @@ export function handleWasmApi(path, options = {}) {
         } catch (_) {
           // Older sql.js without table_xinfo: skip FULL_NAME to be safe
         }
+        if (!trimFields.length) return { ok: true, changes: 0 };
         const setClause = trimFields.map((f) => `${f} = TRIM(${f})`).join(', ');
         const res = wasmRun(`UPDATE Isolates SET ${setClause}`);
         return { ok: true, description: 'Trim whitespace from text fields', changes: res.changes };
       } else if (operation === 'upper_patient_id') {
+        if (!cols.includes('PATIENT_ID')) {
+          return { ok: true, description: 'PATIENT_ID column not present', changes: 0 };
+        }
         sql = "UPDATE Isolates SET PATIENT_ID = UPPER(PATIENT_ID) WHERE PATIENT_ID != UPPER(PATIENT_ID)";
         description = 'PATIENT_ID → UPPERCASE';
       } else if (operation === 'lower_organism') {
+        if (!cols.includes('ORGANISM')) {
+          return { ok: true, description: 'ORGANISM column not present', changes: 0 };
+        }
         sql = "UPDATE Isolates SET ORGANISM = LOWER(ORGANISM) WHERE ORGANISM != LOWER(ORGANISM)";
         description = 'ORGANISM → lowercase';
       } else {
@@ -371,11 +427,21 @@ export function handleWasmApi(path, options = {}) {
     }
 
     if (pathname === '/api/monthly-amr') {
-      const rows = wasmSelect(`
-        SELECT ROW_IDX, SPEC_NUM, SPEC_DATE, SPEC_TYPE, WARD_TYPE, WARD, DEPARTMENT, ORGANISM
+      const cols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
+      const colExpr = (name, fallback = "NULL") => cols.includes(name) ? name : `${fallback} AS ${name}`;
+      const hasDate = cols.includes('SPEC_DATE');
+      const rows = hasDate ? wasmSelect(`
+        SELECT ${colExpr('ROW_IDX', 'rowid')},
+               ${colExpr('SPEC_NUM', "''")},
+               ${colExpr('SPEC_DATE', "''")},
+               ${colExpr('SPEC_TYPE', "''")},
+               ${colExpr('WARD_TYPE', "''")},
+               ${colExpr('WARD', "''")},
+               ${colExpr('DEPARTMENT', "''")},
+               ${colExpr('ORGANISM', "''")}
         FROM Isolates
         WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7
-      `);
+      `) : [];
 
       const monthMap = {};
       const bloodNoGrowth = ['xxx', 'xpa', 'nor', 'scn', ''];

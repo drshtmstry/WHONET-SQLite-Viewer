@@ -173,26 +173,141 @@ function setTargetDb(filename, customPath = null) {
 // Execute query with on-demand connection that closes immediately, freeing the file lock
 function ensureDatabaseSchema(db) {
   try {
-    const cols = db
+    let rawCols = db
       .prepare("PRAGMA table_info(Isolates)")
       .all()
       .map((c) => c.name);
-    if (!cols.includes("FULL_NAME")) {
-      if (cols.includes("FIRST_NAME") && cols.includes("LAST_NAME")) {
-        db.exec(
-          `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS ` +
-          `(TRIM(COALESCE(FIRST_NAME,'') || ' ' || COALESCE(LAST_NAME,''))) VIRTUAL`,
-        );
-      } else if (cols.includes("LAST_NAME")) {
-        db.exec(
-          `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(LAST_NAME, '')) VIRTUAL`,
-        );
-      } else if (cols.includes("FIRST_NAME")) {
-        db.exec(
-          `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(FIRST_NAME, '')) VIRTUAL`,
-        );
-      } else {
-        db.exec(`ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''`);
+
+    if (!rawCols.length) {
+      const userTables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        .all()
+        .map((t) => t.name);
+      const match = userTables.find((t) => /isolate/i.test(t)) || (userTables.length === 1 ? userTables[0] : null);
+      if (match && match.toLowerCase() !== "isolates") {
+        try {
+          db.exec(`CREATE VIEW IF NOT EXISTS Isolates AS SELECT * FROM "${match.replace(/"/g, '""')}"`);
+          rawCols = db
+            .prepare("PRAGMA table_info(Isolates)")
+            .all()
+            .map((c) => c.name);
+        } catch (_) {}
+      }
+    }
+
+    if (!rawCols.length) return;
+
+    const cleanCol = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const colMap = new Map();
+    for (const col of rawCols) {
+      colMap.set(col.toUpperCase(), col);
+      colMap.set(cleanCol(col), col);
+    }
+
+    const findCandidate = (aliases) => {
+      for (const alias of aliases) {
+        const found = colMap.get(alias.toUpperCase()) || colMap.get(cleanCol(alias));
+        if (found) return found;
+      }
+      return null;
+    };
+
+    // 1. Ensure SPEC_NUM exists
+    if (!colMap.has("SPEC_NUM")) {
+      const cand = findCandidate([
+        "spec_no", "specnum", "specno", "spec_id", "specid", "specimen_num",
+        "specimen_no", "specimen_number", "specimen_id", "specimen",
+        "accession", "accession_no", "accession_num", "accession_number",
+        "acc_no", "acc_num", "sample_id", "sample_no", "sample_num",
+        "sample_number", "lab_no", "lab_num", "barcode"
+      ]);
+      try {
+        db.exec("ALTER TABLE Isolates ADD COLUMN SPEC_NUM TEXT DEFAULT ''");
+        if (cand) {
+          db.exec(`UPDATE Isolates SET SPEC_NUM = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
+        }
+        colMap.set("SPEC_NUM", "SPEC_NUM");
+      } catch (_) {}
+    }
+
+    // 2. Ensure PATIENT_ID exists
+    if (!colMap.has("PATIENT_ID")) {
+      const cand = findCandidate([
+        "pat_id", "patientid", "patid", "patient_no", "patient_num",
+        "patient_number", "patient", "mrn", "pid", "subject_id",
+        "hosp_no", "reg_no", "ip_no", "op_no"
+      ]);
+      try {
+        db.exec("ALTER TABLE Isolates ADD COLUMN PATIENT_ID TEXT DEFAULT ''");
+        if (cand) {
+          db.exec(`UPDATE Isolates SET PATIENT_ID = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
+        }
+        colMap.set("PATIENT_ID", "PATIENT_ID");
+      } catch (_) {}
+    }
+
+    // 3. Ensure ROW_IDX exists
+    if (!colMap.has("ROW_IDX")) {
+      const cand = findCandidate(["row_idx", "rowidx", "row_id", "rowid", "id"]);
+      try {
+        db.exec("ALTER TABLE Isolates ADD COLUMN ROW_IDX INTEGER DEFAULT 0");
+        if (cand) {
+          db.exec(`UPDATE Isolates SET ROW_IDX = COALESCE(CAST("${cand.replace(/"/g, '""')}" AS INTEGER), rowid)`);
+        } else {
+          try {
+            db.exec("UPDATE Isolates SET ROW_IDX = rowid");
+          } catch (_) {}
+        }
+        colMap.set("ROW_IDX", "ROW_IDX");
+      } catch (_) {}
+    }
+
+    // 4. Ensure FULL_NAME exists
+    if (!colMap.has("FULL_NAME")) {
+      const cand = findCandidate(["full_name", "fullname", "patient_name", "patientname", "name"]);
+      try {
+        if (cand) {
+          db.exec("ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''");
+          db.exec(`UPDATE Isolates SET FULL_NAME = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
+        } else if (colMap.has("FIRST_NAME") && colMap.has("LAST_NAME")) {
+          db.exec(
+            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS ` +
+            `(TRIM(COALESCE(FIRST_NAME,'') || ' ' || COALESCE(LAST_NAME,''))) VIRTUAL`,
+          );
+        } else if (colMap.has("LAST_NAME")) {
+          db.exec(
+            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(LAST_NAME, '')) VIRTUAL`,
+          );
+        } else if (colMap.has("FIRST_NAME")) {
+          db.exec(
+            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(FIRST_NAME, '')) VIRTUAL`,
+          );
+        } else {
+          db.exec("ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''");
+        }
+        colMap.set("FULL_NAME", "FULL_NAME");
+      } catch (_) {}
+    }
+
+    // 5. Ensure core clinical & surveillance fields exist
+    const textCols = [
+      { name: "SPEC_DATE", aliases: ["spec_date", "date_spec", "specdate", "collection_date", "date"] },
+      { name: "SPEC_TYPE", aliases: ["spec_type", "spectype", "specimen_type", "spec_code", "sample_type"] },
+      { name: "ORGANISM", aliases: ["organism", "org", "organism_code", "org_code", "pathogen", "bacteria"] },
+      { name: "WARD", aliases: ["ward", "ward_name", "unit", "location"] },
+      { name: "DEPARTMENT", aliases: ["department", "dept", "service"] },
+      { name: "WARD_TYPE", aliases: ["ward_type", "wardtype"] }
+    ];
+    for (const { name, aliases } of textCols) {
+      if (!colMap.has(name)) {
+        const cand = findCandidate(aliases);
+        try {
+          db.exec(`ALTER TABLE Isolates ADD COLUMN ${name} TEXT DEFAULT ''`);
+          if (cand) {
+            db.exec(`UPDATE Isolates SET ${name} = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
+          }
+          colMap.set(name, name);
+        } catch (_) {}
       }
     }
   } catch (_) { }
@@ -443,50 +558,44 @@ async function handleApi(req, res) {
     try {
       withDb((db) => {
         const total = db.prepare("SELECT COUNT(*) as c FROM Isolates").get().c;
-        const dupInfo = db
-          .prepare(
-            `
-          SELECT COUNT(*) as dupRows, COUNT(DISTINCT UPPER(SPEC_NUM)) as dupGroups
-          FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' AND UPPER(SPEC_NUM) IN (
-            SELECT UPPER(SPEC_NUM) FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' GROUP BY UPPER(SPEC_NUM) HAVING COUNT(*) > 1
-          )
-        `,
-          )
-          .get();
-        const dupPtInfo = db
-          .prepare(
-            `
-          SELECT COUNT(*) as dupPtRows, COUNT(DISTINCT UPPER(PATIENT_ID)) as dupPtGroups
-          FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' AND UPPER(PATIENT_ID) IN (
-            SELECT UPPER(PATIENT_ID) FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' GROUP BY UPPER(PATIENT_ID) HAVING COUNT(*) > 1
-          )
-        `,
-          )
-          .get();
-        const organisms = db
-          .prepare(
-            "SELECT DISTINCT ORGANISM FROM Isolates WHERE ORGANISM != '' ORDER BY ORGANISM",
-          )
-          .all()
-          .map((r) => r.ORGANISM);
-        const wards = db
-          .prepare(
-            "SELECT DISTINCT WARD FROM Isolates WHERE WARD != '' ORDER BY WARD",
-          )
-          .all()
-          .map((r) => r.WARD);
-        const months = db
-          .prepare(
-            "SELECT DISTINCT SUBSTR(SPEC_DATE, 1, 7) as ym FROM Isolates WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7 AND SUBSTR(SPEC_DATE, 1, 7) GLOB '[1-2][0-9][0-9][0-9]-[0-1][0-9]' AND SUBSTR(SPEC_DATE, 6, 2) BETWEEN '01' AND '12' ORDER BY ym DESC",
-          )
-          .all()
-          .map((r) => r.ym);
+        const cols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name.toUpperCase());
+        const hasSpecNum = cols.includes("SPEC_NUM");
+        const hasPatientId = cols.includes("PATIENT_ID");
+
+        const dupInfo = hasSpecNum
+          ? db.prepare(`
+              SELECT COUNT(*) as dupRows, COUNT(DISTINCT UPPER(SPEC_NUM)) as dupGroups
+              FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' AND UPPER(SPEC_NUM) IN (
+                SELECT UPPER(SPEC_NUM) FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' GROUP BY UPPER(SPEC_NUM) HAVING COUNT(*) > 1
+              )
+            `).get()
+          : { dupRows: 0, dupGroups: 0 };
+
+        const dupPtInfo = hasPatientId
+          ? db.prepare(`
+              SELECT COUNT(*) as dupPtRows, COUNT(DISTINCT UPPER(PATIENT_ID)) as dupPtGroups
+              FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' AND UPPER(PATIENT_ID) IN (
+                SELECT UPPER(PATIENT_ID) FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' GROUP BY UPPER(PATIENT_ID) HAVING COUNT(*) > 1
+              )
+            `).get()
+          : { dupPtRows: 0, dupPtGroups: 0 };
+
+        const organisms = cols.includes("ORGANISM")
+          ? db.prepare("SELECT DISTINCT ORGANISM FROM Isolates WHERE ORGANISM != '' ORDER BY ORGANISM").all().map((r) => r.ORGANISM)
+          : [];
+        const wards = cols.includes("WARD")
+          ? db.prepare("SELECT DISTINCT WARD FROM Isolates WHERE WARD != '' ORDER BY WARD").all().map((r) => r.WARD)
+          : [];
+        const months = cols.includes("SPEC_DATE")
+          ? db.prepare("SELECT DISTINCT SUBSTR(SPEC_DATE, 1, 7) as ym FROM Isolates WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7 AND SUBSTR(SPEC_DATE, 1, 7) GLOB '[1-2][0-9][0-9][0-9]-[0-1][0-9]' AND SUBSTR(SPEC_DATE, 6, 2) BETWEEN '01' AND '12' ORDER BY ym DESC").all().map((r) => r.ym)
+          : [];
+
         sendJson(res, {
           total,
-          dupRows: dupInfo.dupRows,
-          dupGroups: dupInfo.dupGroups,
-          dupPtRows: dupPtInfo.dupPtRows,
-          dupPtGroups: dupPtInfo.dupPtGroups,
+          dupRows: dupInfo?.dupRows || 0,
+          dupGroups: dupInfo?.dupGroups || 0,
+          dupPtRows: dupPtInfo?.dupPtRows || 0,
+          dupPtGroups: dupPtInfo?.dupPtGroups || 0,
           organisms,
           wards,
           months,
@@ -508,72 +617,87 @@ async function handleApi(req, res) {
       const search = (urlObj.searchParams.get("search") || "").trim();
       const offset = (page - 1) * pageSize;
 
-      const groupCol =
-        mode === "patient" ? "UPPER(PATIENT_ID)" : "UPPER(SPEC_NUM)";
-      const notEmptyCond =
-        mode === "patient"
-          ? "PATIENT_ID IS NOT NULL AND PATIENT_ID != ''"
-          : "SPEC_NUM IS NOT NULL AND SPEC_NUM != ''";
-      let searchCond = "";
-      let searchParams = [];
-      if (search) {
-        const s = `%${search.toUpperCase()}%`;
-        searchCond = `AND (${groupCol} LIKE ? OR UPPER(FULL_NAME) LIKE ?)`;
-        searchParams = [s, s];
-      }
-
-      const ALLOWED_DUP_COLS = {
-        ROW_IDX: "ROW_IDX",
-        MATCHED: groupCol,
-        OTHER: mode === "patient" ? "UPPER(SPEC_NUM)" : "UPPER(PATIENT_ID)",
-        SPEC_NUM: "SPEC_NUM",
-        PATIENT_ID: "PATIENT_ID",
-        FULL_NAME: "FULL_NAME",
-        SPEC_DATE: "SPEC_DATE",
-        SPEC_TYPE: "SPEC_TYPE",
-        ORGANISM: "ORGANISM",
-        SEX: "SEX",
-        AGE: "AGE",
-        WARD: "WARD",
-      };
-      const rawDupSort = urlObj.searchParams.get("sortCol")?.toUpperCase();
-      const dupSortExpr = ALLOWED_DUP_COLS[rawDupSort] || null;
-      const rawDupDir = (
-        urlObj.searchParams.get("sortDir") || "ASC"
-      ).toUpperCase();
-      const dupSortDir = rawDupDir === "DESC" ? "DESC" : "ASC";
-
-      let orderClause = `ORDER BY NATURAL_KEY(${groupCol}), row_num`;
-      if (dupSortExpr) {
-        if (rawDupSort === "MATCHED") {
-          orderClause = `ORDER BY NATURAL_KEY(${groupCol}) ${dupSortDir}, row_num`;
-        } else {
-          const clusterAgg = dupSortDir === "DESC" ? "MAX" : "MIN";
-          const clusterValExpr = `${clusterAgg}(NATURAL_KEY(${dupSortExpr})) OVER (PARTITION BY ${groupCol})`;
-          orderClause = `ORDER BY 
-            CASE WHEN ${clusterValExpr} IS NULL OR ${clusterValExpr} = '' THEN 1 ELSE 0 END,
-            ${clusterValExpr} ${dupSortDir},
-            NATURAL_KEY(${groupCol}),
-            CASE WHEN ${dupSortExpr} IS NULL OR ${dupSortExpr} = '' THEN 1 ELSE 0 END,
-            NATURAL_KEY(${dupSortExpr}) ${dupSortDir},
-            row_num`;
-        }
-      }
-
       withDb((db) => {
-        const cols = db.prepare("PRAGMA table_info(Isolates)").all().map(c => c.name);
-        const colExpr = (name, fallback = "NULL") => cols.includes(name) ? name : `${fallback} AS ${name}`;
+        const dupCols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name);
+        const upperCols = dupCols.map((c) => c.toUpperCase());
+        const hasSpecNum = upperCols.includes("SPEC_NUM");
+        const hasPatientId = upperCols.includes("PATIENT_ID");
+        const hasFullName = upperCols.includes("FULL_NAME");
+        const hasRowIdx = upperCols.includes("ROW_IDX");
+        const rowIdxExpr = hasRowIdx ? "ROW_IDX" : "rowid";
+
+        const groupCol = mode === "patient"
+          ? (hasPatientId ? "UPPER(PATIENT_ID)" : "''")
+          : (hasSpecNum ? "UPPER(SPEC_NUM)" : "''");
+        const notEmptyCond = mode === "patient"
+          ? (hasPatientId ? "PATIENT_ID IS NOT NULL AND PATIENT_ID != ''" : "0")
+          : (hasSpecNum ? "SPEC_NUM IS NOT NULL AND SPEC_NUM != ''" : "0");
+
+        let searchCond = "";
+        let searchParams = [];
+        if (search) {
+          if (hasFullName) {
+            searchCond = `AND (${groupCol} LIKE ? OR UPPER(FULL_NAME) LIKE ?)`;
+            const s = `%${search.toUpperCase()}%`;
+            searchParams = [s, s];
+          } else {
+            searchCond = `AND (${groupCol} LIKE ?)`;
+            searchParams = [`%${search.toUpperCase()}%`];
+          }
+        }
+
+        const ALLOWED_DUP_COLS = {
+          ROW_IDX: rowIdxExpr,
+          MATCHED: groupCol,
+          OTHER: mode === "patient"
+            ? (hasSpecNum ? "UPPER(SPEC_NUM)" : "''")
+            : (hasPatientId ? "UPPER(PATIENT_ID)" : "''"),
+          SPEC_NUM: hasSpecNum ? "SPEC_NUM" : "''",
+          PATIENT_ID: hasPatientId ? "PATIENT_ID" : "''",
+          FULL_NAME: hasFullName ? "FULL_NAME" : "''",
+          SPEC_DATE: upperCols.includes("SPEC_DATE") ? "SPEC_DATE" : "''",
+          SPEC_TYPE: upperCols.includes("SPEC_TYPE") ? "SPEC_TYPE" : "''",
+          ORGANISM: upperCols.includes("ORGANISM") ? "ORGANISM" : "''",
+          SEX: upperCols.includes("SEX") ? "SEX" : "''",
+          AGE: upperCols.includes("AGE") ? "AGE" : "''",
+          WARD: upperCols.includes("WARD") ? "WARD" : "''",
+        };
+        const rawDupSort = urlObj.searchParams.get("sortCol")?.toUpperCase();
+        const dupSortExpr = ALLOWED_DUP_COLS[rawDupSort] || null;
+        const rawDupDir = (
+          urlObj.searchParams.get("sortDir") || "ASC"
+        ).toUpperCase();
+        const dupSortDir = rawDupDir === "DESC" ? "DESC" : "ASC";
+
+        let orderClause = `ORDER BY NATURAL_KEY(${groupCol}), row_num`;
+        if (dupSortExpr) {
+          if (rawDupSort === "MATCHED") {
+            orderClause = `ORDER BY NATURAL_KEY(${groupCol}) ${dupSortDir}, row_num`;
+          } else {
+            const clusterAgg = dupSortDir === "DESC" ? "MAX" : "MIN";
+            const clusterValExpr = `${clusterAgg}(NATURAL_KEY(${dupSortExpr})) OVER (PARTITION BY ${groupCol})`;
+            orderClause = `ORDER BY 
+              CASE WHEN ${clusterValExpr} IS NULL OR ${clusterValExpr} = '' THEN 1 ELSE 0 END,
+              ${clusterValExpr} ${dupSortDir},
+              NATURAL_KEY(${groupCol}),
+              CASE WHEN ${dupSortExpr} IS NULL OR ${dupSortExpr} = '' THEN 1 ELSE 0 END,
+              ${dupSortExpr} ${dupSortDir},
+              row_num`;
+          }
+        }
+
+        const colExpr = (name, fallback = "NULL") => dupCols.includes(name) ? name : `${fallback} AS ${name}`;
         const rows = db
           .prepare(
             `
           WITH RankedIsolates AS (
             SELECT *,
-                   ROW_NUMBER() OVER (PARTITION BY ${groupCol} ORDER BY ROW_IDX) AS row_num,
+                   ROW_NUMBER() OVER (PARTITION BY ${groupCol} ORDER BY ${rowIdxExpr}) AS row_num,
                    COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
             FROM Isolates
             WHERE ${notEmptyCond}
           )
-          SELECT ROW_IDX,
+          SELECT ${colExpr("ROW_IDX", "rowid")},
                  ${colExpr("PATIENT_ID", "''")},
                  ${colExpr("SPEC_DATE", "''")},
                  ${colExpr("SPEC_NUM", "''")},
@@ -597,7 +721,7 @@ async function handleApi(req, res) {
           .prepare(
             `
           SELECT COUNT(*) as c FROM (
-            SELECT ROW_IDX, COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
+            SELECT ${rowIdxExpr}, COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
             FROM Isolates
             WHERE ${notEmptyCond}
           ) WHERE total_duplicates > 1 ${searchCond}
@@ -647,32 +771,40 @@ async function handleApi(req, res) {
       const rawSortDir = (
         urlObj.searchParams.get("sortDir") || "DESC"
       ).toUpperCase();
-      const sortDir = rawSortDir === "ASC" ? "ASC" : "DESC";
+      const sortDir = rawSortDir === "DESC" ? "DESC" : "ASC";
 
       const orderClause =
         sortCol === "ROW_IDX"
           ? `ORDER BY ROW_IDX ${sortDir}`
           : `ORDER BY CASE WHEN ${sortCol} IS NULL OR ${sortCol} = '' THEN 1 ELSE 0 END, NATURAL_KEY(${sortCol}) ${sortDir}, ROW_IDX DESC`;
 
-      const conditions = [];
-      const queryParams = [];
-      if (search) {
-        const s = `%${search.toUpperCase()}%`;
-        conditions.push("(UPPER(SPEC_NUM) LIKE ? OR UPPER(PATIENT_ID) LIKE ? OR UPPER(FULL_NAME) LIKE ?)");
-        queryParams.push(s, s, s);
-      }
-      if (organism) { conditions.push("ORGANISM = ?"); queryParams.push(organism); }
-      if (ward) { conditions.push("WARD = ?"); queryParams.push(ward); }
-      if (month) { conditions.push("SUBSTR(SPEC_DATE, 1, 7) = ?"); queryParams.push(month); }
-      const where = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
-
       withDb((db) => {
-        const cols = db.prepare("PRAGMA table_info(Isolates)").all().map(c => c.name);
+        const cols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name);
+        const upperCols = cols.map((c) => c.toUpperCase());
         const colExpr = (name, fallback = "NULL") => cols.includes(name) ? name : `${fallback} AS ${name}`;
+
+        const conditions = [];
+        const queryParams = [];
+        if (search) {
+          const searchParts = [];
+          if (upperCols.includes("SPEC_NUM")) searchParts.push("UPPER(SPEC_NUM) LIKE ?");
+          if (upperCols.includes("PATIENT_ID")) searchParts.push("UPPER(PATIENT_ID) LIKE ?");
+          if (upperCols.includes("FULL_NAME")) searchParts.push("UPPER(FULL_NAME) LIKE ?");
+          if (searchParts.length) {
+            conditions.push(`(${searchParts.join(" OR ")})`);
+            const s = `%${search.toUpperCase()}%`;
+            for (let i = 0; i < searchParts.length; i++) queryParams.push(s);
+          }
+        }
+        if (organism && upperCols.includes("ORGANISM")) { conditions.push("ORGANISM = ?"); queryParams.push(organism); }
+        if (ward && upperCols.includes("WARD")) { conditions.push("WARD = ?"); queryParams.push(ward); }
+        if (month && upperCols.includes("SPEC_DATE")) { conditions.push("SUBSTR(SPEC_DATE, 1, 7) = ?"); queryParams.push(month); }
+        const where = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
+
         const rows = db
           .prepare(
             `
-          SELECT ROW_IDX,
+          SELECT ${colExpr("ROW_IDX", "rowid")},
                  ${colExpr("PATIENT_ID", "''")},
                  ${colExpr("SPEC_DATE", "''")},
                  ${colExpr("SPEC_NUM", "''")},
@@ -709,16 +841,25 @@ async function handleApi(req, res) {
       return sendJson(res, { error: "No database open" }, 400);
     try {
       withDb((db) => {
-        // Query all records with a valid SPEC_DATE
-        const rows = db
+        const cols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name);
+        const colExpr = (name, fallback = "NULL") => cols.includes(name) ? name : `${fallback} AS ${name}`;
+        const hasDate = cols.includes("SPEC_DATE");
+        const rows = hasDate ? db
           .prepare(
             `
-          SELECT ROW_IDX, SPEC_NUM, SPEC_DATE, SPEC_TYPE, WARD_TYPE, WARD, DEPARTMENT, ORGANISM
+          SELECT ${colExpr("ROW_IDX", "rowid")},
+                 ${colExpr("SPEC_NUM", "''")},
+                 ${colExpr("SPEC_DATE", "''")},
+                 ${colExpr("SPEC_TYPE", "''")},
+                 ${colExpr("WARD_TYPE", "''")},
+                 ${colExpr("WARD", "''")},
+                 ${colExpr("DEPARTMENT", "''")},
+                 ${colExpr("ORGANISM", "''")}
           FROM Isolates
           WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7
         `,
           )
-          .all();
+          .all() : [];
 
         const monthMap = {};
 
@@ -1001,6 +1142,14 @@ async function handleApi(req, res) {
     let description = "";
 
     if (operation === "upper_spec_num") {
+      let hasSpec = false;
+      withDb((db) => {
+        const cols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name.toUpperCase());
+        hasSpec = cols.includes("SPEC_NUM");
+      });
+      if (!hasSpec) {
+        return sendJson(res, { ok: true, description: "SPEC_NUM column not present", changes: 0 });
+      }
       sql = "UPDATE Isolates SET SPEC_NUM = UPPER(SPEC_NUM) WHERE SPEC_NUM != UPPER(SPEC_NUM)";
       description = "SPEC_NUM → UPPERCASE";
     } else if (operation === "trim_all") {
@@ -1009,6 +1158,8 @@ async function handleApi(req, res) {
       // PRAGMA table_xinfo exposes hidden=2 (virtual) or hidden=3 (stored generated).
       withDb((db) => {
         let trimFields = ["SPEC_NUM", "PATIENT_ID", "WARD", "DEPARTMENT"];
+        const existingCols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name);
+        trimFields = trimFields.filter((f) => existingCols.includes(f));
         try {
           const xinfo = db.prepare("PRAGMA table_xinfo(Isolates)").all();
           const fullNameCol = xinfo.find((c) => c.name === "FULL_NAME");
@@ -1019,15 +1170,34 @@ async function handleApi(req, res) {
         } catch (_) {
           // Older SQLite without table_xinfo: skip FULL_NAME to be safe
         }
+        if (!trimFields.length) {
+          return sendJson(res, { ok: true, description: "No text fields to trim", changes: 0 });
+        }
         const setClause = trimFields.map((f) => `${f} = TRIM(${f})`).join(", ");
         const result = db.prepare(`UPDATE Isolates SET ${setClause}`).run();
         sendJson(res, { ok: true, description: "Trim whitespace from text fields", changes: result.changes });
       });
       return;
     } else if (operation === "upper_patient_id") {
+      let hasPt = false;
+      withDb((db) => {
+        const cols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name.toUpperCase());
+        hasPt = cols.includes("PATIENT_ID");
+      });
+      if (!hasPt) {
+        return sendJson(res, { ok: true, description: "PATIENT_ID column not present", changes: 0 });
+      }
       sql = "UPDATE Isolates SET PATIENT_ID = UPPER(PATIENT_ID) WHERE PATIENT_ID != UPPER(PATIENT_ID)";
       description = "PATIENT_ID → UPPERCASE";
     } else if (operation === "lower_organism") {
+      let hasOrg = false;
+      withDb((db) => {
+        const cols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name.toUpperCase());
+        hasOrg = cols.includes("ORGANISM");
+      });
+      if (!hasOrg) {
+        return sendJson(res, { ok: true, description: "ORGANISM column not present", changes: 0 });
+      }
       sql = "UPDATE Isolates SET ORGANISM = LOWER(ORGANISM) WHERE ORGANISM != LOWER(ORGANISM)";
       description = "ORGANISM → lowercase";
     } else {
@@ -1067,32 +1237,41 @@ async function handleApi(req, res) {
       return sendJson(res, { error: "No database open" }, 400);
     const body = await readBody(req);
     const { spec_num, patient_id, mode } = JSON.parse(body);
-    let sql;
-    let sqlParams = [];
-    if (mode === "patient" || patient_id) {
-      if (patient_id) {
-        sql = `DELETE FROM Isolates WHERE ROW_IDX NOT IN (
-          SELECT MIN(ROW_IDX) FROM Isolates WHERE UPPER(PATIENT_ID) = UPPER(?)
-        ) AND UPPER(PATIENT_ID) = UPPER(?)`;
-        sqlParams = [patient_id, patient_id];
-      } else {
-        sql = `DELETE FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' AND ROW_IDX NOT IN (
-          SELECT MIN(ROW_IDX) FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' GROUP BY UPPER(PATIENT_ID)
-        )`;
-      }
-    } else {
-      if (spec_num) {
-        sql = `DELETE FROM Isolates WHERE ROW_IDX NOT IN (
-          SELECT MIN(ROW_IDX) FROM Isolates WHERE UPPER(SPEC_NUM) = UPPER(?)
-        ) AND UPPER(SPEC_NUM) = UPPER(?)`;
-        sqlParams = [spec_num, spec_num];
-      } else {
-        sql = `DELETE FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' AND ROW_IDX NOT IN (
-          SELECT MIN(ROW_IDX) FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' GROUP BY UPPER(SPEC_NUM)
-        )`;
-      }
-    }
+
     withDb((db) => {
+      const cols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name.toUpperCase());
+      const hasSpecNum = cols.includes("SPEC_NUM");
+      const hasPatientId = cols.includes("PATIENT_ID");
+      const hasRowIdx = cols.includes("ROW_IDX");
+      const rowIdxCol = hasRowIdx ? "ROW_IDX" : "rowid";
+
+      let sql;
+      let sqlParams = [];
+      if (mode === "patient" || patient_id) {
+        if (!hasPatientId) return sendJson(res, { ok: true, changes: 0 });
+        if (patient_id) {
+          sql = `DELETE FROM Isolates WHERE ${rowIdxCol} NOT IN (
+            SELECT MIN(${rowIdxCol}) FROM Isolates WHERE UPPER(PATIENT_ID) = UPPER(?)
+          ) AND UPPER(PATIENT_ID) = UPPER(?)`;
+          sqlParams = [patient_id, patient_id];
+        } else {
+          sql = `DELETE FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' AND ${rowIdxCol} NOT IN (
+            SELECT MIN(${rowIdxCol}) FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' GROUP BY UPPER(PATIENT_ID)
+          )`;
+        }
+      } else {
+        if (!hasSpecNum) return sendJson(res, { ok: true, changes: 0 });
+        if (spec_num) {
+          sql = `DELETE FROM Isolates WHERE ${rowIdxCol} NOT IN (
+            SELECT MIN(${rowIdxCol}) FROM Isolates WHERE UPPER(SPEC_NUM) = UPPER(?)
+          ) AND UPPER(SPEC_NUM) = UPPER(?)`;
+          sqlParams = [spec_num, spec_num];
+        } else {
+          sql = `DELETE FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' AND ${rowIdxCol} NOT IN (
+            SELECT MIN(${rowIdxCol}) FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' GROUP BY UPPER(SPEC_NUM)
+          )`;
+        }
+      }
       const result = db.prepare(sql).run(...sqlParams);
       sendJson(res, { ok: true, changes: result.changes });
     });

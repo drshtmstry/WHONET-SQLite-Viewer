@@ -83,27 +83,146 @@ export function normaliseSchema() {
   // Guard: only run once per loaded database to avoid a PRAGMA query on every API call
   if (state._schemaNormalised) return;
   try {
-    const cols = wasmSelect("PRAGMA table_info(Isolates)").map(r => r.name);
-    if (!cols.includes('FULL_NAME')) {
-      if (cols.includes('FIRST_NAME') && cols.includes('LAST_NAME')) {
-        state.wasmDb.run(
-          `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS ` +
-          `(TRIM(COALESCE(FIRST_NAME,'') || ' ' || COALESCE(LAST_NAME,''))) VIRTUAL`
-        );
-      } else if (cols.includes('LAST_NAME')) {
-        state.wasmDb.run(
-          `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS ` +
-          `(COALESCE(LAST_NAME, '')) VIRTUAL`
-        );
-      } else if (cols.includes('FIRST_NAME')) {
-        state.wasmDb.run(
-          `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS ` +
-          `(COALESCE(FIRST_NAME, '')) VIRTUAL`
-        );
-      } else {
-        state.wasmDb.run(`ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''`);
+    let rawCols = wasmSelect("PRAGMA table_info(Isolates)").map(r => r.name);
+    if (!rawCols.length) {
+      // If table is not named Isolates, check if there is an isolates/data table to alias
+      const userTables = wasmSelect("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").map(t => t.name);
+      const match = userTables.find(t => /isolate/i.test(t)) || (userTables.length === 1 ? userTables[0] : null);
+      if (match && match.toLowerCase() !== 'isolates') {
+        try {
+          state.wasmDb.run(`CREATE VIEW IF NOT EXISTS Isolates AS SELECT * FROM "${match.replace(/"/g, '""')}"`);
+          rawCols = wasmSelect("PRAGMA table_info(Isolates)").map(r => r.name);
+        } catch (_) {}
       }
     }
+
+    if (!rawCols.length) {
+      state._schemaNormalised = true;
+      return;
+    }
+
+    const cleanCol = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const colMap = new Map();
+    for (const col of rawCols) {
+      colMap.set(col.toUpperCase(), col);
+      colMap.set(cleanCol(col), col);
+    }
+
+    const findCandidate = (aliases) => {
+      for (const alias of aliases) {
+        const found = colMap.get(alias.toUpperCase()) || colMap.get(cleanCol(alias));
+        if (found) return found;
+      }
+      return null;
+    };
+
+    // 1. Ensure SPEC_NUM exists (resolves 'no such column: SPEC_NUM')
+    if (!colMap.has('SPEC_NUM')) {
+      const cand = findCandidate([
+        'spec_no', 'specnum', 'specno', 'spec_id', 'specid', 'specimen_num',
+        'specimen_no', 'specimen_number', 'specimen_id', 'specimen',
+        'accession', 'accession_no', 'accession_num', 'accession_number',
+        'acc_no', 'acc_num', 'sample_id', 'sample_no', 'sample_num',
+        'sample_number', 'lab_no', 'lab_num', 'barcode'
+      ]);
+      try {
+        state.wasmDb.run(`ALTER TABLE Isolates ADD COLUMN SPEC_NUM TEXT DEFAULT ''`);
+        if (cand) {
+          state.wasmDb.run(`UPDATE Isolates SET SPEC_NUM = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
+        }
+        colMap.set('SPEC_NUM', 'SPEC_NUM');
+      } catch (err) {
+        console.warn('Failed to ensure SPEC_NUM column:', err.message);
+      }
+    }
+
+    // 2. Ensure PATIENT_ID exists
+    if (!colMap.has('PATIENT_ID')) {
+      const cand = findCandidate([
+        'pat_id', 'patientid', 'patid', 'patient_no', 'patient_num',
+        'patient_number', 'patient', 'mrn', 'pid', 'subject_id',
+        'hosp_no', 'reg_no', 'ip_no', 'op_no'
+      ]);
+      try {
+        state.wasmDb.run(`ALTER TABLE Isolates ADD COLUMN PATIENT_ID TEXT DEFAULT ''`);
+        if (cand) {
+          state.wasmDb.run(`UPDATE Isolates SET PATIENT_ID = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
+        }
+        colMap.set('PATIENT_ID', 'PATIENT_ID');
+      } catch (err) {
+        console.warn('Failed to ensure PATIENT_ID column:', err.message);
+      }
+    }
+
+    // 3. Ensure ROW_IDX exists
+    if (!colMap.has('ROW_IDX')) {
+      const cand = findCandidate(['row_idx', 'rowidx', 'row_id', 'rowid', 'id']);
+      try {
+        state.wasmDb.run(`ALTER TABLE Isolates ADD COLUMN ROW_IDX INTEGER DEFAULT 0`);
+        if (cand) {
+          state.wasmDb.run(`UPDATE Isolates SET ROW_IDX = COALESCE(CAST("${cand.replace(/"/g, '""')}" AS INTEGER), rowid)`);
+        } else {
+          try {
+            state.wasmDb.run(`UPDATE Isolates SET ROW_IDX = rowid`);
+          } catch (_) {}
+        }
+        colMap.set('ROW_IDX', 'ROW_IDX');
+      } catch (err) {
+        console.warn('Failed to ensure ROW_IDX column:', err.message);
+      }
+    }
+
+    // 4. Ensure FULL_NAME exists
+    if (!colMap.has('FULL_NAME')) {
+      const cand = findCandidate(['full_name', 'fullname', 'patient_name', 'patientname', 'name']);
+      try {
+        if (cand) {
+          state.wasmDb.run(`ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''`);
+          state.wasmDb.run(`UPDATE Isolates SET FULL_NAME = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
+        } else if (colMap.has('FIRST_NAME') && colMap.has('LAST_NAME')) {
+          state.wasmDb.run(
+            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS ` +
+            `(TRIM(COALESCE(FIRST_NAME,'') || ' ' || COALESCE(LAST_NAME,''))) VIRTUAL`
+          );
+        } else if (colMap.has('LAST_NAME')) {
+          state.wasmDb.run(
+            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(LAST_NAME, '')) VIRTUAL`
+          );
+        } else if (colMap.has('FIRST_NAME')) {
+          state.wasmDb.run(
+            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(FIRST_NAME, '')) VIRTUAL`
+          );
+        } else {
+          state.wasmDb.run(`ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''`);
+        }
+        colMap.set('FULL_NAME', 'FULL_NAME');
+      } catch (err) {
+        console.warn('Failed to ensure FULL_NAME column:', err.message);
+      }
+    }
+
+    // 5. Ensure core clinical & surveillance fields exist
+    const textCols = [
+      { name: 'SPEC_DATE', aliases: ['spec_date', 'date_spec', 'specdate', 'collection_date', 'date'] },
+      { name: 'SPEC_TYPE', aliases: ['spec_type', 'spectype', 'specimen_type', 'spec_code', 'sample_type'] },
+      { name: 'ORGANISM', aliases: ['organism', 'org', 'organism_code', 'org_code', 'pathogen', 'bacteria'] },
+      { name: 'WARD', aliases: ['ward', 'ward_name', 'unit', 'location'] },
+      { name: 'DEPARTMENT', aliases: ['department', 'dept', 'service'] },
+      { name: 'WARD_TYPE', aliases: ['ward_type', 'wardtype'] }
+    ];
+    for (const { name, aliases } of textCols) {
+      if (!colMap.has(name)) {
+        const cand = findCandidate(aliases);
+        try {
+          state.wasmDb.run(`ALTER TABLE Isolates ADD COLUMN ${name} TEXT DEFAULT ''`);
+          if (cand) {
+            state.wasmDb.run(`UPDATE Isolates SET ${name} = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
+          }
+          colMap.set(name, name);
+        } catch (_) {}
+      }
+    }
+
     state._schemaNormalised = true;
   } catch (e) {
     console.warn('normaliseSchema:', e.message);
