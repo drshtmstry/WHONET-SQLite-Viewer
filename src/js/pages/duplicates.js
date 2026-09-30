@@ -1,0 +1,294 @@
+import { state } from "../state/store.js";
+import { api } from "../api/client.js";
+import { toast } from "../ui/toast.js";
+import { renderSortHeader, renderPagination } from "../ui/table.js";
+import { fmtDate, formatAgeSex, debounce, escapeHtml } from "../utils/formatters.js";
+import { renderOrgBadge } from "../utils/organisms.js";
+
+export function setDupMode(mode) {
+  if (state.dupMode === mode) return;
+  state.dupMode = mode;
+  document
+    .getElementById("mode-btn-spec")
+    ?.classList.toggle("active", mode === "spec");
+  document
+    .getElementById("mode-btn-patient")
+    ?.classList.toggle("active", mode === "patient");
+
+  const searchInput = document.getElementById("dup-search");
+  if (searchInput) {
+    searchInput.placeholder =
+      mode === "patient"
+        ? "Search by Patient ID or Name…"
+        : "Search by Specimen # or Name…";
+    searchInput.value = "";
+  }
+
+  if (state.stats) {
+    const activeCount =
+      mode === "patient"
+        ? state.stats.dupPtRows || 0
+        : state.stats.dupRows || 0;
+    const badge = document.getElementById("dup-badge");
+    if (badge) badge.textContent = activeCount;
+  }
+
+  loadDuplicates(1);
+}
+
+export function sortDuplicates(column) {
+  if (state.dupSortCol === column) {
+    state.dupSortDir = state.dupSortDir === "asc" ? "desc" : "asc";
+  } else {
+    state.dupSortCol = column;
+    state.dupSortDir = "asc";
+  }
+  loadDuplicates(1);
+}
+
+export function groupRows(rows, mode = state.dupMode) {
+  const groups = {};
+  for (const r of rows) {
+    const val = mode === "patient" ? r.PATIENT_ID || "" : r.SPEC_NUM || "";
+    const key = val.trim().toUpperCase() || "(BLANK)";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  }
+  return groups;
+}
+
+export async function loadDuplicates(page = 1) {
+  const numPage = parseInt(page, 10) || 1;
+  const dupBody = document.getElementById("dup-table-body");
+  const countEl = document.getElementById("dup-count");
+  const casingBanner = document.getElementById("casing-banner");
+  if (!state.currentDb) {
+    if (casingBanner) casingBanner.style.display = "none";
+    if (countEl) countEl.textContent = "Open a database to view duplicates";
+    if (dupBody) dupBody.innerHTML = '<div class="empty"><div class="empty-title">No database loaded</div></div>';
+    return;
+  }
+
+  state.dupsPage = numPage;
+  const datasetVersion = state.datasetVersion;
+  const databaseName = state.currentDb;
+  const search = encodeURIComponent(
+    document.getElementById("dup-search")?.value || "",
+  );
+  const mode = state.dupMode || "spec";
+  const sortCol = state.dupSortCol || "";
+  const sortDir = state.dupSortDir || "asc";
+
+  // Check for mixed-case SPEC_NUMs and show/hide warning banner
+  if (casingBanner) casingBanner.style.display = "none";
+  if (dupBody) {
+    dupBody.innerHTML = '<div class="loading"><div class="spinner"></div>Finding duplicate records…</div>';
+  }
+
+  let hasMixedCase = false;
+  try {
+    const casingCheck = await api("/api/custom-sql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sql: "SELECT COUNT(*) as c FROM Isolates WHERE SPEC_NUM != UPPER(SPEC_NUM) AND SPEC_NUM != ''",
+      }),
+    });
+    if (!casingCheck?.error) {
+      hasMixedCase = (casingCheck?.rows?.[0]?.c || 0) > 0;
+    }
+  } catch (_) {}
+
+  if (datasetVersion !== state.datasetVersion || databaseName !== state.currentDb || !state.currentDb) {
+    if (casingBanner) casingBanner.style.display = "none";
+    return;
+  }
+  if (casingBanner) {
+    casingBanner.style.display = (hasMixedCase && state.currentDb) ? "flex" : "none";
+  }
+
+  const data = await api(
+    `/api/duplicates?page=${numPage}&pageSize=50&mode=${mode}&search=${search}&sortCol=${sortCol}&sortDir=${sortDir}`,
+  );
+  if (datasetVersion !== state.datasetVersion || databaseName !== state.currentDb) return;
+  if (data.error) return toast(data.error, "error");
+
+  const modeLabel = mode === "patient" ? "Patient ID" : "Specimen ID";
+  const groupCount = Object.keys(groupRows(data.rows, mode)).length;
+  const totalGroups =
+    mode === "patient"
+      ? state.stats?.dupPtGroups || groupCount
+      : state.stats?.dupGroups || groupCount;
+
+  if (countEl) {
+    countEl.textContent = `${data.totalCount.toLocaleString()} duplicate records across ${totalGroups.toLocaleString()} groups (ordered by ${modeLabel})`;
+  }
+
+  if (dupBody) {
+    dupBody.innerHTML = renderDuplicatesTable(data.rows, mode);
+    dupBody.scrollTop = 0;
+    dupBody.scrollLeft = 0;
+    attachDuplicatesTableListeners(dupBody);
+  }
+  updateDupSelectedState();
+  renderPagination("dup-pagination", numPage, data.totalCount, 50, loadDuplicates);
+}
+
+function attachDuplicatesTableListeners(container) {
+  if (!container || container._hasActionsListener) return;
+  container.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const rowIdx = parseInt(btn.dataset.rowIdx, 10);
+    if (isNaN(rowIdx)) return;
+    if (action === "delete") {
+      const specNum = btn.dataset.specNum || "";
+      if (typeof confirmDeleteRow === "function") {
+        confirmDeleteRow(rowIdx, specNum);
+      } else if (typeof window.confirmDeleteRow === "function") {
+        window.confirmDeleteRow(rowIdx, specNum);
+      }
+    } else if (action === "edit") {
+      if (typeof openEditModal === "function") openEditModal(rowIdx);
+      else if (typeof window.openEditModal === "function") window.openEditModal(rowIdx);
+    } else if (action === "view") {
+      if (typeof viewDetail === "function") viewDetail(rowIdx);
+      else if (typeof window.viewDetail === "function") window.viewDetail(rowIdx);
+    }
+  });
+  container._hasActionsListener = true;
+}
+
+export function renderDuplicatesTable(rows, mode = state.dupMode) {
+  const modeLabel = mode === "patient" ? "Patient ID" : "Specimen ID";
+  if (!rows || !rows.length) {
+    return `<div class="empty"><div class="empty-icon" style="color:var(--green)"><i class="fa-solid fa-circle-check"></i></div><div class="empty-title">No duplicates found by ${modeLabel}!</div></div>`;
+  }
+
+  let lastGroupKey = null;
+  let clusterIdx = 0;
+  const sCol = state.dupSortCol;
+  const sDir = state.dupSortDir;
+  const matchedLabel = mode === "patient" ? "Patient ID" : "Specimen #";
+  const otherLabel = mode === "patient" ? "Specimen #" : "Patient ID";
+
+  return `
+    <table class="dup-table">
+      <thead>
+        <tr>
+          <th class="col-check" style="text-align: center;">
+            <input type="checkbox" id="dup-select-all" onchange="toggleSelectAllDups(this.checked)" title="Select all on this page" />
+          </th>
+          ${renderSortHeader("Row", "ROW_IDX", sCol, sDir, "sortDuplicates", 'class="col-row"')}
+          ${renderSortHeader(matchedLabel, "MATCHED", sCol, sDir, "sortDuplicates", 'class="col-matched"')}
+          ${renderSortHeader(otherLabel, "OTHER", sCol, sDir, "sortDuplicates", 'class="col-other"')}
+          <th class="col-name">Patient Name</th>
+          <th class="col-agesex">Age/Sex</th>
+          ${renderSortHeader("Date", "SPEC_DATE", sCol, sDir, "sortDuplicates", 'class="col-date"')}
+          ${renderSortHeader("Type", "SPEC_TYPE", sCol, sDir, "sortDuplicates", 'class="col-type"')}
+          ${renderSortHeader("Organism", "ORGANISM", sCol, sDir, "sortDuplicates", 'class="col-org"')}
+          ${renderSortHeader("Ward", "WARD", sCol, sDir, "sortDuplicates", 'class="col-ward"')}
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map((r, idx) => {
+            const keyVal =
+              mode === "patient" ? r.PATIENT_ID || "" : r.SPEC_NUM || "";
+            const groupKey = keyVal.trim().toUpperCase() || "(BLANK)";
+            const isNewGroup = idx > 0 && groupKey !== lastGroupKey;
+            if (idx === 0 || groupKey !== lastGroupKey) {
+              clusterIdx++;
+              lastGroupKey = groupKey;
+            }
+
+            const clusterClass = `dup-cluster-${clusterIdx % 2}`;
+            const startClass = isNewGroup ? "dup-group-start" : "";
+
+            const matchedVal =
+              mode === "patient" ? r.PATIENT_ID || "—" : r.SPEC_NUM || "—";
+            const otherVal =
+              mode === "patient" ? r.SPEC_NUM || "—" : r.PATIENT_ID || "—";
+            const safeSpecNum = escapeHtml(JSON.stringify(r.SPEC_NUM || ''));
+            const safeSpecNumAttr = escapeHtml(r.SPEC_NUM || '');
+            const fullName = r.FULL_NAME || '—';
+            const specType = r.SPEC_TYPE || '—';
+            const ward = r.WARD || '—';
+            const ageSex = formatAgeSex(r.AGE, r.SEX);
+
+            const safeMatchedVal = escapeHtml(matchedVal);
+            const safeOtherVal = escapeHtml(otherVal);
+            const safeFullName = escapeHtml(fullName);
+            const safeSpecType = escapeHtml(specType);
+            const safeWard = escapeHtml(ward);
+
+            return `
+            <tr class="dup-row ${clusterClass} ${startClass}">
+              <td class="col-check" style="text-align: center;">
+                <input type="checkbox" class="dup-row-check" value="${r.ROW_IDX}" onchange="updateDupSelectedState()" />
+              </td>
+              <td class="mono col-row" style="color:var(--text3);font-size:11px">#${r.ROW_IDX}</td>
+              <td class="mono col-matched" style="font-size:11.5px;font-weight:700;color:var(--accent)" title="${safeMatchedVal}"><span class="cell-truncate">${safeMatchedVal}</span></td>
+              <td class="mono col-other" style="font-size:11.5px;color:var(--text2)" title="${safeOtherVal}"><span class="cell-truncate">${safeOtherVal}</span></td>
+              <td class="pt-name col-name" title="${safeFullName}"><span class="cell-truncate">${safeFullName}</span></td>
+              <td class="col-agesex">${ageSex}</td>
+              <td class="col-date" style="white-space:nowrap;font-size:11.5px">${fmtDate(r.SPEC_DATE)}</td>
+              <td class="col-type" title="${safeSpecType}"><span class="cell-truncate">${safeSpecType}</span></td>
+              <td class="col-org">${renderOrgBadge(r.ORGANISM)}</td>
+              <td class="col-ward" title="${safeWard}"><span class="cell-truncate">${safeWard}</span></td>
+              <td class="col-actions" style="text-align: right; white-space: nowrap;">
+                <div class="dup-actions-group row-actions-group">
+                  <button type="button" class="btn btn-ghost btn-icon-sm" data-action="edit" data-row-idx="${r.ROW_IDX}" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-icon-sm" data-action="view" data-row-idx="${r.ROW_IDX}" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                  <button type="button" class="btn btn-danger btn-icon-sm" data-action="delete" data-row-idx="${r.ROW_IDX}" data-spec-num="${safeSpecNumAttr}" onclick="confirmDeleteRow(${r.ROW_IDX}, ${safeSpecNum})" title="Delete this isolate" aria-label="Delete isolate">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>`;
+}
+
+export function toggleSelectAllDups(checked) {
+  const checkboxes = document.querySelectorAll(".dup-row-check");
+  checkboxes.forEach((cb) => {
+    cb.checked = checked;
+  });
+  updateDupSelectedState();
+}
+
+export function updateDupSelectedState() {
+  const checkboxes = Array.from(document.querySelectorAll(".dup-row-check"));
+  const checked = checkboxes.filter((cb) => cb.checked);
+  const count = checked.length;
+
+  const countEl = document.getElementById("dup-selected-count");
+  if (countEl) countEl.textContent = count;
+
+  const btn = document.getElementById("dup-delete-selected-btn");
+  if (btn) {
+    btn.disabled = count === 0;
+    btn.style.opacity = count === 0 ? "0.5" : "1";
+    btn.style.cursor = count === 0 ? "not-allowed" : "pointer";
+  }
+
+  const selectAll = document.getElementById("dup-select-all");
+  if (selectAll && checkboxes.length > 0) {
+    selectAll.checked = count === checkboxes.length;
+    selectAll.indeterminate = count > 0 && count < checkboxes.length;
+  } else if (selectAll) {
+    selectAll.checked = false;
+    selectAll.indeterminate = false;
+  }
+}
+
+export const debouncedLoadDups = debounce(() => loadDuplicates(1), 350);
