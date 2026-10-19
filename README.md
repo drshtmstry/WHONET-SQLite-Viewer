@@ -15,11 +15,20 @@
 
 ## Features
 
+- **CLSI M39 Cumulative Antibiogram** — Clinical Laboratory Standards Institute (CLSI M39-A4) compliant cumulative antibiogram engine:
+  - **1st-Isolate Deduplication**: Automatically includes only the initial isolate of a given species per patient in the surveillance period, eliminating diagnostic bias.
+  - **Statistical Cutoff Alert (<30 isolates)**: Flags small sample sizes per CLSI recommendations with an intuitive toggle to show/hide organisms with insufficient isolates.
+  - **Drug Class Grouping & Alphabetical Sorting**: Switch instantly between hierarchical grouping by drug classes (Penicillins, Cephalosporins, Carbapenems, Fluoroquinolones, Aminoglycosides, Glycopeptides, Polymyxins, etc. per CLSI Appendix E2) and standard alphabetical listing (CLSI Appendix E1).
+  - **% Susceptible (%S) vs % Resistant (%R) Views**: Toggle between susceptibility rates for empiric therapy guidance and resistance rates for infection control.
+  - **Specimen Type Filtering**: Filter by specific specimen categories (Urine, Blood, Respiratory, Pus/Wounds, Sterile Fluids, Stool, etc.) with automatic translation of WHONET specimen codes.
+  - **Export & Clipboard Integration**: One-click Copy TSV for immediate pasting into Excel/Word, and instant CSV download for clinical audits.
+- **Specimen & Organism Dictionary Translation** — Resolves cryptic WHONET 2-to-4 letter specimen codes (e.g. `ur`, `bl`, `sp`, `csf`) into standard clinical descriptions across 180+ specimen mappings, and provides full scientific binomial names from WHONET organism taxonomies.
 - **Deduplication** — Identify and resolve duplicate isolates clustered by `SPEC_NUM` (Specimen #) or `PATIENT_ID` with batch selection and deletion.
-- **Natural Column Sorting** — Interactive click-to-sort headers with intelligent alphanumeric ordering for specimen numbers (e.g. `CSR-1`, `CSR-2`, `CSR-10`, `CSR-151`, `-1/-2`, `-A/-B` suffixes) across Isolates, Duplicates, and SQL Workspace.
+- **Natural Column Sorting** — Interactive click-to-sort headers with intelligent alphanumeric ordering for specimen numbers (e.g. `CSR-1`, `CSR-2`, `CSR-10`, `CSR-151`, `-1/-2`, `-A/-B` suffixes) across Isolates, Duplicates, Antibiograms, and SQL Workspace.
 - **Customizable Clinical Tables** — Patient Full Name display, combined `Age/Sex` formatting (`19/f`), locale-aware dates, compact action icons, and user-configurable resistance phenotype columns (ESBL, Carbapenem, MRSA) with browser persistence.
 - **Monthly AMR Surveillance Report (SAPCAR-G)** — Standard Gujarat State Action Plan for Containment of Antimicrobial Resistance (SAPCAR-G) Culture & Sensitivity (C&S) reporting data (OPD / IPD / ICU × specimen types) with instant TSV clipboard copy and CSV export.
 - **Interactive Visual Analytics** — Real-time Chart.js distribution charts (Organisms, Specimen Types, Wards, Age Groups, Gender, AMR Phenotypes) with dynamic date range filtering and single/dual view toggles.
+- **Unified Persistent Navigation** — Persistent active database file pill with quick Refresh and Close database controls in the top header, accessible from any view on desktop and mobile.
 - **In-Place Record Corrections** — Clean, inline field editing and full-record correction modals with immediate database sync.
 - **Bulk Data Cleansing** — One-click uppercase specimen normalization and whitespace sanitation.
 - **Intelligent SQL Console** — Built-in query editor with schema-aware autocomplete, keyboard shortcuts, and instant result table sorting.
@@ -82,8 +91,21 @@ The codebase is organized into a dual-runtime architecture supporting both local
 │       ├── api/            # Local Node REST dispatcher & live-reload client
 │       ├── db/             # WebAssembly database & File System Access API
 │       ├── ui/             # Table rendering, modals, and toasts
-│       ├── utils/          # Natural sort, formatters, and organism badges
-│       └── pages/          # Dashboard, Isolates, Duplicates, AMR, SQL, Fixes
+│       ├── utils/          # Antibiogram engine, natural sort, specimens & formatters
+│       │   ├── antibiogram-engine.js  # CLSI M39 deduplication & %S/%R matrix calculation
+│       │   ├── antibiogram-rules.json # CLSI Appendix E antibiotic class groupings
+│       │   ├── specimens.js           # 180+ specimen code to clinical name mappings
+│       │   ├── natural-sort.js        # Alphanumeric specimen # sorting algorithm
+│       │   ├── formatters.js          # Locale dates, Age/Sex merged formatting & escaping
+│       │   └── organisms.js           # Taxonomical badge rendering & scientific names
+│       └── pages/          # Dashboard, Isolates, Antibiogram, Duplicates, AMR, SQL, Fixes
+│           ├── dashboard.js   # Summary KPIs & Chart.js visual analytics
+│           ├── isolates.js    # All Isolates table & column configurations
+│           ├── antibiogram.js # CLSI M39 cumulative antibiogram view & exports
+│           ├── duplicates.js  # Isolate clustering & batch deduplication
+│           ├── monthly-amr.js # Gujarat SAPCAR-G monthly surveillance matrix
+│           ├── sql-workspace.js # Interactive SQL query runner with autocomplete
+│           └── fixes.js       # Bulk specimen normalization & whitespace trim
 ├── server.js               # Local Node.js server (native node:sqlite & auto-sync)
 ├── start.bat               # Windows 1-click launcher for lab machines
 ├── vite.config.js          # Vite configuration for production builds

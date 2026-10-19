@@ -3392,7 +3392,31 @@ input[type="checkbox"] {
   }
 
   .header-file-actions {
-    display: none !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .header-file-pill {
+    max-width: 140px;
+    height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .header-file-pill .current-file-name {
+    max-width: 90px;
+  }
+
+  .header-file-actions .btn-refresh-data {
+    width: 28px;
+    height: 28px;
+  }
+
+  .header-file-actions .btn-close-db {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
   }
 
   .connection-badge {

@@ -79,21 +79,6 @@ export function setRuntimeBadge(text, isServer = false) {
 }
 
 export function updateCurrentFileDisplay(filename) {
-  const dbLabel = document.getElementById('db-label');
-  if (dbLabel) {
-    if (filename) {
-      dbLabel.innerHTML = `
-        <div class="current-file-pill">
-          <i class="fa-solid fa-database current-file-icon"></i>
-          <span class="current-file-name" title="${escapeHtml(filename)}">${escapeHtml(filename)}</span>
-          <span class="current-file-status">Active</span>
-        </div>
-      `;
-    } else {
-      dbLabel.innerHTML = '';
-    }
-  }
-
   const headerPillWrap = document.getElementById('header-file-pill-container');
   const headerFileName = document.getElementById('header-file-name');
   if (headerPillWrap) {

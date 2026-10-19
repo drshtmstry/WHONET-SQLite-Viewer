@@ -116,8 +116,15 @@
       <div class="db-selector" id="db-selector">
         <span id="runtime-badge" class="connection-badge">Connecting…</span>
 
-        <div id="header-file-pill-container" class="header-file-actions" style="display: none;">
-          <div class="current-file-pill header-file-pill" title="Active SQLite Database">
+        <div
+          id="header-file-pill-container"
+          class="header-file-actions"
+          style="display: none"
+        >
+          <div
+            class="current-file-pill header-file-pill"
+            title="Active SQLite Database"
+          >
             <i class="fa-solid fa-database current-file-icon"></i>
             <span class="current-file-name" id="header-file-name"></span>
           </div>
@@ -133,6 +140,7 @@
           <button
             type="button"
             class="btn-close-db"
+            id="btn-close-database"
             onclick="closeCurrentDatabase()"
             title="Close database and return to selection"
           >
@@ -298,7 +306,7 @@
             <line x1="4" y1="10" x2="20" y2="10"></line>
             <line x1="10" y1="4" x2="10" y2="20"></line>
           </svg>
-          Antibiogram (CLSI M39)
+          Antibiogram
         </button>
 
         <div class="nav-section">Data Quality</div>
@@ -584,31 +592,13 @@
           <div id="dashboard-analytics-container" style="display: none">
             <!-- Section Header -->
             <div class="section-header">
-              <div class="section-title">
-                <i class="fa-solid fa-chart-column"></i>
-                <span>Overview</span>
-              </div>
-              <div class="dashboard-file-row">
-                <div id="db-label"></div>
-                <div class="dashboard-file-actions">
-                  <button
-                    type="button"
-                    class="btn-refresh-data"
-                    onclick="loadStats()"
-                    title="Refresh Surveillance Data"
-                    aria-label="Refresh Data"
-                  >
-                    <i class="fa-solid fa-arrows-rotate"></i>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-close-db"
-                    id="btn-close-database"
-                    onclick="closeCurrentDatabase()"
-                    title="Close current database and return to selection"
-                  >
-                    <i class="fa-solid fa-xmark"></i> Close file
-                  </button>
+              <div>
+                <div class="section-title">
+                  <i class="fa-solid fa-chart-column"></i>
+                  <span>Overview</span>
+                </div>
+                <div class="section-sub">
+                  Surveillance Analytics &amp; Demographics
                 </div>
               </div>
             </div>
@@ -1582,7 +1572,7 @@
                   onclick="setAntibiogramGrouping(true)"
                   title="Group antibiotics by drug class (CLSI Appendix E2)"
                 >
-                  <i class="fa-solid fa-layer-group"></i> By Class (E2)
+                  <i class="fa-solid fa-layer-group"></i> By Class
                 </button>
                 <button
                   class="seg-btn"
@@ -1590,7 +1580,7 @@
                   onclick="setAntibiogramGrouping(false)"
                   title="Alphabetical antibiotic listing (CLSI Appendix E1)"
                 >
-                  <i class="fa-solid fa-arrow-down-a-z"></i> Alphabetical (E1)
+                  <i class="fa-solid fa-arrow-down-a-z"></i> Alphabetical
                 </button>
               </div>
 
