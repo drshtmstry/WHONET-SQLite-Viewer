@@ -11,6 +11,13 @@ const __dirname = process.pkg
   ? dirname(process.execPath)
   : dirname(fileURLToPath(import.meta.url));
 const WHONET_DIR = "C:\\WHONET\\Data";
+const WHONET_ROOT = "C:\\WHONET";
+
+import {
+  parseLabConfig,
+  deduplicateFirstIsolates,
+  calculateCumulativeAntibiogram
+} from "./src/js/utils/antibiogram-engine.js";
 
 // Live-reload SSE clients
 const liveReloadClients = new Set();
@@ -597,6 +604,9 @@ async function handleApi(req, res) {
         const wards = cols.includes("WARD")
           ? db.prepare("SELECT DISTINCT WARD FROM Isolates WHERE WARD != '' ORDER BY WARD").all().map((r) => r.WARD)
           : [];
+        const specimens = cols.includes("SPEC_TYPE")
+          ? db.prepare("SELECT DISTINCT SPEC_TYPE FROM Isolates WHERE SPEC_TYPE IS NOT NULL AND SPEC_TYPE != '' ORDER BY SPEC_TYPE").all().map((r) => r.SPEC_TYPE)
+          : [];
         const months = cols.includes("SPEC_DATE")
           ? db.prepare("SELECT DISTINCT SUBSTR(SPEC_DATE, 1, 7) as ym FROM Isolates WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7 AND SUBSTR(SPEC_DATE, 1, 7) GLOB '[1-2][0-9][0-9][0-9]-[0-1][0-9]' AND SUBSTR(SPEC_DATE, 6, 2) BETWEEN '01' AND '12' ORDER BY ym DESC").all().map((r) => r.ym)
           : [];
@@ -609,8 +619,82 @@ async function handleApi(req, res) {
           dupPtGroups: dupPtInfo?.dupPtGroups || 0,
           organisms,
           wards,
+          specimens,
           months,
         });
+      });
+    } catch (e) {
+      sendJson(res, { error: e.message }, 500);
+    }
+    return;
+  }
+
+  if (path === "/api/antibiogram" && req.method === "GET") {
+    if (!currentDbFullPath)
+      return sendJson(res, { error: "No database open" }, 400);
+    try {
+      const minIsolates = parseInt(urlObj.searchParams.get("minIsolates") || "30", 10);
+      const orgFilter = (urlObj.searchParams.get("organism") || "").trim().toLowerCase();
+      const wardFilter = (urlObj.searchParams.get("ward") || "").trim();
+      const specFilter = (urlObj.searchParams.get("specType") || "").trim();
+
+      // Attempt to auto-locate matching Lab Configuration file (e.g. LABIND.BMCRI for IND-BMCRI-2024)
+      let customLabConfig = null;
+      try {
+        if (existsSync(WHONET_ROOT)) {
+          const labFiles = readdirSync(WHONET_ROOT).filter(f => f.toUpperCase().startsWith("LAB"));
+          const currentBase = basename(currentDbFullPath).toUpperCase();
+          // Match by prefix or suffix (e.g. IND-BMCRI -> LABIND.BMCRI)
+          let matchedLabFile = labFiles.find(f => {
+            const clean = f.replace(/^LAB/i, "").replace(/\.[^.]+$/, "").toUpperCase();
+            return clean && currentBase.includes(clean);
+          }) || labFiles.find(f => f.toUpperCase() === "LABWHO.TST") || labFiles[0];
+
+          if (matchedLabFile) {
+            const labPath = join(WHONET_ROOT, matchedLabFile);
+            const content = readFileSync(labPath, "utf8");
+            customLabConfig = parseLabConfig(content);
+            if (customLabConfig) customLabConfig.filename = matchedLabFile;
+          }
+        }
+      } catch (e) {
+        console.warn("Could not load WHONET lab config:", e.message);
+      }
+
+      withDb((db) => {
+        const where = [];
+        const params = [];
+
+        if (orgFilter) {
+          where.push("LOWER(ORGANISM) = ?");
+          params.push(orgFilter);
+        }
+        if (wardFilter) {
+          where.push("WARD = ?");
+          params.push(wardFilter);
+        }
+        if (specFilter) {
+          where.push("LOWER(SPEC_TYPE) = LOWER(?)");
+          params.push(specFilter);
+        }
+
+        const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
+        const rawIsolates = db.prepare(`SELECT * FROM Isolates ${whereClause}`).all(...params);
+
+        // CLSI M39 First-Isolate Deduplication
+        const firstIsolates = deduplicateFirstIsolates(rawIsolates);
+
+        // Calculate Antibiogram
+        const report = calculateCumulativeAntibiogram(firstIsolates, {
+          minIsolates,
+          customLabConfig
+        });
+
+        report.labConfigFile = customLabConfig?.filename || null;
+        report.labName = customLabConfig?.metadata?.["Laboratory Name"] || null;
+        report.totalRawIsolates = rawIsolates.length;
+
+        sendJson(res, report);
       });
     } catch (e) {
       sendJson(res, { error: e.message }, 500);
@@ -758,6 +842,7 @@ async function handleApi(req, res) {
       const organism = (urlObj.searchParams.get("organism") || "").trim();
       const ward = (urlObj.searchParams.get("ward") || "").trim();
       const month = (urlObj.searchParams.get("month") || "").trim();
+      const specimen = (urlObj.searchParams.get("specimen") || urlObj.searchParams.get("specType") || "").trim();
       const offset = (page - 1) * pageSize;
 
       const ALLOWED_ISOLATE_COLS = {
@@ -810,6 +895,7 @@ async function handleApi(req, res) {
         if (organism && upperCols.includes("ORGANISM")) { conditions.push("ORGANISM = ?"); queryParams.push(organism); }
         if (ward && upperCols.includes("WARD")) { conditions.push("WARD = ?"); queryParams.push(ward); }
         if (month && upperCols.includes("SPEC_DATE")) { conditions.push("SUBSTR(SPEC_DATE, 1, 7) = ?"); queryParams.push(month); }
+        if (specimen && upperCols.includes("SPEC_TYPE")) { conditions.push("LOWER(SPEC_TYPE) = LOWER(?)"); queryParams.push(specimen); }
         const where = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
 
         const rows = db

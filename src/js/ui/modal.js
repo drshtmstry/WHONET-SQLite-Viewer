@@ -2,6 +2,7 @@ import { api } from '../api/client.js';
 import { toast } from './toast.js';
 import { escapeHtml } from '../utils/formatters.js';
 import { getOrganismName } from '../utils/organisms.js';
+import { getSpecimenName } from '../utils/specimens.js';
 import { state } from '../state/store.js';
 
 export const EDITABLE = [
@@ -57,6 +58,12 @@ export async function viewDetail(rowIdx) {
             const orgName = getOrganismName(r[key]);
             if (orgName) {
               valDisplay = `${r[key]} <span style="font-size:12px;color:var(--text3);font-weight:normal">(${orgName})</span>`;
+            }
+          }
+          if (key === 'SPEC_TYPE' && r[key]) {
+            const specName = getSpecimenName(r[key]);
+            if (specName) {
+              valDisplay = `${r[key]} <span style="font-size:12px;color:var(--text3);font-weight:normal">(${specName})</span>`;
             }
           }
           return `<div class="detail-field ${editable ? 'editable' : ''}">

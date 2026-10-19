@@ -2,6 +2,7 @@ import { state, setRuntimeBadge, updateCurrentFileDisplay } from '../state/store
 import { api, API_BASE } from '../api/client.js';
 import { toast } from '../ui/toast.js';
 import { getOrganismName } from '../utils/organisms.js';
+import { getSpecimenName } from '../utils/specimens.js';
 import { formatAmrMonthLabel } from '../utils/formatters.js';
 import { getSqlJs, wasmSelect, normaliseSchema } from '../db/wasm.js';
 
@@ -53,6 +54,40 @@ export async function loadStats() {
   if (wardFilter && data.wards) {
     wardFilter.innerHTML = '<option value="">All Wards</option>' +
       data.wards.map(w => `<option value="${w}">${w}</option>`).join('');
+  }
+
+  const abxWardFilter = document.getElementById('abx-ward-filter');
+  if (abxWardFilter && data.wards) {
+    abxWardFilter.innerHTML = '<option value="">All Locations</option>' +
+      data.wards.map(w => `<option value="${w}">${w}</option>`).join('');
+  }
+
+  const isoSpecFilter = document.getElementById('isolates-spec-filter');
+  if (isoSpecFilter && data.specimens) {
+    const currentVal = isoSpecFilter.value;
+    isoSpecFilter.innerHTML = '<option value="">All Specimens</option>' +
+      data.specimens.map(s => {
+        const name = getSpecimenName(s);
+        const label = name ? `${name} (${s})` : s;
+        return `<option value="${s}">${label}</option>`;
+      }).join('');
+    if (currentVal && data.specimens.includes(currentVal)) {
+      isoSpecFilter.value = currentVal;
+    }
+  }
+
+  const abxSpecFilter = document.getElementById('abx-spec-filter');
+  if (abxSpecFilter && data.specimens) {
+    const currentVal = abxSpecFilter.value;
+    abxSpecFilter.innerHTML = '<option value="">All Specimens</option>' +
+      data.specimens.map(s => {
+        const name = getSpecimenName(s);
+        const label = name ? `${name} (${s})` : s;
+        return `<option value="${s}">${label}</option>`;
+      }).join('');
+    if (currentVal && data.specimens.includes(currentVal)) {
+      abxSpecFilter.value = currentVal;
+    }
   }
 
   const monthFilter = document.getElementById('isolates-month-filter');
@@ -205,8 +240,8 @@ export async function updateDashboardCharts() {
       if (orgName) return `${orgName} (${label})`;
     }
     if (param === 'SPEC_TYPE') {
-      const dict = { bl: 'Blood (bl)', ps: 'Pus (ps)', sp: 'Sputum (sp)', ur: 'Urine (ur)', st: 'Stool (st)', cs: 'CSF (cs)' };
-      if (dict[label.toLowerCase()]) return dict[label.toLowerCase()];
+      const specName = getSpecimenName(label);
+      if (specName) return `${specName} (${label})`;
     }
     if (param === 'WARD_TYPE') {
       const dict = { in: 'Inpatient (in)', out: 'Outpatient (out)', icu: 'ICU (icu)' };

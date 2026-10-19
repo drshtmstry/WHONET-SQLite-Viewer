@@ -51,6 +51,9 @@ import {
   loadMonthlyAmrData, renderAmrTable, getAmrRowsData, copyAmrTableTsv, exportAmrCsv
 } from './pages/monthly-amr.js';
 import {
+  loadAntibiogram, setAntibiogramGrouping, setAntibiogramMetric, toggleHideUnder30, exportAntibiogramCsv
+} from './pages/antibiogram.js';
+import {
   refreshSqlSchema, initSqlAutocomplete, insertSQL, clearSQL,
   sortSqlTable, renderSqlResultTable, runSQL
 } from './pages/sql-workspace.js';
@@ -192,6 +195,20 @@ export function showPage(name) {
               No database loaded — please open or select a WHONET database to view surveillance data.
             </td>
           </tr>`;
+      }
+    }
+  }
+  if (name === 'antibiogram') {
+    if (state.currentDb) loadAntibiogram();
+    else {
+      const abxContainer = document.getElementById('antibiogram-table-container');
+      if (abxContainer) {
+        abxContainer.innerHTML = `
+          <div style="padding: 40px; text-align: center; color: var(--text3);">
+            <i class="fa-solid fa-table-cells" style="font-size: 32px; margin-bottom: 12px; color: var(--accent);"></i>
+            <div style="font-size: 14px; font-weight: 600;">No Database Loaded</div>
+            <div style="font-size: 12px; margin-top: 4px;">Please open or select a WHONET database to generate the cumulative antibiogram.</div>
+          </div>`;
       }
     }
   }
@@ -407,6 +424,11 @@ Object.assign(window, {
   loadMonthlyAmrData,
   copyAmrTableTsv,
   exportAmrCsv,
+  loadAntibiogram,
+  setAntibiogramGrouping,
+  setAntibiogramMetric,
+  toggleHideUnder30,
+  exportAntibiogramCsv,
   refreshSqlSchema,
   insertSQL,
   clearSQL,

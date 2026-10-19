@@ -4,6 +4,7 @@ import { toast } from '../ui/toast.js';
 import { renderSortHeader, renderPagination } from '../ui/table.js';
 import { fmtDate, formatAgeSex, debounce, escapeHtml } from '../utils/formatters.js';
 import { renderOrgBadge } from '../utils/organisms.js';
+import { renderSpecimenBadge } from '../utils/specimens.js';
 
 export function sortIsolates(column) {
   if (state.isolatesSortCol === column) {
@@ -63,11 +64,12 @@ export async function loadIsolates(page = 1) {
   const month = encodeURIComponent(document.getElementById('isolates-month-filter')?.value || '');
   const org = encodeURIComponent(document.getElementById('isolates-org-filter')?.value || '');
   const ward = encodeURIComponent(document.getElementById('isolates-ward-filter')?.value || '');
+  const spec = encodeURIComponent(document.getElementById('isolates-spec-filter')?.value || '');
   const sortCol = state.isolatesSortCol || 'ROW_IDX';
   const sortDir = state.isolatesSortDir || 'desc';
 
   if (isoBody) isoBody.innerHTML = '<div class="loading"><div class="spinner"></div>Loading isolates…</div>';
-  const data = await api(`/api/isolates?page=${numPage}&pageSize=25&search=${search}&month=${month}&organism=${org}&ward=${ward}&sortCol=${sortCol}&sortDir=${sortDir}`);
+  const data = await api(`/api/isolates?page=${numPage}&pageSize=25&search=${search}&month=${month}&organism=${org}&ward=${ward}&specimen=${spec}&sortCol=${sortCol}&sortDir=${sortDir}`);
   if (datasetVersion !== state.datasetVersion || databaseName !== state.currentDb) return;
   if (data.error) return toast(data.error, 'error');
 
@@ -147,7 +149,7 @@ export function renderIsolatesTable(rows) {
       <td class="pt-name col-name" title="${safeFullName}"><span class="cell-truncate">${safeFullName}</span></td>
       <td class="col-agesex">${ageSex}</td>
       <td>${fmtDate(r.SPEC_DATE)}</td>
-      <td>${escapeHtml(r.SPEC_TYPE || '—')}</td>
+      <td>${renderSpecimenBadge(r.SPEC_TYPE)}</td>
       <td>${renderOrgBadge(r.ORGANISM)}</td>
       <td>${escapeHtml(r.WARD || '—')}</td>
       ${showEsbl ? `<td>${r.ESBL ? `<span class="badge badge-${r.ESBL === '+' ? 'r' : 's'}">${r.ESBL}</span>` : '—'}</td>` : ''}

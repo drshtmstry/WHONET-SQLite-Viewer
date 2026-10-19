@@ -5,6 +5,7 @@
  */
 import { state } from '../state/store.js';
 import { wasmSelect, wasmRun, normaliseSchema } from '../db/wasm.js';
+import { deduplicateFirstIsolates, calculateCumulativeAntibiogram } from '../utils/antibiogram-engine.js';
 
 // Single source of truth for editable fields (mirrors server.js EDITABLE_FIELDS)
 const EDITABLE_FIELDS = [
@@ -53,11 +54,14 @@ export function handleWasmApi(path, options = {}) {
       const wards = cols.includes('WARD')
         ? wasmSelect("SELECT DISTINCT WARD FROM Isolates WHERE WARD IS NOT NULL AND WARD != '' ORDER BY WARD").map(r => r.WARD)
         : [];
+      const specimens = cols.includes('SPEC_TYPE')
+        ? wasmSelect("SELECT DISTINCT SPEC_TYPE FROM Isolates WHERE SPEC_TYPE IS NOT NULL AND SPEC_TYPE != '' ORDER BY SPEC_TYPE").map(r => r.SPEC_TYPE)
+        : [];
       const months = cols.includes('SPEC_DATE')
         ? wasmSelect("SELECT DISTINCT SUBSTR(SPEC_DATE, 1, 7) as ym FROM Isolates WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7 AND SUBSTR(SPEC_DATE, 1, 7) GLOB '[1-2][0-9][0-9][0-9]-[0-1][0-9]' AND SUBSTR(SPEC_DATE, 6, 2) BETWEEN '01' AND '12' ORDER BY ym DESC").map(r => r.ym)
         : [];
 
-      return { total, dupRows, dupGroups, dupPtRows, dupPtGroups, organisms, wards, months };
+      return { total, dupRows, dupGroups, dupPtRows, dupPtGroups, organisms, wards, specimens, months };
     }
 
     if (pathname === '/api/schema') {
@@ -80,6 +84,7 @@ export function handleWasmApi(path, options = {}) {
       const organism = (url.searchParams.get('organism') || '').trim();
       const ward = (url.searchParams.get('ward') || '').trim();
       const month = (url.searchParams.get('month') || '').trim();
+      const specimen = (url.searchParams.get('specimen') || url.searchParams.get('specType') || '').trim();
       const offset = (page - 1) * pageSize;
 
       const ALLOWED_ISOLATE_COLS = {
@@ -134,6 +139,10 @@ export function handleWasmApi(path, options = {}) {
       if (month && upperCols.includes('SPEC_DATE')) {
         whereClauses.push("SUBSTR(SPEC_DATE, 1, 7) = ?");
         params.push(month);
+      }
+      if (specimen && upperCols.includes('SPEC_TYPE')) {
+        whereClauses.push("LOWER(SPEC_TYPE) = LOWER(?)");
+        params.push(specimen);
       }
       const whereSql = whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
@@ -590,6 +599,43 @@ export function handleWasmApi(path, options = {}) {
         totalFiltered,
         rows
       };
+    }
+
+    if (pathname === '/api/antibiogram') {
+      const minIsolates = parseInt(url.searchParams.get('minIsolates') || '30', 10);
+      const orgFilter = (url.searchParams.get('organism') || '').trim().toLowerCase();
+      const wardFilter = (url.searchParams.get('ward') || '').trim();
+      const specFilter = (url.searchParams.get('specType') || '').trim();
+
+      const where = [];
+      const params = [];
+      if (orgFilter) {
+        where.push('LOWER(ORGANISM) = ?');
+        params.push(orgFilter);
+      }
+      if (wardFilter) {
+        where.push('WARD = ?');
+        params.push(wardFilter);
+      }
+      if (specFilter) {
+        where.push('LOWER(SPEC_TYPE) = LOWER(?)');
+        params.push(specFilter);
+      }
+
+      const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+      const rawIsolates = wasmSelect(`SELECT * FROM Isolates ${whereClause}`, params);
+
+      const firstIsolates = deduplicateFirstIsolates(rawIsolates);
+      const report = calculateCumulativeAntibiogram(firstIsolates, {
+        minIsolates,
+        customLabConfig: state.customLabConfig || null
+      });
+
+      report.labConfigFile = state.customLabConfig?.filename || null;
+      report.labName = state.customLabConfig?.metadata?.['Laboratory Name'] || null;
+      report.totalRawIsolates = rawIsolates.length;
+
+      return report;
     }
 
     return { error: `Unhandled WASM route: ${pathname}` };

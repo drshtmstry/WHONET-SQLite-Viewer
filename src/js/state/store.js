@@ -94,6 +94,20 @@ export function updateCurrentFileDisplay(filename) {
     }
   }
 
+  const headerPillWrap = document.getElementById('header-file-pill-container');
+  const headerFileName = document.getElementById('header-file-name');
+  if (headerPillWrap) {
+    if (filename) {
+      headerPillWrap.style.display = 'inline-flex';
+      if (headerFileName) {
+        headerFileName.textContent = filename;
+        headerFileName.title = filename;
+      }
+    } else {
+      headerPillWrap.style.display = 'none';
+    }
+  }
+
   const dropSub = document.getElementById('dropzone-sub');
   if (dropSub) {
     if (filename) {
