@@ -75,6 +75,51 @@ export function parseLabConfig(configContent) {
 }
 
 /**
+ * Taxonomic Parent Group Mappings (CLSI M100 / EUCAST / WHONET)
+ * Maps individual species codes to broad organism groups when breakpoints are defined at genus/family level
+ * (e.g. E. coli 'eco' -> Enterobacterales 'ebc', S. aureus 'sau' -> Staphylococci 'sta').
+ */
+export const TAXON_PARENT_GROUPS = {
+  // Enterobacterales (ebc)
+  eco: ['ebc'], kpn: ['ebc'], kox: ['ebc'], kvi: ['ebc'], kle: ['ebc'],
+  eae: ['ebc'], ecl: ['ebc'], ecx: ['ebc'],
+  cfr: ['ebc'], cko: ['ebc'], cdi: ['ebc'], cbr: ['ebc'], cit: ['ebc'],
+  smar: ['ebc'], ser: ['ebc'],
+  pmi: ['ebc', 'pro'], pvu: ['ebc', 'pro'], pro: ['ebc'],
+  mmo: ['ebc'], pre: ['ebc'], pst: ['ebc'], pve: ['ebc'],
+  sal: ['ebc'], spt: ['ebc'], sty: ['ebc'],
+  shi: ['ebc'], sdy: ['ebc'], sfl: ['ebc'], sso: ['ebc'],
+  haf: ['ebc'], yen: ['ebc'], ypm: ['ebc'], yer: ['ebc'],
+  pea: ['ebc'], plu: ['ebc'], edw: ['ebc'],
+
+  // Staphylococci (sta)
+  sau: ['sta', 'sc+'], sep: ['sta', 'scn'], sha: ['sta', 'scn'],
+  shl: ['sta', 'scn'], sap: ['sta', 'scn'], slu: ['sta', 'scn'],
+  scn: ['sta'], 'sc+': ['sta'], swa: ['sta', 'scn'], sca: ['sta', 'scn'],
+  sxy: ['sta', 'scn'],
+
+  // Enterococci (ent)
+  efa: ['ent'], efm: ['ent'], eca: ['ent'], ega: ['ent'],
+  edv: ['ent'], ehs: ['ent'], eav: ['ent'],
+
+  // Acinetobacter (ac-, acb)
+  aba: ['ac-', 'acb'], aca: ['ac-', 'acb'], alw: ['ac-', 'acb'],
+  aha: ['ac-', 'acb'], ajs: ['ac-', 'acb'], ani: ['ac-', 'acb'],
+  apt: ['ac-', 'acb'],
+
+  // Pseudomonas (psd, pae)
+  pae: ['psd'], ppu: ['psd'], pfl: ['psd'], pst: ['psd'],
+
+  // Streptococci (str, stp)
+  spn: ['str', 'stp'], spy: ['str', 'stp'], sag: ['str', 'stp'],
+  sdg: ['str', 'stp'], sbo: ['str', 'stp'], smi: ['str', 'stp'],
+  svi: ['str', 'stp'], san: ['str', 'stp'],
+
+  // Haemophilus (ha-, hin)
+  hin: ['ha-'], hpa: ['ha-', 'hin'], hhe: ['ha-', 'hin']
+};
+
+/**
  * Interpret a raw AST measurement (zone size mm or MIC)
  * @param {string} orgCode WHONET organism code (e.g. 'sau', 'eco', 'kpn')
  * @param {string} testCol AST Column name (e.g. 'FOX_ND30', 'AMP_ND10', 'VAN_NM')
@@ -108,8 +153,24 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
     bp = customLabConfig.generalBreakpoints[testCol];
   } else if (bpMatrix[testCol]?.species?.[orgLower]) {
     bp = bpMatrix[testCol].species[orgLower];
-  } else if (bpMatrix[testCol]?.general) {
-    bp = bpMatrix[testCol].general;
+  } else {
+    // Check taxonomic parent groups (e.g. eco -> ebc, sau -> sta, aba -> ac-)
+    const parentGroups = TAXON_PARENT_GROUPS[orgLower];
+    if (parentGroups) {
+      for (const groupCode of parentGroups) {
+        if (customLabConfig?.speciesBreakpoints?.[testCol]?.[groupCode]) {
+          bp = customLabConfig.speciesBreakpoints[testCol][groupCode];
+          break;
+        }
+        if (bpMatrix[testCol]?.species?.[groupCode]) {
+          bp = bpMatrix[testCol].species[groupCode];
+          break;
+        }
+      }
+    }
+    if (!bp && bpMatrix[testCol]?.general) {
+      bp = bpMatrix[testCol].general;
+    }
   }
 
   if (!bp) return null;
@@ -340,6 +401,35 @@ export function deduplicateFirstIsolates(records, options = {}) {
 }
 
 /**
+ * Antibiotics with clinical indications restricted exclusively to the urinary tract (CLSI M39 / M100).
+ * In cumulative antibiograms, susceptibility % for these agents must be calculated strictly from urine isolates.
+ */
+export const URINE_SPECIFIC_ANTIBIOTICS = new Set([
+  'NIT', // Nitrofurantoin
+  'NFT', // Nitrofurantoin
+  'NOR', // Norfloxacin
+  'NAL', // Nalidixic acid
+  'CIN', // Cinoxacin
+  'MET', // Methenamine
+  'FOS'  // Fosfomycin (oral uncomplicated UTI indication in CLSI)
+]);
+
+/**
+ * Check if a specimen code designates a urine specimen in WHONET
+ * @param {string|null|undefined} specType 
+ * @returns {boolean}
+ */
+export function isUrineSpecimen(specType) {
+  if (!specType || typeof specType !== 'string') return false;
+  const clean = specType.trim().toLowerCase();
+  // Standard WHONET urine codes: 'ur' (Urine), 'ub' (Bladder), 'uc' (Catheter), 'cv' (Clean-voided),
+  // 'fv' (First-voided), 'uk' (Kidney), 'uo' (Nephrostomy), 'uz' (Non-catheterized), 'ua' (Suprapubic), 'uu' (Unknown urine)
+  if (['ur', 'ub', 'uc', 'cv', 'fv', 'uk', 'uo', 'uz', 'ua', 'uu'].includes(clean)) return true;
+  if (clean.startsWith('ur')) return true;
+  return false;
+}
+
+/**
  * Generate Cumulative Antibiogram Summary conforming to CLSI M39-A4
  * @param {Array<object>} isolates First isolates
  * @param {object} options Options: minIsolates (default 30), customLabConfig
@@ -370,12 +460,21 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
     }
     orgMap[orgCode].totalCount++;
 
+    const rowIsUrine = isUrineSpecimen(row.SPEC_TYPE);
+
     for (const [col, val] of Object.entries(row)) {
       if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && val !== null && val !== '') {
+        const abxCode = col.split('_')[0].toUpperCase();
+
+        // CLSI M39 Section 5.3: Urinary tract agents (e.g., Nitrofurantoin, Norfloxacin)
+        // must ONLY be calculated from urinary isolates!
+        if (URINE_SPECIFIC_ANTIBIOTICS.has(abxCode) && !rowIsUrine) {
+          continue;
+        }
+
         testColsSet.add(col);
         const interp = interpretAstValue(orgCode, col, val, customLabConfig);
         if (interp) {
-          const abxCode = col.split('_')[0];
           if (!orgMap[orgCode].tested[abxCode]) {
             orgMap[orgCode].tested[abxCode] = { total: 0, S: 0, I: 0, R: 0, intrinsic: false };
           }
@@ -461,7 +560,8 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
     code,
     name: abx[code]?.name || code,
     class: abx[code]?.class || 'Other',
-    profClass: abx[code]?.profClass || ''
+    profClass: abx[code]?.profClass || '',
+    isUrineOnly: URINE_SPECIFIC_ANTIBIOTICS.has(code)
   })).sort((a, b) => a.name.localeCompare(b.name));
 
   return {

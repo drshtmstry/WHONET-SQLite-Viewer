@@ -296,10 +296,20 @@ export function renderAntibiogramTable() {
   `;
 
   for (const drug of abxList) {
+    const isUrine = drug.isUrineOnly;
+    const urineBadge = isUrine ? `
+      <div style="margin-top: 3px;">
+        <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: var(--accent); border: 1px solid rgba(14, 165, 233, 0.3); font-size: 9.5px; padding: 1px 5px; border-radius: 3px; font-weight: 700;" title="CLSI M39: Susceptibility calculated strictly from urine specimens">
+          <i class="fa-solid fa-vial" style="font-size: 8.5px;"></i> Urine only
+        </span>
+      </div>
+    ` : '';
+
     html += `
-      <th style="min-width: 90px; text-align: center; padding: 8px 6px; border-bottom: 2px solid var(--border);" title="${drug.name} (${drug.class})">
+      <th style="min-width: 95px; text-align: center; padding: 8px 6px; border-bottom: 2px solid var(--border);" title="${drug.name} (${drug.class})${isUrine ? ' — CLSI M39: Calculated strictly from urine isolates' : ''}">
         <div style="font-weight: 700; color: var(--text);">${escapeHtml(drug.name)}</div>
         <div style="font-size: 10px; color: var(--text3); font-weight: normal; margin-top: 2px;">${drug.code}${drug.class ? ' • ' + drug.class : ''}</div>
+        ${urineBadge}
       </th>
     `;
   }
@@ -495,7 +505,7 @@ export function exportAntibiogramCsv() {
   const activeOrgs = hideUnderMinIsolates ? organisms.filter(o => o.meetsThreshold) : organisms;
 
   const metricLabel = currentMetric === 'R' ? '% Resistant' : '% Susceptible';
-  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...antibiotics.map(a => `${a.name} (${a.code}) [${metricLabel}]`)];
+  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...antibiotics.map(a => `${a.name} (${a.code}${a.isUrineOnly ? ' - Urine Only' : ''}) [${metricLabel}]`)];
   const rows = [headers.join(',')];
 
   for (const org of activeOrgs) {
@@ -530,7 +540,7 @@ export function copyAntibiogramTsv() {
   const activeOrgs = hideUnderMinIsolates ? organisms.filter(o => o.meetsThreshold) : organisms;
 
   const metricLabel = currentMetric === 'R' ? '%R' : '%S';
-  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...antibiotics.map(a => `${a.name} (${a.code}) ${metricLabel}`)];
+  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...antibiotics.map(a => `${a.name} (${a.code}${a.isUrineOnly ? ' - Urine' : ''}) ${metricLabel}`)];
   const rows = [headers.join('\t')];
 
   for (const org of activeOrgs) {
