@@ -51,7 +51,10 @@ import {
   loadMonthlyAmrData, renderAmrTable, getAmrRowsData, copyAmrTableTsv, exportAmrCsv
 } from './pages/monthly-amr.js';
 import {
-  loadAntibiogram, setAntibiogramGrouping, setAntibiogramMetric, toggleHideUnder30, exportAntibiogramCsv
+  loadAntibiogram, setAntibiogramGrouping, setAntibiogramMetric, toggleHideUnder30,
+  toggleHideUnderMinIsolates, setAntibiogramMinIsolates, setAntibiogramDedupMode,
+  setAntibiogramPeriodPreset, handleDateInputChange, openAntibiogramOptionsModal,
+  closeAntibiogramOptionsModal, applyAntibiogramOptions, exportAntibiogramCsv, copyAntibiogramTsv
 } from './pages/antibiogram.js';
 import {
   refreshSqlSchema, initSqlAutocomplete, insertSQL, clearSQL,
@@ -428,7 +431,16 @@ Object.assign(window, {
   setAntibiogramGrouping,
   setAntibiogramMetric,
   toggleHideUnder30,
+  toggleHideUnderMinIsolates,
+  setAntibiogramMinIsolates,
+  setAntibiogramDedupMode,
+  setAntibiogramPeriodPreset,
+  handleDateInputChange,
+  openAntibiogramOptionsModal,
+  closeAntibiogramOptionsModal,
+  applyAntibiogramOptions,
   exportAntibiogramCsv,
+  copyAntibiogramTsv,
   refreshSqlSchema,
   insertSQL,
   clearSQL,

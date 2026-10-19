@@ -126,39 +126,200 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
 }
 
 /**
- * Apply CLSI M39 First-Isolate Deduplication
- * @param {Array<object>} records Raw database isolate records
- * @returns {Array<object>} Deduplicated first isolates
+ * Check if an isolate row contains at least one non-empty AST measurement
+ * @param {object} row 
+ * @returns {boolean}
  */
-export function deduplicateFirstIsolates(records) {
+export function hasAstResults(row) {
+  if (!row || typeof row !== 'object') return false;
+  for (const [col, val] of Object.entries(row)) {
+    if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && val !== null && val !== '') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Calculate AST interpretation score for isolate ranking
+ * @param {object} row
+ * @param {'R'|'S'} bias 'R' ranks resistance higher (R > I > S); 'S' ranks susceptibility higher (S > I > R)
+ * @param {object} [customLabConfig]
+ * @returns {number}
+ */
+export function getAstScore(row, bias = 'R', customLabConfig = null) {
+  let score = 0;
+  const orgCode = (row.ORGANISM || '').trim().toLowerCase();
+  for (const [col, val] of Object.entries(row)) {
+    if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && val !== null && val !== '') {
+      const interp = interpretAstValue(orgCode, col, val, customLabConfig);
+      if (bias === 'R') {
+        if (interp === 'R') score += 3;
+        else if (interp === 'I') score += 2;
+        else if (interp === 'S') score += 1;
+      } else {
+        if (interp === 'S') score += 3;
+        else if (interp === 'I') score += 2;
+        else if (interp === 'R') score += 1;
+      }
+    }
+  }
+  return score;
+}
+
+/**
+ * Apply WHONET / CLSI M39 Isolate Deduplication Rules
+ * @param {Array<object>} records Raw database isolate records
+ * @param {object} [options]
+ * @param {'patient_first'|'isolate'|'patient_first_ast'|'patient_most_resistant'|'patient_most_susceptible'|'episode'} [options.mode='patient_first']
+ * @param {number} [options.episodeDays=30] Number of days since previous isolate for episode mode
+ * @param {object} [options.customLabConfig] Optional active lab configuration
+ * @returns {Array<object>} Deduplicated isolates
+ */
+export function deduplicateFirstIsolates(records, options = {}) {
   if (!Array.isArray(records)) return [];
 
+  const mode = options.mode || 'patient_first';
+  const episodeDays = Number(options.episodeDays) > 0 ? Number(options.episodeDays) : 30;
+  const customLabConfig = options.customLabConfig || null;
+
+  // 1. By isolate: No deduplication — include all isolates
+  if (mode === 'isolate') {
+    return [...records];
+  }
+
+  // Chronological sort by specimen collection date or data entry date
   const sorted = [...records].sort((a, b) => {
     const da = a.SPEC_DATE || a.DATE_DATA || '';
     const db = b.SPEC_DATE || b.DATE_DATA || '';
     return da.localeCompare(db);
   });
 
-  const seen = new Set();
-  const firstIsolates = [];
-
-  for (const rec of sorted) {
-    const patId = (rec.PATIENT_ID || '').trim().toLowerCase();
-    const org = (rec.ORGANISM || '').trim().toLowerCase();
-
-    if (!patId || !org) {
-      firstIsolates.push(rec);
-      continue;
+  // 2. By patient: First isolate only (Standard CLSI M39-A4 Recommendation)
+  if (mode === 'patient_first') {
+    const seen = new Set();
+    const result = [];
+    for (const rec of sorted) {
+      const patId = (rec.PATIENT_ID || '').trim().toLowerCase();
+      const org = (rec.ORGANISM || '').trim().toLowerCase();
+      if (!patId || !org) {
+        result.push(rec);
+        continue;
+      }
+      const key = `${patId}|${org}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(rec);
+      }
     }
-
-    const key = `${patId}|${org}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      firstIsolates.push(rec);
-    }
+    return result;
   }
 
-  return firstIsolates;
+  // 3. By patient: First isolate with antibiotic susceptibility results
+  if (mode === 'patient_first_ast') {
+    const seenWithAst = new Set();
+    const fallbackMap = new Map();
+    const result = [];
+
+    for (const rec of sorted) {
+      const patId = (rec.PATIENT_ID || '').trim().toLowerCase();
+      const org = (rec.ORGANISM || '').trim().toLowerCase();
+      if (!patId || !org) {
+        result.push(rec);
+        continue;
+      }
+      const key = `${patId}|${org}`;
+      if (hasAstResults(rec)) {
+        if (!seenWithAst.has(key)) {
+          seenWithAst.add(key);
+          result.push(rec);
+        }
+      } else if (!fallbackMap.has(key)) {
+        fallbackMap.set(key, rec);
+      }
+    }
+
+    // For patients where none of the isolates had AST results, keep their first isolate as fallback
+    for (const [key, fallbackRec] of fallbackMap.entries()) {
+      if (!seenWithAst.has(key)) {
+        result.push(fallbackRec);
+      }
+    }
+    return result;
+  }
+
+  // 4. By time interval / episode window (e.g. 30 days since previous isolation)
+  if (mode === 'episode') {
+    const lastDateMap = new Map();
+    const result = [];
+
+    for (const rec of sorted) {
+      const patId = (rec.PATIENT_ID || '').trim().toLowerCase();
+      const org = (rec.ORGANISM || '').trim().toLowerCase();
+      if (!patId || !org) {
+        result.push(rec);
+        continue;
+      }
+      const key = `${patId}|${org}`;
+      const dStr = rec.SPEC_DATE || rec.DATE_DATA || '';
+      const recDate = dStr ? new Date(dStr.slice(0, 10)).getTime() : null;
+
+      if (!lastDateMap.has(key)) {
+        lastDateMap.set(key, recDate || 0);
+        result.push(rec);
+      } else {
+        const lastDate = lastDateMap.get(key);
+        if (recDate && lastDate) {
+          const diffDays = (recDate - lastDate) / (1000 * 60 * 60 * 24);
+          if (diffDays >= episodeDays) {
+            lastDateMap.set(key, recDate);
+            result.push(rec);
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  // 5. By patient: Most resistant or most susceptible result for each species
+  if (mode === 'patient_most_resistant' || mode === 'patient_most_susceptible') {
+    const bias = mode === 'patient_most_resistant' ? 'R' : 'S';
+    const groups = new Map();
+    const anonymousIsolates = [];
+
+    for (const rec of sorted) {
+      const patId = (rec.PATIENT_ID || '').trim().toLowerCase();
+      const org = (rec.ORGANISM || '').trim().toLowerCase();
+      if (!patId || !org) {
+        anonymousIsolates.push(rec);
+        continue;
+      }
+      const key = `${patId}|${org}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(rec);
+    }
+
+    const result = [...anonymousIsolates];
+    for (const [, list] of groups.entries()) {
+      if (list.length === 1) {
+        result.push(list[0]);
+      } else {
+        let bestRec = list[0];
+        let bestScore = getAstScore(bestRec, bias, customLabConfig);
+        for (let i = 1; i < list.length; i++) {
+          const score = getAstScore(list[i], bias, customLabConfig);
+          if (score > bestScore) {
+            bestScore = score;
+            bestRec = list[i];
+          }
+        }
+        result.push(bestRec);
+      }
+    }
+    return result;
+  }
+
+  return sorted;
 }
 
 /**
@@ -285,6 +446,8 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
     organisms,
     antibiotics,
     totalFirstIsolates: isolates.length,
-    minIsolatesThreshold: minIsolates
+    minIsolatesThreshold: minIsolates,
+    dedupMode: options.mode || 'patient_first',
+    episodeDays: options.episodeDays || 30
   };
 }

@@ -637,6 +637,10 @@ async function handleApi(req, res) {
       const orgFilter = (urlObj.searchParams.get("organism") || "").trim().toLowerCase();
       const wardFilter = (urlObj.searchParams.get("ward") || "").trim();
       const specFilter = (urlObj.searchParams.get("specType") || "").trim();
+      const startDate = (urlObj.searchParams.get("startDate") || "").trim();
+      const endDate = (urlObj.searchParams.get("endDate") || "").trim();
+      const dedupMode = (urlObj.searchParams.get("dedupMode") || "patient_first").trim();
+      const episodeDays = parseInt(urlObj.searchParams.get("episodeDays") || "30", 10);
 
       // Attempt to auto-locate matching Lab Configuration file (e.g. LABIND.BMCRI for IND-BMCRI-2024)
       let customLabConfig = null;
@@ -677,22 +681,38 @@ async function handleApi(req, res) {
           where.push("LOWER(SPEC_TYPE) = LOWER(?)");
           params.push(specFilter);
         }
+        if (startDate) {
+          where.push("SUBSTR(COALESCE(SPEC_DATE, DATE_DATA, ''), 1, 10) >= ?");
+          params.push(startDate);
+        }
+        if (endDate) {
+          where.push("SUBSTR(COALESCE(SPEC_DATE, DATE_DATA, ''), 1, 10) <= ?");
+          params.push(endDate);
+        }
 
         const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
         const rawIsolates = db.prepare(`SELECT * FROM Isolates ${whereClause}`).all(...params);
 
-        // CLSI M39 First-Isolate Deduplication
-        const firstIsolates = deduplicateFirstIsolates(rawIsolates);
+        // Deduplication per user options (CLSI M39 First-Isolate, By Isolate, Episode, AST, etc.)
+        const filteredIsolates = deduplicateFirstIsolates(rawIsolates, {
+          mode: dedupMode,
+          episodeDays,
+          customLabConfig
+        });
 
         // Calculate Antibiogram
-        const report = calculateCumulativeAntibiogram(firstIsolates, {
+        const report = calculateCumulativeAntibiogram(filteredIsolates, {
           minIsolates,
-          customLabConfig
+          customLabConfig,
+          mode: dedupMode,
+          episodeDays
         });
 
         report.labConfigFile = customLabConfig?.filename || null;
         report.labName = customLabConfig?.metadata?.["Laboratory Name"] || null;
         report.totalRawIsolates = rawIsolates.length;
+        report.startDate = startDate || null;
+        report.endDate = endDate || null;
 
         sendJson(res, report);
       });

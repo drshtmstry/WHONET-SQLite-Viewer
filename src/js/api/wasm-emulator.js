@@ -606,6 +606,10 @@ export function handleWasmApi(path, options = {}) {
       const orgFilter = (url.searchParams.get('organism') || '').trim().toLowerCase();
       const wardFilter = (url.searchParams.get('ward') || '').trim();
       const specFilter = (url.searchParams.get('specType') || '').trim();
+      const startDate = (url.searchParams.get('startDate') || '').trim();
+      const endDate = (url.searchParams.get('endDate') || '').trim();
+      const dedupMode = (url.searchParams.get('dedupMode') || 'patient_first').trim();
+      const episodeDays = parseInt(url.searchParams.get('episodeDays') || '30', 10);
 
       const where = [];
       const params = [];
@@ -621,19 +625,36 @@ export function handleWasmApi(path, options = {}) {
         where.push('LOWER(SPEC_TYPE) = LOWER(?)');
         params.push(specFilter);
       }
+      if (startDate) {
+        where.push("SUBSTR(COALESCE(SPEC_DATE, DATE_DATA, ''), 1, 10) >= ?");
+        params.push(startDate);
+      }
+      if (endDate) {
+        where.push("SUBSTR(COALESCE(SPEC_DATE, DATE_DATA, ''), 1, 10) <= ?");
+        params.push(endDate);
+      }
 
       const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
       const rawIsolates = wasmSelect(`SELECT * FROM Isolates ${whereClause}`, params);
 
-      const firstIsolates = deduplicateFirstIsolates(rawIsolates);
-      const report = calculateCumulativeAntibiogram(firstIsolates, {
-        minIsolates,
+      const filteredIsolates = deduplicateFirstIsolates(rawIsolates, {
+        mode: dedupMode,
+        episodeDays,
         customLabConfig: state.customLabConfig || null
+      });
+
+      const report = calculateCumulativeAntibiogram(filteredIsolates, {
+        minIsolates,
+        customLabConfig: state.customLabConfig || null,
+        mode: dedupMode,
+        episodeDays
       });
 
       report.labConfigFile = state.customLabConfig?.filename || null;
       report.labName = state.customLabConfig?.metadata?.['Laboratory Name'] || null;
       report.totalRawIsolates = rawIsolates.length;
+      report.startDate = startDate || null;
+      report.endDate = endDate || null;
 
       return report;
     }
