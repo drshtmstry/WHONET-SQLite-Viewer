@@ -509,6 +509,17 @@ async function handleApi(req, res) {
     return sendJson(res, { databases: DB_FILES, current: currentDbFile });
   }
 
+  if (path === "/api/close-database" && req.method === "POST") {
+    if (dbWatcher) {
+      try { dbWatcher.close(); } catch (_) {}
+      dbWatcher = null;
+    }
+    clearTimeout(dbDebounceTimer);
+    currentDbFile = null;
+    currentDbFullPath = null;
+    return sendJson(res, { ok: true });
+  }
+
   if (path === "/api/open-database" && req.method === "POST") {
     const body = await readBody(req);
     const { filename, path: customPath } = JSON.parse(body);

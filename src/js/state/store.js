@@ -107,6 +107,19 @@ export function updateCurrentFileDisplay(filename) {
       dropSub.innerHTML = 'Works directly with standard WHONET files from <code>C:\\WHONET\\Data</code> or custom folders/downloads.';
     }
   }
+
+  const analyticsContainer = document.getElementById('dashboard-analytics-container');
+  if (analyticsContainer) {
+    analyticsContainer.style.display = filename ? 'block' : 'none';
+  }
+  const guidedHub = document.getElementById('guided-source-hub');
+  if (guidedHub) {
+    guidedHub.style.display = filename ? 'none' : 'block';
+  }
+  const guide = document.getElementById('db-selection-guide');
+  if (guide) guide.style.display = filename ? 'none' : 'flex';
+  const closeButton = document.getElementById('btn-close-database');
+  if (closeButton) closeButton.style.display = filename ? 'inline-flex' : 'none';
 }
 
 export function markModified() {

@@ -362,6 +362,37 @@ export function renderDbSelector() {
     `<option value="${db}" ${db === state.currentDb ? 'selected' : ''}>${db}</option>`
   ).join('');
   updateCurrentFileDisplay(state.currentDb);
+  if (typeof window.renderLaunchDbSelect === 'function') {
+    window.renderLaunchDbSelect();
+  }
+}
+
+export async function closeCurrentDatabase() {
+  if (!state.currentDb) return;
+  if (state.isModified && !window.confirm('This database has unsaved changes. Close it and discard those changes?')) return;
+  if (!state.isWasmMode) {
+    const result = await api('/api/close-database', { method: 'POST' });
+    if (result.error) return toast(`Could not close database: ${result.error}`, 'error');
+  }
+  if (state.wasmDb) {
+    try { state.wasmDb.close(); } catch (_) {}
+  }
+  state.datasetVersion += 1;
+  state.currentDb = null;
+  state.wasmDb = null;
+  state.activeFileHandle = null;
+  state.isModified = false;
+  state._schemaNormalised = false;
+  state.stats = {};
+  const saveBtn = document.getElementById('btn-save-file');
+  if (saveBtn) saveBtn.style.display = 'none';
+  const downloadBtn = document.getElementById('btn-download-db');
+  if (downloadBtn) downloadBtn.style.display = 'none';
+  updateCurrentFileDisplay('');
+  renderDbSelector();
+  setRuntimeBadge(state.isWasmMode ? 'In-Browser Engine (Client-side)' : 'Local SQLite Server (Node.js)', !state.isWasmMode);
+  window.showPage?.('dashboard');
+  toast('Database closed. Choose a WHONET folder, SQLite file, or sample dataset to continue.', 'success');
 }
 
 export async function switchDb(filename) {

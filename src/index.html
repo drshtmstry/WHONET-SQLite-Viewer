@@ -88,12 +88,6 @@
     <div class="db-selector" id="db-selector">
       <span id="runtime-badge" class="connection-badge">Connecting…</span>
 
-      <div class="db-select-wrapper">
-        <select class="db-select" id="db-select" onchange="switchDb(this.value)" title="Active SQLite Database">
-          <option value="">Loading…</option>
-        </select>
-      </div>
-
       <button class="btn btn-sm btn-success" id="btn-save-file" onclick="saveToFileHandle()"
         title="Save changes directly back to the original .sqlite file on disk" style="display: none">
         <i class="fa-solid fa-floppy-disk"></i> Save to File
@@ -217,43 +211,111 @@
     <main class="main">
       <!-- Dashboard Page -->
       <div class="page active" id="page-dashboard">
-        <!-- Compact Hero Dropzone -->
-        <div class="db-dropzone" id="global-dropzone" ondragover="
-              event.preventDefault();
-              this.classList.add('dragover');
-            " ondragleave="this.classList.remove('dragover')" ondrop="handleFileDrop(event)"
-          onclick="document.getElementById('file-upload-input').click()">
-          <div class="db-dropzone-content">
-            <div class="db-dropzone-icon">
-              <i class="fa-solid fa-upload"></i>
+        <!-- Premium Guided Data Source Hub (Displayed when no database is loaded) -->
+        <div class="guided-source-hub" id="guided-source-hub">
+          <div class="guided-hub-header">
+            <div class="guided-hub-badge">
+              <i class="fa-solid fa-database"></i> WHONET Workspace
             </div>
-            <div class="db-dropzone-text">
-              <div class="db-dropzone-title">
-                Drag &amp; Drop any WHONET <code>.sqlite</code> file here, or
-                click to upload
-              </div>
-              <div class="db-dropzone-sub" id="dropzone-sub">
-                Works directly with standard WHONET files from
-                <code>C:\WHONET\Data</code> or custom folders/downloads.
-              </div>
-            </div>
+            <h1 class="guided-hub-title">Select WHONET Database to Open</h1>
+            <p class="guided-hub-sub">
+              Choose how you would like to load your WHONET laboratory database. All processing runs privately in your local browser runtime.
+            </p>
           </div>
-          <div class="db-source-tabs" onclick="event.stopPropagation()">
-            <button class="btn btn-sm btn-primary" onclick="document.getElementById('file-upload-input').click()">
-              <i class="fa-solid fa-upload"></i> Choose SQLite File
-            </button>
-            <button class="btn btn-sm btn-ghost" onclick="loadSampleDatabase('WHO-TST-2020-01.sqlite')"
-              title="Load bundled sample dataset">
-              <i class="fa-solid fa-database"></i> WHO-TST-2020-01.sqlite
-            </button>
-            <button class="btn btn-sm btn-ghost" onclick="loadSampleDatabase('WHO-TST-2020-OneHealth.sqlite')"
-              title="Load bundled sample dataset">
-              <i class="fa-solid fa-database"></i>
-              WHO-TST-2020-OneHealth.sqlite
-            </button>
+
+          <div class="guided-cards-grid">
+            <!-- Option 1: WHONET Data Folder (Local or WASM directory) -->
+            <div class="guided-card" id="launch-option-local">
+              <div class="guided-card-header">
+                <div class="guided-card-icon icon-blue">
+                  <i class="fa-solid fa-folder-open"></i>
+                </div>
+                <div>
+                  <div class="guided-card-tag">Option 1</div>
+                  <div class="guided-card-title">Select from WHONET Data Folder</div>
+                </div>
+              </div>
+              <p class="guided-card-desc" id="launch-local-desc">
+                Default location: <code>C:\WHONET\Data</code>. Scan and switch between databases seamlessly.
+              </p>
+              
+              <div class="guided-card-body">
+                <div id="launch-local-file-row" class="launch-select-row">
+                  <select id="launch-db-select" class="filter-select launch-db-select" aria-label="Select WHONET database">
+                    <option value="">Scanning folder…</option>
+                  </select>
+                  <button id="btn-open-launch-file" class="btn btn-primary btn-sm launch-open-btn" onclick="selectFromLaunchList()">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Open File
+                  </button>
+                </div>
+                <div id="launch-dir-actions" style="margin-top: 10px; display: flex; gap: 8px;">
+                  <button type="button" id="btn-pick-folder" class="btn btn-sm btn-outline" onclick="chooseWhonetFolder()"
+                    style="display: none; width: 100%; justify-content: center;">
+                    <i class="fa-solid fa-folder-tree"></i> Connect WHONET Folder (C:\WHONET\Data)
+                  </button>
+                  <input type="file" id="folder-input-fallback" webkitdirectory directory style="display: none"
+                    onchange="handleFolderSelected(this.files)" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Option 2: Browse or Drag-and-Drop Specific File -->
+            <div class="guided-card guided-dropzone-card" id="global-dropzone"
+                 ondragover="event.preventDefault(); this.classList.add('dragover');"
+                 ondragleave="this.classList.remove('dragover')"
+                 ondrop="handleFileDrop(event)">
+              <div class="guided-card-header">
+                <div class="guided-card-icon icon-green">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                </div>
+                <div>
+                  <div class="guided-card-tag green">Option 2</div>
+                  <div class="guided-card-title">Browse or Drop a Specific File</div>
+                </div>
+              </div>
+              <p class="guided-card-desc">
+                Drag &amp; drop any <strong>.sqlite</strong> file here, or select from any folder or USB drive. Modern browsers can save changes directly back to that file.
+              </p>
+              <div class="guided-card-body" style="text-align: center;">
+                <button type="button" class="btn btn-success btn-sm" onclick="triggerBrowseFile()" style="padding: 10px 22px; width: 100%; justify-content: center; font-weight: 700;">
+                  <i class="fa-solid fa-file-circle-plus"></i> Browse &amp; Open .sqlite File
+                </button>
+                <div class="guided-drop-hint">
+                  <i class="fa-solid fa-arrow-down"></i> Or drop your file anywhere in this card
+                </div>
+              </div>
+            </div>
+
+            <!-- Option 3: Bundled Official WHO Datasets -->
+            <div class="guided-card">
+              <div class="guided-card-header">
+                <div class="guided-card-icon icon-purple">
+                  <i class="fa-solid fa-flask-vial"></i>
+                </div>
+                <div>
+                  <div class="guided-card-tag purple">Option 3</div>
+                  <div class="guided-card-title">Bundled WHO Sample Data</div>
+                </div>
+              </div>
+              <p class="guided-card-desc">
+                Official test datasets bundled for instant testing and AMR analysis demonstrations without uploading your own data:
+              </p>
+              <div class="guided-card-body">
+                <div class="guided-sample-btns">
+                  <button type="button" class="btn btn-ghost btn-sm sample-btn" onclick="loadSampleDatabase('WHO-TST-2020-01.sqlite')">
+                    <i class="fa-solid fa-database"></i> WHO-TST-2020-01.sqlite
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm sample-btn" onclick="loadSampleDatabase('WHO-TST-2020-OneHealth.sqlite')">
+                    <i class="fa-solid fa-database"></i> WHO-TST-2020-OneHealth.sqlite
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
+        <!-- Conditional Dashboard Analytics Container (shown once a database is loaded) -->
+        <div id="dashboard-analytics-container" style="display: none;">
         <!-- Section Header -->
         <div class="section-header">
           <div class="section-title">
@@ -262,6 +324,9 @@
           </div>
           <div class="dashboard-file-row">
             <div id="db-label"></div>
+            <button type="button" class="btn btn-sm btn-ghost" id="btn-close-database" onclick="closeCurrentDatabase()" title="Close this database and return to file selection">
+              <i class="fa-solid fa-right-from-bracket"></i> Close file
+            </button>
             <button type="button" class="btn-icon" onclick="loadStats()" title="Refresh Surveillance Data"
               aria-label="Refresh Data">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -381,6 +446,7 @@
               </div>
             </div>
           </div>
+        </div>
         </div>
       </div>
 
@@ -1245,7 +1311,7 @@
           sponsored by WHONET.
         </div>
         <div style="display: flex; gap: 12px; justify-content: flex-end">
-          <button class="btn btn-primary" onclick="proceedToDataSourceModal()" style="
+          <button class="btn btn-primary" onclick="closeDisclaimerModal()" style="
                 padding: 8px 22px;
                 font-size: 13.5px;
                 font-weight: 700;
@@ -1253,7 +1319,7 @@
                 align-items: center;
                 gap: 8px;
               ">
-            <span>Continue</span>
+            <span>Continue to Dashboard</span>
             <i class="fa-solid fa-arrow-right" style="font-size: 12px"></i>
           </button>
         </div>
@@ -1261,179 +1327,7 @@
     </div>
   </div>
 
-  <!-- Data Source Selection Modal -->
-  <div class="modal-overlay" id="source-modal" role="dialog" aria-modal="true" aria-labelledby="source-modal-title">
-    <div class="modal" style="max-width: 640px">
-      <div class="modal-header">
-        <div class="modal-title" id="source-modal-title" style="display: flex; align-items: center; gap: 10px">
-          <span><i class="fa-solid fa-folder-open" style="color: var(--accent)"></i></span>
-          <span>Select WHONET Database to Open</span>
-        </div>
-        <button type="button" class="modal-close" onclick="
-              document.getElementById('source-modal')?.classList.remove('open')
-            " aria-label="Close data source dialog">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-      <div class="modal-body" style="padding: 24px 28px">
-        <div style="font-size: 14px; color: var(--text2); margin-bottom: 20px">
-          Choose how you would like to load your WHONET laboratory database:
-        </div>
 
-        <!-- Interactive Option Cards -->
-        <div style="display: flex; flex-direction: column; gap: 16px">
-          <!-- Option 1: Select from default path (Local Server) -->
-          <div id="launch-option-local" style="
-                background: var(--bg3);
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                padding: 18px;
-              ">
-            <div style="
-                  font-weight: 800;
-                  font-size: 14px;
-                  color: var(--accent);
-                  margin-bottom: 6px;
-                  display: flex;
-                  align-items: center;
-                  gap: 8px;
-                ">
-              <span><i class="fa-solid fa-folder" style="color: var(--accent)"></i></span>
-              Option 1: Select file from WHONET Data Folder
-            </div>
-            <div id="launch-local-desc" style="
-                  font-size: 12.5px;
-                  color: var(--text3);
-                  margin-bottom: 12px;
-                ">
-              Folder:
-              <code style="
-                    background: var(--bg2);
-                    padding: 2px 7px;
-                    border-radius: 4px;
-                    border: 1px solid var(--border);
-                    color: var(--text);
-                  ">C:\WHONET\Data</code>
-            </div>
-            <div id="launch-local-file-row" class="launch-select-row">
-              <select id="launch-db-select" class="filter-select launch-db-select">
-                <option value="">Scanning folder…</option>
-              </select>
-              <button id="btn-open-launch-file" class="btn btn-primary btn-sm launch-open-btn"
-                onclick="selectFromLaunchList()">
-                Open File
-              </button>
-            </div>
-            <div id="launch-dir-actions" style="
-                  margin-top: 12px;
-                  display: flex;
-                  gap: 8px;
-                  flex-wrap: wrap;
-                  align-items: center;
-                ">
-              <button type="button" id="btn-pick-folder" class="btn btn-sm btn-primary" onclick="chooseWhonetFolder()"
-                style="padding: 7px 16px; font-size: 12.5px; display: none">
-                <i class="fa-solid fa-folder-open"></i> Select WHONET Folder
-                (C:\WHONET\Data)
-              </button>
-              <input type="file" id="folder-input-fallback" webkitdirectory directory style="display: none"
-                onchange="handleFolderSelected(this.files)" />
-            </div>
-          </div>
-
-          <!-- Option 2: Upload / Browse file -->
-          <div style="
-                background: var(--bg3);
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                padding: 18px;
-                text-align: center;
-              ">
-            <div style="
-                  font-weight: 800;
-                  font-size: 14px;
-                  color: var(--green);
-                  margin-bottom: 6px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  gap: 8px;
-                ">
-              <span><i class="fa-solid fa-cloud-arrow-up" style="color: var(--green)"></i></span>
-              Option 2: Browse a Specific File
-            </div>
-            <div style="
-                  font-size: 12.5px;
-                  color: var(--text2);
-                  margin-bottom: 14px;
-                ">
-              Select one <strong>.sqlite</strong> file from any folder. Modern
-              browsers can save changes directly back to that file.
-            </div>
-            <button class="btn btn-success btn-sm" onclick="triggerBrowseFile()"
-              style="padding: 9px 24px; font-size: 13.5px">
-              <i class="fa-solid fa-folder-open"></i> Browse &amp; Open
-              .sqlite File
-            </button>
-            <input type="file" id="launch-file-input" accept=".sqlite" style="display: none"
-              onchange="handleLaunchFileUpload(this.files[0])" />
-          </div>
-
-          <!-- Option 3: Bundled WHO Sample Databases -->
-          <div style="
-                background: var(--bg3);
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                padding: 18px;
-              ">
-            <div style="
-                  font-weight: 800;
-                  font-size: 14px;
-                  color: var(--purple);
-                  margin-bottom: 6px;
-                  display: flex;
-                  align-items: center;
-                  gap: 8px;
-                ">
-              <span><i class="fa-solid fa-flask" style="color: var(--purple)"></i></span>
-              Option 3: Bundled Sample Data (Online / Demo)
-            </div>
-            <div style="
-                  font-size: 12.5px;
-                  color: var(--text3);
-                  margin-bottom: 12px;
-                ">
-              Official WHO-TST test datasets bundled for instant testing
-              without uploading files:
-            </div>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap">
-              <button class="btn btn-ghost btn-sm" onclick="loadSampleFromLaunch('WHO-TST-2020-01.sqlite')" style="
-                    flex: 1;
-                    min-width: 180px;
-                    justify-content: center;
-                    border-color: rgba(139, 92, 246, 0.3);
-                    color: var(--purple);
-                  ">
-                <i class="fa-solid fa-database"></i> WHO-TST-2020-01.sqlite
-              </button>
-              <button class="btn btn-ghost btn-sm" onclick="
-                    loadSampleFromLaunch('WHO-TST-2020-OneHealth.sqlite')
-                  " style="
-                    flex: 1;
-                    min-width: 180px;
-                    justify-content: center;
-                    border-color: rgba(139, 92, 246, 0.3);
-                    color: var(--purple);
-                  ">
-                <i class="fa-solid fa-database"></i>
-                WHO-TST-2020-OneHealth.sqlite
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <script src="/organisms.js"></script>
   <script type="module" src="js/main.js"></script>

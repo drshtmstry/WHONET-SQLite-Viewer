@@ -205,15 +205,16 @@ export function checkNoticeModal() {
   if (disc) disc.classList.add('open');
 }
 
-export function proceedToDataSourceModal() {
+export function closeDisclaimerModal() {
   try {
     sessionStorage.setItem('whonet_welcome_seen', '1');
   } catch (e) { }
   const disc = document.getElementById('disclaimer-modal');
   if (disc) disc.classList.remove('open');
-  renderLaunchDbSelect();
-  const sourceModal = document.getElementById('source-modal');
-  if (sourceModal) sourceModal.classList.add('open');
+}
+
+export function proceedToDataSourceModal() {
+  closeDisclaimerModal();
 }
 
 export async function selectFromLaunchList() {
@@ -224,8 +225,6 @@ export async function selectFromLaunchList() {
   if (state.isWasmMode) {
     const handleOrFile = state.fileHandles[filename];
     if (handleOrFile) {
-      const modal = document.getElementById('source-modal');
-      if (modal) modal.classList.remove('open');
       if (typeof handleOrFile.getFile === 'function') {
         const file = await handleOrFile.getFile();
         await window.handleFileUpload(file, handleOrFile);
@@ -234,14 +233,12 @@ export async function selectFromLaunchList() {
       }
       return;
     }
-    return toast('Please select your .sqlite file using Option 2 (Browse / Upload)', 'info');
+    return toast('Please select your .sqlite file', 'info');
   }
 
   if (typeof window.switchDb === 'function') {
     await window.switchDb(filename);
   }
-  const modal = document.getElementById('source-modal');
-  if (modal) modal.classList.remove('open');
 }
 
 export async function triggerBrowseFile() {
@@ -255,8 +252,6 @@ export async function triggerBrowseFile() {
         multiple: false
       });
       const file = await fileHandle.getFile();
-      const modal = document.getElementById('source-modal');
-      if (modal) modal.classList.remove('open');
       state.isWasmMode = true;
       if (typeof window.handleFileUpload === 'function') {
         await window.handleFileUpload(file, fileHandle);
@@ -267,23 +262,19 @@ export async function triggerBrowseFile() {
       }
     }
   } else {
-    const input = document.getElementById('launch-file-input');
+    const input = document.getElementById('file-upload-input');
     if (input) input.click();
   }
 }
 
 export async function handleLaunchFileUpload(file) {
   if (!file) return;
-  const modal = document.getElementById('source-modal');
-  if (modal) modal.classList.remove('open');
   if (typeof window.handleFileUpload === 'function') {
     await window.handleFileUpload(file);
   }
 }
 
 export async function loadSampleFromLaunch(sampleFilename) {
-  const modal = document.getElementById('source-modal');
-  if (modal) modal.classList.remove('open');
   if (typeof window.loadSampleDatabase === 'function') {
     await window.loadSampleDatabase(sampleFilename);
   }

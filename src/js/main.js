@@ -30,7 +30,7 @@ import {
 import {
   saveWhonetFolderHandle, getSavedWhonetFolderHandle, scanWhonetFolder,
   restoreWhonetFolder, chooseWhonetFolder, handleFolderSelected,
-  renderLaunchDbSelect, checkNoticeModal, proceedToDataSourceModal,
+  renderLaunchDbSelect, checkNoticeModal, proceedToDataSourceModal, closeDisclaimerModal,
   selectFromLaunchList, triggerBrowseFile, handleLaunchFileUpload, loadSampleFromLaunch
 } from './db/filesystem.js';
 
@@ -38,7 +38,7 @@ import {
 import {
   loadStats, setChartTypeMode, onPeriodFilterChange, resetChartZoom,
   updateDashboardCharts, renderDbSelector, switchDb, loadSampleDatabase,
-  handleFileUpload, handleFileDrop
+  handleFileUpload, handleFileDrop, closeCurrentDatabase
 } from './pages/dashboard.js';
 import {
   sortIsolates, loadIsolates, renderIsolatesTable, debouncedLoadIsolates, toggleIsolateCol
@@ -263,6 +263,7 @@ export async function init() {
         state.currentDb = data.current;
         setRuntimeBadge('Local SQLite Server (Node.js)', true);
         renderDbSelector();
+        renderLaunchDbSelect();
         if (state.currentDb) {
           await loadStats();
           refreshSqlSchema();
@@ -280,7 +281,9 @@ export async function init() {
   const btnOpenPath = document.getElementById('btn-open-path');
   if (btnOpenPath) btnOpenPath.style.display = 'none';
   renderDbSelector();
+  renderLaunchDbSelect();
   await restoreWhonetFolder();
+  renderLaunchDbSelect();
 }
 
 // ── Global Event Handlers & Shortcuts ──
@@ -306,7 +309,7 @@ document.addEventListener('keydown', e => {
 });
 
 // Close modals when clicking the dimmed backdrop
-['detail-modal', 'confirm-modal', 'edit-modal', 'source-modal', 'disclaimer-modal'].forEach(id => {
+['detail-modal', 'confirm-modal', 'edit-modal', 'disclaimer-modal'].forEach(id => {
   const modalEl = document.getElementById(id);
   if (modalEl) {
     modalEl.addEventListener('click', e => {
@@ -315,6 +318,7 @@ document.addEventListener('keydown', e => {
         if (id === 'detail-modal') closeModal();
         else if (id === 'confirm-modal') closeConfirm();
         else if (id === 'edit-modal') closeEditModal();
+        else if (id === 'disclaimer-modal') closeDisclaimerModal();
       }
     });
   }
@@ -374,6 +378,7 @@ Object.assign(window, {
   loadSampleDatabase,
   handleFileUpload,
   handleFileDrop,
+  closeCurrentDatabase,
   exportSqliteDatabase,
   saveToFileHandle,
   sortIsolates,
@@ -416,6 +421,7 @@ Object.assign(window, {
   handleLaunchFileUpload,
   loadSampleFromLaunch,
   proceedToDataSourceModal,
+  closeDisclaimerModal,
   handleExternalDbUpdate,
   toast
 });
