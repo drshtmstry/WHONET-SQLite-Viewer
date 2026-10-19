@@ -344,8 +344,9 @@ export function renderAntibiogramTable() {
         html += `<td style="text-align: center; color: var(--text4); font-size: 11px;">—</td>`;
       } else if (stats.isIntrinsic) {
         html += `
-          <td style="text-align: center; background: var(--red-bg); color: var(--red); font-weight: 800; font-family: 'JetBrains Mono', monospace;" title="CLSI Intrinsic Resistance: Inherently resistant without testing">
+          <td style="text-align: center; background: var(--red-bg); color: var(--red); font-weight: 800; font-family: 'JetBrains Mono', monospace;" title="CLSI Intrinsic Resistance: Inherently resistant (${stats.rCount} of ${stats.testedCount} tested resistant)">
             <span style="border: 1px solid var(--red-border); padding: 2px 6px; border-radius: 4px; font-size: 11px;">${currentMetric === 'R' ? '100% (R)' : 'R'}</span>
+            ${stats.testedCount > 0 ? `<div style="font-size: 9.5px; color: var(--red); font-weight: normal; margin-top: 2px;">(${stats.rCount}/${stats.testedCount})</div>` : ''}
           </td>
         `;
       } else {
