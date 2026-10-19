@@ -3,6 +3,7 @@ import { toast } from '../ui/toast.js';
 import { isSqliteDatabase } from '../utils/formatters.js';
 import { getSqlJs, normaliseSchema, wasmSelect } from './wasm.js';
 import { API_BASE } from '../api/client.js';
+import { parseLabConfig } from '../utils/antibiogram-engine.js';
 
 async function getFolderHandleStore() {
   return new Promise((resolve, reject) => {
@@ -46,13 +47,46 @@ export async function getSavedWhonetFolderHandle() {
 
 export async function scanWhonetFolder(dirHandle, showToast = true) {
   state.dirHandle = dirHandle;
-  if (showToast) toast('Scanning selected folder for .sqlite files…', 'info');
+  if (showToast) toast('Scanning selected folder for .sqlite files and lab configs…', 'info');
 
   const foundFiles = [];
+  let foundLabFile = null;
+
+  // 1. Scan directory items (files and subdirectories like Data/)
   for await (const entry of dirHandle.values()) {
-    if (entry.kind === 'file' && isSqliteDatabase(entry.name)) {
-      state.fileHandles[entry.name] = entry;
-      foundFiles.push(entry.name);
+    if (entry.kind === 'file') {
+      if (isSqliteDatabase(entry.name)) {
+        state.fileHandles[entry.name] = entry;
+        foundFiles.push(entry.name);
+      } else if (/^LAB/i.test(entry.name) && !foundLabFile) {
+        foundLabFile = entry;
+      }
+    } else if (entry.kind === 'directory') {
+      // Automatically recurse into subdirectories (e.g. Data/, 2024/, etc.)
+      try {
+        for await (const subEntry of entry.values()) {
+          if (subEntry.kind === 'file' && isSqliteDatabase(subEntry.name)) {
+            state.fileHandles[subEntry.name] = subEntry;
+            foundFiles.push(subEntry.name);
+          }
+        }
+      } catch (_) { }
+    }
+  }
+
+  // 2. If a laboratory configuration file was discovered in the root folder, auto-parse it
+  if (foundLabFile) {
+    try {
+      const file = await foundLabFile.getFile();
+      const text = await file.text();
+      const config = parseLabConfig(text);
+      if (config) {
+        config.filename = foundLabFile.name;
+        state.customLabConfig = config;
+        console.info(`[WASM Lab Config] Loaded ${foundLabFile.name} (${config.metadata?.['Laboratory Name'] || 'Custom'})`);
+      }
+    } catch (err) {
+      console.warn('Could not load WHONET lab config:', err.message);
     }
   }
 
