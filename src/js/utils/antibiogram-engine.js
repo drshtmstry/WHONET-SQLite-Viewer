@@ -120,6 +120,18 @@ export const TAXON_PARENT_GROUPS = {
 };
 
 /**
+ * Test whether an AST measurement value is blank, empty, or not tested
+ * @param {any} val
+ * @returns {boolean}
+ */
+export function isBlankAstValue(val) {
+  if (val === null || val === undefined) return true;
+  const str = String(val).trim();
+  if (str === '' || str === '-' || str === '.' || str === 'ND' || str === 'NT' || str === 'NA' || str === 'null' || str === 'undefined') return true;
+  return false;
+}
+
+/**
  * Interpret a raw AST measurement (zone size mm or MIC)
  * @param {string} orgCode WHONET organism code (e.g. 'sau', 'eco', 'kpn')
  * @param {string} testCol AST Column name (e.g. 'FOX_ND30', 'AMP_ND10', 'VAN_NM')
@@ -128,10 +140,7 @@ export const TAXON_PARENT_GROUPS = {
  * @returns {'S'|'I'|'R'|null} Clinical interpretation
  */
 export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = null) {
-  if (rawValue === null || rawValue === undefined || rawValue === '') return null;
-
-  const numVal = parseFloat(String(rawValue).replace(/[<>=]/g, '').trim());
-  if (isNaN(numVal)) return null;
+  if (isBlankAstValue(rawValue)) return null;
 
   const abxCode = testCol.split('_')[0];
   const orgLower = (orgCode || '').toLowerCase().trim();
@@ -140,6 +149,15 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
   if (orgLower && intrinsicMap[orgLower] && intrinsicMap[orgLower].includes(abxCode)) {
     return 'R';
   }
+
+  // Check for qualitative test result (e.g. 'S', 'I', 'R')
+  const rawStr = String(rawValue).trim().toUpperCase();
+  if (rawStr === 'S' || rawStr === 'SUS') return 'S';
+  if (rawStr === 'R' || rawStr === 'RES') return 'R';
+  if (rawStr === 'I' || rawStr === 'INT') return 'I';
+
+  const numVal = parseFloat(rawStr.replace(/[<>=]/g, '').trim());
+  if (isNaN(numVal)) return null;
 
   // Determine if MIC or Disk Diffusion
   const isMic = testCol.endsWith('_NM') || testCol.endsWith('_NE') || testCol.endsWith('_EM') || testCol.endsWith('_EE');
@@ -194,7 +212,7 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
 export function hasAstResults(row) {
   if (!row || typeof row !== 'object') return false;
   for (const [col, val] of Object.entries(row)) {
-    if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && val !== null && val !== '') {
+    if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && !isBlankAstValue(val)) {
       return true;
     }
   }
@@ -212,7 +230,7 @@ export function getAstScore(row, bias = 'R', customLabConfig = null) {
   let score = 0;
   const orgCode = (row.ORGANISM || '').trim().toLowerCase();
   for (const [col, val] of Object.entries(row)) {
-    if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && val !== null && val !== '') {
+    if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && !isBlankAstValue(val)) {
       const interp = interpretAstValue(orgCode, col, val, customLabConfig);
       if (bias === 'R') {
         if (interp === 'R') score += 3;
@@ -259,10 +277,10 @@ export function deduplicateFirstIsolates(records, options = {}) {
   const episodeDays = Number(options.episodeDays) > 0 ? Number(options.episodeDays) : 30;
   const customLabConfig = options.customLabConfig || null;
 
-  // Filter out negative results ('xxx', 'xpa', etc.) and records with empty organism
-  const validRecords = records.filter(r => !isNegativeOrganismResult(r.ORGANISM));
+  // Filter out negative results ('xxx', 'xpa', etc.), empty organism, and isolates without AST results (all blank)
+  const validRecords = records.filter(r => !isNegativeOrganismResult(r.ORGANISM) && hasAstResults(r));
 
-  // 1. By isolate: No deduplication — include all non-negative isolate records
+  // 1. By isolate: No deduplication — include all non-negative isolate records with AST results
   if (mode === 'isolate') {
     return validRecords;
   }
@@ -445,6 +463,7 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
   for (const row of isolates) {
     const orgCode = (row.ORGANISM || '').trim().toLowerCase();
     if (!orgCode || isNegativeOrganismResult(orgCode)) continue;
+    if (!hasAstResults(row)) continue;
 
     if (!orgMap[orgCode]) {
       const resolvedName = orgNames[orgCode] ||
@@ -462,8 +481,11 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
 
     const rowIsUrine = isUrineSpecimen(row.SPEC_TYPE);
 
+    // Track tested antibiotics for this isolate to prevent double-counting across disk & MIC
+    const abxEntriesThisRow = {};
+
     for (const [col, val] of Object.entries(row)) {
-      if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && val !== null && val !== '') {
+      if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && !isBlankAstValue(val)) {
         const abxCode = col.split('_')[0].toUpperCase();
 
         // CLSI M39 Section 5.3: Urinary tract agents (e.g., Nitrofurantoin, Norfloxacin)
@@ -472,26 +494,34 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
           continue;
         }
 
-        testColsSet.add(col);
         const interp = interpretAstValue(orgCode, col, val, customLabConfig);
         if (interp) {
-          if (!orgMap[orgCode].tested[abxCode]) {
-            orgMap[orgCode].tested[abxCode] = { total: 0, S: 0, I: 0, R: 0, intrinsic: false };
+          testColsSet.add(col);
+          const isMic = col.endsWith('_NM') || col.endsWith('_NE') || col.endsWith('_EM') || col.endsWith('_EE');
+          // Prefer MIC over Disk if both present in the same isolate
+          if (!abxEntriesThisRow[abxCode] || isMic) {
+            abxEntriesThisRow[abxCode] = { interp, col };
           }
-          orgMap[orgCode].tested[abxCode].total++;
-          orgMap[orgCode].tested[abxCode][interp]++;
         }
       }
     }
+
+    // Record at most ONE test result per antibiotic per isolate
+    for (const [abxCode, entry] of Object.entries(abxEntriesThisRow)) {
+      if (!orgMap[orgCode].tested[abxCode]) {
+        orgMap[orgCode].tested[abxCode] = { total: 0, S: 0, I: 0, R: 0, intrinsic: false };
+      }
+      orgMap[orgCode].tested[abxCode].total++;
+      orgMap[orgCode].tested[abxCode][entry.interp]++;
+    }
   }
 
-  // Annotate intrinsic resistance
+  // Annotate intrinsic resistance ONLY for drugs that were actually tested (total > 0).
+  // Untested drugs (blank value) must never be counted or marked as resistant.
   for (const orgCode of Object.keys(orgMap)) {
     if (intrinsicMap[orgCode]) {
       for (const drug of intrinsicMap[orgCode]) {
-        if (!orgMap[orgCode].tested[drug]) {
-          orgMap[orgCode].tested[drug] = { total: 0, S: 0, I: 0, R: 0, intrinsic: true };
-        } else {
+        if (orgMap[orgCode].tested[drug] && orgMap[orgCode].tested[drug].total > 0) {
           orgMap[orgCode].tested[drug].intrinsic = true;
         }
       }
@@ -501,14 +531,16 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
   const organisms = Object.values(orgMap)
     .filter(org => {
       if (isNegativeOrganismResult(org.orgCode)) return false;
-      return Object.keys(org.tested).length > 0;
+      return Object.values(org.tested).some(stats => stats.total > 0);
     })
     .map(org => {
     const meetsThreshold = org.totalCount >= minIsolates;
     const drugStats = {};
 
     for (const [drug, stats] of Object.entries(org.tested)) {
-      if (stats.intrinsic) {
+      if (!stats || stats.total === 0) {
+        drugStats[drug] = null;
+      } else if (stats.intrinsic) {
         drugStats[drug] = {
           pctS: 0,
           pctR: 100,
@@ -521,7 +553,7 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
           rCount: stats.R,
           iCount: stats.I
         };
-      } else if (stats.total > 0) {
+      } else {
         const pctS = Math.round((stats.S / stats.total) * 100);
         const pctR = Math.round((stats.R / stats.total) * 100);
         const pctI = Math.round((stats.I / stats.total) * 100);
@@ -537,8 +569,6 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
           rCount: stats.R,
           iCount: stats.I
         };
-      } else {
-        drugStats[drug] = null;
       }
     }
 
@@ -554,7 +584,13 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
   organisms.sort((a, b) => a.orgName.localeCompare(b.orgName));
 
   const activeAbxCodes = new Set();
-  organisms.forEach(o => Object.keys(o.drugStats).forEach(d => activeAbxCodes.add(d)));
+  organisms.forEach(o => {
+    Object.entries(o.drugStats).forEach(([d, stats]) => {
+      if (stats && stats.testedCount > 0) {
+        activeAbxCodes.add(d);
+      }
+    });
+  });
 
   const antibiotics = Array.from(activeAbxCodes).map(code => ({
     code,
