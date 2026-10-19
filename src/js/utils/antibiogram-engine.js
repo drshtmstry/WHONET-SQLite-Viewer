@@ -168,6 +168,21 @@ export function getAstScore(row, bias = 'R', customLabConfig = null) {
 }
 
 /**
+ * WHONET standard: organism codes starting with 'x' designate negative cultures,
+ * no growth, normal flora, or non-pathogen screening results (e.g. 'xxx' = No growth,
+ * 'xpa' = No pathogen isolated, 'xxp' = No parasites seen, 'xnf' = Normal flora).
+ * These must be excluded from cumulative antibiogram analysis.
+ * @param {string} orgCode
+ * @returns {boolean}
+ */
+export function isNegativeOrganismResult(orgCode) {
+  if (!orgCode || typeof orgCode !== 'string') return true;
+  const clean = orgCode.trim().toLowerCase();
+  if (!clean) return true;
+  return clean.startsWith('x');
+}
+
+/**
  * Apply WHONET / CLSI M39 Isolate Deduplication Rules
  * @param {Array<object>} records Raw database isolate records
  * @param {object} [options]
@@ -183,13 +198,16 @@ export function deduplicateFirstIsolates(records, options = {}) {
   const episodeDays = Number(options.episodeDays) > 0 ? Number(options.episodeDays) : 30;
   const customLabConfig = options.customLabConfig || null;
 
-  // 1. By isolate: No deduplication — include all isolates
+  // Filter out negative results ('xxx', 'xpa', etc.) and records with empty organism
+  const validRecords = records.filter(r => !isNegativeOrganismResult(r.ORGANISM));
+
+  // 1. By isolate: No deduplication — include all non-negative isolate records
   if (mode === 'isolate') {
-    return [...records];
+    return validRecords;
   }
 
   // Chronological sort by specimen collection date or data entry date
-  const sorted = [...records].sort((a, b) => {
+  const sorted = [...validRecords].sort((a, b) => {
     const da = a.SPEC_DATE || a.DATE_DATA || '';
     const db = b.SPEC_DATE || b.DATE_DATA || '';
     return da.localeCompare(db);
@@ -202,8 +220,7 @@ export function deduplicateFirstIsolates(records, options = {}) {
     for (const rec of sorted) {
       const patId = (rec.PATIENT_ID || '').trim().toLowerCase();
       const org = (rec.ORGANISM || '').trim().toLowerCase();
-      if (!patId || !org) {
-        result.push(rec);
+      if (!patId || !org || isNegativeOrganismResult(org)) {
         continue;
       }
       const key = `${patId}|${org}`;
@@ -337,7 +354,7 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
 
   for (const row of isolates) {
     const orgCode = (row.ORGANISM || '').trim().toLowerCase();
-    if (!orgCode) continue;
+    if (!orgCode || isNegativeOrganismResult(orgCode)) continue;
 
     if (!orgMap[orgCode]) {
       const resolvedName = orgNames[orgCode] ||
@@ -382,7 +399,12 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
     }
   }
 
-  const organisms = Object.values(orgMap).map(org => {
+  const organisms = Object.values(orgMap)
+    .filter(org => {
+      if (isNegativeOrganismResult(org.orgCode)) return false;
+      return Object.keys(org.tested).length > 0;
+    })
+    .map(org => {
     const meetsThreshold = org.totalCount >= minIsolates;
     const drugStats = {};
 

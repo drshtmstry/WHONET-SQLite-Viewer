@@ -634,6 +634,9 @@ export function handleWasmApi(path, options = {}) {
         params.push(endDate);
       }
 
+      // Exclude negative culture / non-pathogen / no growth results (e.g. 'xxx', 'xpa', 'xxp')
+      where.push("LOWER(COALESCE(ORGANISM, '')) NOT LIKE 'x%' AND COALESCE(ORGANISM, '') != ''");
+
       const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
       const rawIsolates = wasmSelect(`SELECT * FROM Isolates ${whereClause}`, params);
 

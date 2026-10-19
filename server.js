@@ -690,6 +690,9 @@ async function handleApi(req, res) {
           params.push(endDate);
         }
 
+        // Exclude negative culture / non-pathogen / no growth results (e.g. 'xxx', 'xpa', 'xxp')
+        where.push("LOWER(COALESCE(ORGANISM, '')) NOT LIKE 'x%' AND COALESCE(ORGANISM, '') != ''");
+
         const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
         const rawIsolates = db.prepare(`SELECT * FROM Isolates ${whereClause}`).all(...params);
 
