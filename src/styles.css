@@ -25,6 +25,7 @@
 
   --accent: #4f46e5;
   --accent2: #4338ca;
+  --accent-hover: #4338ca;
   --accent-light: rgba(79, 70, 229, 0.08);
   --accent-glow: rgba(79, 70, 229, 0.18);
   --accent-gradient: linear-gradient(
@@ -93,6 +94,7 @@
 
   --accent: #6366f1;
   --accent2: #4f46e5;
+  --accent-hover: #4f46e5;
   --accent-light: rgba(99, 102, 241, 0.15);
   --accent-glow: rgba(99, 102, 241, 0.32);
   --accent-gradient: linear-gradient(
@@ -3254,14 +3256,20 @@ textarea.sql-input {
 
 .abx-modal-btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: #ffffff !important;
   border-color: var(--accent);
 }
 
 .abx-modal-btn-primary:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  box-shadow: var(--shadow-sm);
+  background: var(--accent-hover, #4338ca);
+  color: #ffffff !important;
+  border-color: var(--accent-hover, #4338ca);
+  box-shadow: 0 4px 14px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+.abx-modal-btn-primary:active {
+  transform: translateY(0);
 }
 
 .abx-modal-btn-secondary {

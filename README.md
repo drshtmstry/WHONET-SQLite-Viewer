@@ -4,7 +4,9 @@
 
 # WHONET SQLite Viewer
 
-<p>High-performance, open-source utility for inspecting, deduplicating, sorting, and analyzing WHONET SQLite databases, featuring full <strong>CLSI M39-A4 Cumulative Antibiograms</strong>, <strong>Cross-Setting Care Location Stratification</strong>, and <strong>Longitudinal AMR Surveillance Analytics</strong>.</p>
+### Inspect, Deduplicate &amp; Generate Cumulative Antibiograms
+
+<p>High-performance, open-source utility for inspecting, deduplicating, and generating <strong>CLSI M39 Cumulative Antibiograms</strong> from WHONET SQLite databases, featuring <strong>Cross-Setting Care Location Stratification</strong> and <strong>Longitudinal AMR Surveillance Analytics</strong>.</p>
 <p><a href="https://whonet-sqlite-viewer.vercel.app/"><strong>whonet-sqlite-viewer.vercel.app</strong></a></p>
 
 ---

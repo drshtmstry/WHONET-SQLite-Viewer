@@ -503,6 +503,105 @@ export const URINE_SPECIFIC_ANTIBIOTICS = new Set([
 ]);
 
 /**
+ * WHO AWaRe Antibiotic Classification (Access, Watch, Reserve, Other)
+ * Based on the WHO AWaRe 2023 / 2024 classification of antibiotics for
+ * antimicrobial stewardship and surveillance.
+ */
+export const WHO_AWARE_MAP = {
+  // ── ACCESS GROUP ──
+  // Penicillins & Beta-lactamase Inhibitor Combinations
+  AMP: 'Access', AMX: 'Access', AMC: 'Access', SAM: 'Access',
+  PEN: 'Access', PHN: 'Access', CLX: 'Access', OXA: 'Access',
+  DIC: 'Access', FLX: 'Access', NAF: 'Access', MET: 'Access',
+  CRB: 'Access', APX: 'Access',
+
+  // Aminoglycosides
+  AMK: 'Access', GEN: 'Access', GEH: 'Access', KAN: 'Access',
+  NET: 'Access', TOB: 'Access', SPT: 'Access', STR: 'Access',
+  NEO: 'Access',
+
+  // 1st & Selected 2nd Generation Cephalosporins
+  CZO: 'Access', LEX: 'Access', CFR: 'Access', CXM: 'Access',
+  RAD: 'Access', HAP: 'Access', CEF: 'Access', CEC: 'Access',
+  CFD: 'Access',
+
+  // Phenicols & Lincosamides
+  CHL: 'Access', THA: 'Access', CLI: 'Access', LIN: 'Access',
+
+  // Tetracyclines
+  DOX: 'Access', TCY: 'Access', OTC: 'Access', CTC: 'Access',
+
+  // Folate Pathway Inhibitors
+  SXT: 'Access', COT: 'Access', TMP: 'Access', SMX: 'Access',
+  STX: 'Access', SOX: 'Access', SDZ: 'Access', BDP: 'Access',
+
+  // Nitrofurans & Imidazoles
+  NIT: 'Access', NFT: 'Access', FZD: 'Access', NFZ: 'Access',
+  MTZ: 'Access',
+
+  // ── WATCH GROUP ──
+  // 3rd & 4th Generation Cephalosporins
+  CRO: 'Watch', CTX: 'Watch', CAZ: 'Watch', FEP: 'Watch',
+  CFM: 'Watch', CPD: 'Watch', CFP: 'Watch', CSL: 'Watch',
+  CTT: 'Watch', FOX: 'Watch', CPO: 'Watch', ZOX: 'Watch',
+  CDR: 'Watch', DN: 'Watch', DIT: 'Watch', CTB: 'Watch',
+  CMZ: 'Watch', FMX: 'Watch', MOX: 'Watch',
+
+  // Broad-Spectrum / Antipseudomonal Penicillins
+  TZP: 'Watch', PIP: 'Watch', TIM: 'Watch', TIC: 'Watch',
+  AZL: 'Watch', MEZ: 'Watch',
+
+  // Carbapenems
+  MEM: 'Watch', IPM: 'Watch', ETP: 'Watch', DOR: 'Watch',
+  BIA: 'Watch', PAN: 'Watch',
+
+  // Fluoroquinolones & Quinolones
+  CIP: 'Watch', LVX: 'Watch', MXF: 'Watch', OFX: 'Watch',
+  NOR: 'Watch', NAL: 'Watch', GAT: 'Watch', GEM: 'Watch',
+  LOM: 'Watch', SPX: 'Watch', ENX: 'Watch', PEF: 'Watch',
+  PRU: 'Watch', CIN: 'Watch',
+
+  // Macrolides & Ketolides
+  AZM: 'Watch', CLR: 'Watch', ERY: 'Watch', ROX: 'Watch',
+  SPI: 'Watch', TEL: 'Watch',
+
+  // Glycopeptides & Monobactams
+  VAN: 'Watch', TEC: 'Watch', ATM: 'Watch', CAR: 'Watch',
+
+  // Other Watch Agents
+  FOS: 'Watch', RIF: 'Watch', MNO: 'Watch', FUS: 'Watch',
+  PRI: 'Watch',
+
+  // ── RESERVE GROUP ──
+  // Polymyxins
+  COL: 'Reserve', CST: 'Reserve', PMB: 'Reserve', POL: 'Reserve',
+
+  // Glycylcyclines & Novel Tetracyclines
+  TGC: 'Reserve', ERV: 'Reserve', OMC: 'Reserve',
+
+  // Oxazolidinones & Lipopeptides
+  LNZ: 'Reserve', TZD: 'Reserve', DAP: 'Reserve',
+
+  // Novel BL-BLI Combinations & Siderophores
+  CZA: 'Reserve', CTZ: 'Reserve', MEV: 'Reserve', IMR: 'Reserve',
+  AZA: 'Reserve', FDC: 'Reserve',
+
+  // Novel Aminoglycosides & Pleuromutilins
+  PLZ: 'Reserve', LFM: 'Reserve', QUD: 'Reserve'
+};
+
+/**
+ * Resolve WHO AWaRe classification category for a given WHONET antibiotic code
+ * @param {string} code Antibiotic code (e.g. 'AMK', 'MEM', 'COL')
+ * @returns {'Access'|'Watch'|'Reserve'|'Other'}
+ */
+export function getAwareCategory(code) {
+  if (!code) return 'Other';
+  const clean = String(code).trim().toUpperCase();
+  return WHO_AWARE_MAP[clean] || 'Other';
+}
+
+/**
  * Check if a specimen code designates a urine specimen in WHONET
  * @param {string|null|undefined} specType 
  * @returns {boolean}
@@ -668,6 +767,7 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
     name: abx[code]?.name || code,
     class: abx[code]?.class || 'Other',
     profClass: abx[code]?.profClass || '',
+    aware: getAwareCategory(code),
     isUrineOnly: URINE_SPECIFIC_ANTIBIOTICS.has(code)
   })).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -1074,6 +1174,7 @@ export function calculateLocationStratification(isolates, options = {}) {
         code: abxCode,
         name: abx[abxCode]?.name || abxCode,
         class: abx[abxCode]?.class || 'Other',
+        aware: getAwareCategory(abxCode),
         isUrineOnly: URINE_SPECIFIC_ANTIBIOTICS.has(abxCode),
         icu: icuStats,
         inpatient: inpatStats,

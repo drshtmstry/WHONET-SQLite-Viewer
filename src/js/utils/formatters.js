@@ -108,3 +108,36 @@ export function isSqliteDatabase(filename) {
 export function isSampleDb(name) {
   return (name || '').toLowerCase().startsWith('who-tst');
 }
+
+/**
+ * Formats a WHONET location/ward type into a human-readable display string.
+ * @param {string|null|undefined} wt 
+ * @returns {string}
+ */
+export function formatWardTypeLabel(wt) {
+  if (!wt) return 'Unknown';
+  const clean = String(wt).trim().toLowerCase();
+  const WARD_TYPE_NAMES = {
+    in: 'Inpatient (in)',
+    out: 'Outpatient (out)',
+    icu: 'Intensive Care Unit (icu)',
+    eme: 'Emergency (eme)',
+    er: 'Emergency Room (er)',
+    ed: 'Emergency Department (ed)',
+    opd: 'Outpatient Clinic (opd)',
+    nicu: 'Neonatal ICU (nicu)',
+    picu: 'Pediatric ICU (picu)',
+    sicu: 'Surgical ICU (sicu)',
+    micu: 'Medical ICU (micu)',
+    ccu: 'Coronary Care Unit (ccu)',
+    surg: 'Surgical (surg)',
+    med: 'Medical (med)',
+    ped: 'Pediatric (ped)',
+    obg: 'Obstetrics/Gynecology (obg)',
+    obgyn: 'Obstetrics/Gynecology (obgyn)',
+    dial: 'Dialysis (dial)',
+    burn: 'Burn Unit (burn)',
+    step: 'Step-down / HDU (step)'
+  };
+  return WARD_TYPE_NAMES[clean] || `${wt.toUpperCase()} (${wt})`;
+}

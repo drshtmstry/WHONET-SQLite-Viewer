@@ -1,12 +1,16 @@
-import { state } from '../state/store.js';
-import { api } from '../api/client.js';
-import { toast } from '../ui/toast.js';
-import { getSpecimenName } from '../utils/specimens.js';
-import { escapeHtml } from '../utils/formatters.js';
+import { state } from "../state/store.js";
+import { api } from "../api/client.js";
+import { toast } from "../ui/toast.js";
+import { getSpecimenName } from "../utils/specimens.js";
+import { escapeHtml, formatWardTypeLabel } from "../utils/formatters.js";
+import { getAwareCategory } from "../utils/antibiogram-engine.js";
+
+const AWARE_ORDER = { Access: 1, Watch: 2, Reserve: 3, Other: 4 };
 
 let currentReportData = null;
-let currentGroupByClass = true; // default CLSI Appendix E2 (By Drug Class)
-let currentMetric = 'S'; // 'S' = % Susceptible, 'R' = % Resistant
+let currentGroupingMode = "class"; // 'class' | 'aware' | 'alpha'
+let currentGroupByClass = true; // backward compatibility
+let currentMetric = "S"; // 'S' = % Susceptible, 'R' = % Resistant
 let hideUnderMinIsolates = true; // default CLSI M39 threshold filter (hide organisms < threshold)
 let hideEmptyAbx = true; // default: hide antibiotics without any data / % for displayed organisms
 
@@ -16,39 +20,51 @@ export function toggleHideEmptyAbx(checked) {
 }
 
 // WHONET Deduplication & Surveillance Configuration State
-let currentDedupMode = 'patient_first'; // 'patient_first' | 'isolate' | 'patient_first_ast' | 'episode' | 'patient_most_resistant' | 'patient_most_susceptible'
+let currentDedupMode = "patient_first"; // 'patient_first' | 'isolate' | 'patient_first_ast' | 'episode' | 'patient_most_resistant' | 'patient_most_susceptible'
 let currentEpisodeDays = 30; // Number of days for episode window
 let currentMinIsolates = 30; // CLSI M39 recommendation
-let currentPeriodPreset = 'all'; // 'all' | '1y' | '6m' | '90d' | '30d' | 'custom'
-let currentStartDate = '';
-let currentEndDate = '';
+let currentPeriodPreset = "all"; // 'all' | '1y' | '6m' | '90d' | '30d' | 'custom'
+let currentStartDate = "";
+let currentEndDate = "";
 
 export function setAntibiogramMetric(metric) {
   currentMetric = metric;
-  const btnS = document.getElementById('btn-abx-metric-s');
-  const btnR = document.getElementById('btn-abx-metric-r');
-  if (btnS) btnS.classList.toggle('active', metric === 'S');
-  if (btnR) btnR.classList.toggle('active', metric === 'R');
+  const btnS = document.getElementById("btn-abx-metric-s");
+  const btnR = document.getElementById("btn-abx-metric-r");
+  if (btnS) btnS.classList.toggle("active", metric === "S");
+  if (btnR) btnR.classList.toggle("active", metric === "R");
   renderAntibiogramTable();
 }
 
-export function setAntibiogramGrouping(byClass) {
-  currentGroupByClass = byClass;
-  const btnClass = document.getElementById('btn-abx-group-class');
-  const btnAlpha = document.getElementById('btn-abx-group-alpha');
-  if (btnClass) btnClass.classList.toggle('active', byClass);
-  if (btnAlpha) btnAlpha.classList.toggle('active', !byClass);
+export function setAntibiogramGrouping(mode) {
+  if (mode === true || mode === "class") {
+    currentGroupingMode = "class";
+  } else if (mode === "aware") {
+    currentGroupingMode = "aware";
+  } else {
+    currentGroupingMode = "alpha";
+  }
+  currentGroupByClass = currentGroupingMode === "class";
+
+  const btnClass = document.getElementById("btn-abx-group-class");
+  const btnAware = document.getElementById("btn-abx-group-aware");
+  const btnAlpha = document.getElementById("btn-abx-group-alpha");
+
+  if (btnClass) btnClass.classList.toggle("active", currentGroupingMode === "class");
+  if (btnAware) btnAware.classList.toggle("active", currentGroupingMode === "aware");
+  if (btnAlpha) btnAlpha.classList.toggle("active", currentGroupingMode === "alpha");
+
   renderAntibiogramTable();
 }
 
 export function setAntibiogramMinIsolates(val) {
   const num = parseInt(val, 10);
   currentMinIsolates = isNaN(num) || num < 1 ? 1 : num;
-  const inputEl = document.getElementById('abx-min-isolates-input');
+  const inputEl = document.getElementById("abx-min-isolates-input");
   if (inputEl && parseInt(inputEl.value, 10) !== currentMinIsolates) {
     inputEl.value = currentMinIsolates;
   }
-  const modalInput = document.getElementById('abx-modal-min-isolates');
+  const modalInput = document.getElementById("abx-modal-min-isolates");
   if (modalInput && parseInt(modalInput.value, 10) !== currentMinIsolates) {
     modalInput.value = currentMinIsolates;
   }
@@ -63,7 +79,7 @@ export function toggleHideUnderMinIsolates(checkbox) {
 export const toggleHideUnder30 = toggleHideUnderMinIsolates;
 
 function updateHideThresholdLabel() {
-  const lbl = document.getElementById('abx-hide-under-label');
+  const lbl = document.getElementById("abx-hide-under-label");
   if (lbl) {
     lbl.textContent = `Hide species with < ${currentMinIsolates} isolates`;
   }
@@ -71,30 +87,30 @@ function updateHideThresholdLabel() {
 
 export function setAntibiogramDedupMode(mode) {
   currentDedupMode = mode;
-  const selectEl = document.getElementById('abx-dedup-select');
+  const selectEl = document.getElementById("abx-dedup-select");
   if (selectEl) selectEl.value = mode;
   loadAntibiogram();
 }
 
 export function setAntibiogramPeriodPreset(preset) {
   currentPeriodPreset = preset;
-  const presetSelect = document.getElementById('abx-period-preset');
+  const presetSelect = document.getElementById("abx-period-preset");
   if (presetSelect) presetSelect.value = preset;
 
-  const startInput = document.getElementById('abx-start-date');
-  const endInput = document.getElementById('abx-end-date');
+  const startInput = document.getElementById("abx-start-date");
+  const endInput = document.getElementById("abx-end-date");
 
-  if (preset === 'all') {
-    currentStartDate = '';
-    currentEndDate = '';
+  if (preset === "all") {
+    currentStartDate = "";
+    currentEndDate = "";
   } else {
     const now = new Date();
     const endStr = now.toISOString().slice(0, 10);
     let pastDays = 365;
-    if (preset === '30d') pastDays = 30;
-    else if (preset === '90d') pastDays = 90;
-    else if (preset === '6m') pastDays = 180;
-    else if (preset === '1y') pastDays = 365;
+    if (preset === "30d") pastDays = 30;
+    else if (preset === "90d") pastDays = 90;
+    else if (preset === "6m") pastDays = 180;
+    else if (preset === "1y") pastDays = 365;
 
     const past = new Date(now.getTime() - pastDays * 24 * 60 * 60 * 1000);
     const startStr = past.toISOString().slice(0, 10);
@@ -110,19 +126,19 @@ export function setAntibiogramPeriodPreset(preset) {
 }
 
 export function handleDateInputChange() {
-  const startInput = document.getElementById('abx-start-date');
-  const endInput = document.getElementById('abx-end-date');
-  currentStartDate = startInput ? startInput.value : '';
-  currentEndDate = endInput ? endInput.value : '';
-  currentPeriodPreset = 'custom';
-  const presetSelect = document.getElementById('abx-period-preset');
-  if (presetSelect) presetSelect.value = 'custom';
+  const startInput = document.getElementById("abx-start-date");
+  const endInput = document.getElementById("abx-end-date");
+  currentStartDate = startInput ? startInput.value : "";
+  currentEndDate = endInput ? endInput.value : "";
+  currentPeriodPreset = "custom";
+  const presetSelect = document.getElementById("abx-period-preset");
+  if (presetSelect) presetSelect.value = "custom";
   loadAntibiogram();
 }
 
 export async function loadAntibiogram() {
   if (!state.currentDb) return;
-  const container = document.getElementById('antibiogram-table-container');
+  const container = document.getElementById("antibiogram-table-container");
   if (container) {
     container.innerHTML = `
       <div style="padding: 48px; text-align: center; color: var(--text3);">
@@ -133,20 +149,28 @@ export async function loadAntibiogram() {
     `;
   }
 
-  const wardEl = document.getElementById('abx-ward-filter');
-  const ward = wardEl ? wardEl.value : '';
-  const specEl = document.getElementById('abx-spec-filter');
-  const spec = specEl ? specEl.value : '';
+  const locTypeEl = document.getElementById("abx-loctype-filter");
+  if (locTypeEl && locTypeEl.options.length <= 1 && state.stats?.wardTypes?.length) {
+    const curVal = locTypeEl.value;
+    locTypeEl.innerHTML = '<option value="">All Location Types</option>' +
+      state.stats.wardTypes.map(wt => `<option value="${escapeHtml(wt)}">${formatWardTypeLabel(wt)}</option>`).join('');
+    if (curVal && state.stats.wardTypes.includes(curVal)) {
+      locTypeEl.value = curVal;
+    }
+  }
+  const locType = locTypeEl ? locTypeEl.value : "";
+  const specEl = document.getElementById("abx-spec-filter");
+  const spec = specEl ? specEl.value : "";
 
   const queryParams = new URLSearchParams({
     minIsolates: String(currentMinIsolates),
     dedupMode: currentDedupMode,
-    episodeDays: String(currentEpisodeDays)
+    episodeDays: String(currentEpisodeDays),
   });
-  if (ward) queryParams.set('ward', ward);
-  if (spec) queryParams.set('specType', spec);
-  if (currentStartDate) queryParams.set('startDate', currentStartDate);
-  if (currentEndDate) queryParams.set('endDate', currentEndDate);
+  if (locType) queryParams.set("locType", locType);
+  if (spec) queryParams.set("specType", spec);
+  if (currentStartDate) queryParams.set("startDate", currentStartDate);
+  if (currentEndDate) queryParams.set("endDate", currentEndDate);
 
   const res = await api(`/api/antibiogram?${queryParams.toString()}`);
   if (res.error) {
@@ -158,15 +182,15 @@ export async function loadAntibiogram() {
         </div>
       `;
     }
-    return toast(res.error, 'error');
+    return toast(res.error, "error");
   }
 
   currentReportData = res;
   updateAntibiogramMetaHeader(res);
   renderAntibiogramTable();
-  if (currentAntibiogramViewMode === 'trends') {
+  if (currentAntibiogramViewMode === "trends") {
     renderAmrTrendChart();
-  } else if (currentAntibiogramViewMode === 'locations') {
+  } else if (currentAntibiogramViewMode === "locations") {
     populateLocationOrgDropdown();
     renderLocationStratificationChart();
   }
@@ -174,85 +198,107 @@ export async function loadAntibiogram() {
 
 function getDedupModeLabel(mode) {
   switch (mode) {
-    case 'isolate': return 'By Isolate (All Isolates)';
-    case 'patient_first_ast': return 'First with AST Results';
-    case 'episode': return `Episode (${currentEpisodeDays} Days)`;
-    case 'patient_most_resistant': return 'Most Resistant Isolate';
-    case 'patient_most_susceptible': return 'Most Susceptible Isolate';
-    case 'patient_first':
+    case "isolate":
+      return "All Isolates (Raw)";
+    case "patient_first_ast":
+      return "1st with AST";
+    case "episode":
+      return `Episode (${currentEpisodeDays}d)`;
+    case "patient_most_resistant":
+      return "Most Resistant";
+    case "patient_most_susceptible":
+      return "Most Susceptible";
+    case "patient_first":
     default:
-      return 'First Isolate (CLSI M39)';
+      return "1st Isolate (M39)";
   }
 }
 
 function updateAntibiogramMetaHeader(data) {
-  const metaEl = document.getElementById('antibiogram-meta-banner');
+  const metaEl = document.getElementById("antibiogram-meta-banner");
   if (!metaEl) return;
 
-  const labLabel = data.labName || data.labConfigFile || 'Standard CLSI M100';
+  const labLabel = data.labName || data.labConfigFile || "Standard CLSI M100";
   const orgCount = data.organisms ? data.organisms.length : 0;
-  const qualifiedCount = data.organisms ? data.organisms.filter(o => o.meetsThreshold).length : 0;
-  const threshold = data.minIsolatesThreshold !== undefined ? data.minIsolatesThreshold : currentMinIsolates;
+  const qualifiedCount = data.organisms
+    ? data.organisms.filter((o) => o.meetsThreshold).length
+    : 0;
+  const threshold =
+    data.minIsolatesThreshold !== undefined
+      ? data.minIsolatesThreshold
+      : currentMinIsolates;
 
-  const specEl = document.getElementById('abx-spec-filter');
-  const selectedSpec = specEl ? specEl.value : '';
-  const specName = selectedSpec ? (getSpecimenName(selectedSpec) || selectedSpec) : '';
-  const specBadge = specName ? `
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <span style="font-weight: 700; color: var(--text);"><i class="fa-solid fa-vial" style="color: var(--accent);"></i> Specimen:</span>
-      <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;">${escapeHtml(specName)} (${escapeHtml(selectedSpec)})</span>
-    </div>
-  ` : '';
+  const locTypeEl = document.getElementById("abx-loctype-filter");
+  const selectedLocType = locTypeEl ? locTypeEl.value : "";
+  const locTypeLabel = selectedLocType
+    ? formatWardTypeLabel(selectedLocType)
+    : "";
+  const locTypeBadge = locTypeLabel
+    ? `
+    <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;" title="Location: ${escapeHtml(locTypeLabel)}">
+      <i class="fa-solid fa-hospital-user" style="color: var(--accent); margin-right: 4px;"></i>${escapeHtml(locTypeLabel)}
+    </span>
+  `
+    : "";
 
-  const dateBadge = (data.startDate || data.endDate) ? `
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <span style="font-weight: 700; color: var(--text);"><i class="fa-regular fa-calendar" style="color: var(--accent);"></i> Period:</span>
-      <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;">${data.startDate || 'Beginning'} &rarr; ${data.endDate || 'Latest'}</span>
-    </div>
-  ` : '';
+  const specEl = document.getElementById("abx-spec-filter");
+  const selectedSpec = specEl ? specEl.value : "";
+  const specName = selectedSpec
+    ? getSpecimenName(selectedSpec) || selectedSpec
+    : "";
+  const specBadge = specName
+    ? `
+    <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;" title="Specimen: ${escapeHtml(specName)} (${escapeHtml(selectedSpec)})">
+      <i class="fa-solid fa-vial" style="color: var(--accent); margin-right: 4px;"></i>${escapeHtml(specName)}
+    </span>
+  `
+    : "";
+
+  const dateBadge =
+    data.startDate || data.endDate
+      ? `
+    <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;" title="Surveillance Period">
+      <i class="fa-regular fa-calendar" style="color: var(--accent); margin-right: 4px;"></i>${data.startDate || "Start"} &rarr; ${data.endDate || "Latest"}
+    </span>
+  `
+      : "";
 
   const dedupBadge = `
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <span style="font-weight: 700; color: var(--text);"><i class="fa-solid fa-user-check" style="color: var(--accent);"></i> Deduplication:</span>
-      <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;">${escapeHtml(getDedupModeLabel(data.dedupMode || currentDedupMode))}</span>
-    </div>
+    <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;" title="Deduplication: ${escapeHtml(getDedupModeLabel(data.dedupMode || currentDedupMode))}">
+      <i class="fa-solid fa-user-check" style="color: var(--accent); margin-right: 4px;"></i>${escapeHtml(getDedupModeLabel(data.dedupMode || currentDedupMode))}
+    </span>
   `;
 
   const cutoffBadge = `
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <span style="font-weight: 700; color: var(--text);"><i class="fa-solid fa-chart-pie" style="color: var(--accent);"></i> Cutoff:</span>
-      <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;">&ge; ${threshold} isolates</span>
-    </div>
+    <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;" title="CLSI M39 Reporting Threshold: Minimum ${threshold} isolates">
+      <i class="fa-solid fa-filter" style="color: var(--accent); margin-right: 4px;"></i>&ge;${threshold}
+    </span>
   `;
 
-  const orgAnalysisLabel = `Showing <strong style="color:var(--text);">${qualifiedCount}</strong> with ≥ ${threshold} isolates (${orgCount} total)`;
-
   metaEl.innerHTML = `
-    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px;">
-      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
-        <div style="display: flex; align-items: center; gap: 7px;">
-          <span style="font-weight: 700; color: var(--text);"><i class="fa-solid fa-microscope" style="color: var(--accent);"></i> Lab Rules:</span>
-          <span class="badge" style="background: var(--accent-light); color: var(--accent); padding: 3px 8px; border-radius: 4px; font-weight: 600;">${labLabel}</span>
-        </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11.5px; white-space: nowrap; overflow-x: auto; scrollbar-width: none;">
+      <div style="display: flex; align-items: center; gap: 7px; flex-shrink: 0;">
+        <span class="badge" style="background: var(--accent-light); color: var(--accent); padding: 3px 8px; border-radius: 4px; font-weight: 600;" title="AST Guideline & Breakpoint Matrix">
+          <i class="fa-solid fa-microscope" style="margin-right: 4px;"></i>${escapeHtml(labLabel)}
+        </span>
         ${dedupBadge}
         ${cutoffBadge}
+        ${locTypeBadge}
         ${dateBadge}
         ${specBadge}
       </div>
 
-      <div style="display: flex; flex-wrap: wrap; gap: 10px; color: var(--text3); align-items: center; font-size: 12px; margin-left: auto;">
-        <span>Analyzed: <strong style="color:var(--text);">${data.totalFirstIsolates || 0}</strong></span>
+      <div style="display: flex; gap: 8px; color: var(--text3); align-items: center; font-size: 11.5px; margin-left: auto; flex-shrink: 0;">
+        <span title="Deduplicated isolates analyzed vs total raw laboratory isolates">Isolates: <strong style="color:var(--text);">${data.totalFirstIsolates || 0}</strong> analyzed / <strong style="color:var(--text);">${data.totalRawIsolates || data.totalFirstIsolates || 0}</strong> raw</span>
         <span>•</span>
-        <span>Raw: <strong style="color:var(--text);">${data.totalRawIsolates || data.totalFirstIsolates || 0}</strong></span>
-        <span>•</span>
-        <span>${orgAnalysisLabel}</span>
+        <span title="${qualifiedCount} species meet the ≥${threshold} isolate cutoff for statistical validity (${orgCount} total species detected)">Species: <strong style="color:var(--text);">${qualifiedCount}</strong>/<strong style="color:var(--text);">${orgCount}</strong> qualified (&ge;${threshold})</span>
       </div>
     </div>
   `;
 }
 
 export function renderAntibiogramTable() {
-  const container = document.getElementById('antibiogram-table-container');
+  const container = document.getElementById("antibiogram-table-container");
   if (!container || !currentReportData) return;
 
   const { organisms, antibiotics } = currentReportData;
@@ -267,7 +313,7 @@ export function renderAntibiogramTable() {
   }
 
   // Filter organisms by configured threshold (CLSI M39)
-  const filteredOrgs = organisms.filter(o => o.meetsThreshold);
+  const filteredOrgs = organisms.filter((o) => o.meetsThreshold);
 
   if (!filteredOrgs.length) {
     container.innerHTML = `
@@ -278,65 +324,287 @@ export function renderAntibiogramTable() {
     return;
   }
 
-  // Prepare antibiotic columns (grouped by class or alphabetical)
+  // Prepare antibiotic columns (grouped by class, by AWaRe, or alphabetical)
   let abxList = [...antibiotics];
   if (hideEmptyAbx) {
-    abxList = abxList.filter(drug => {
-      return filteredOrgs.some(org => {
+    abxList = abxList.filter((drug) => {
+      return filteredOrgs.some((org) => {
         const stats = org.drugStats[drug.code];
         return stats && (stats.testedCount > 0 || stats.isIntrinsic);
       });
     });
   }
 
-  if (currentGroupByClass) {
-    abxList.sort((a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name));
+  if (currentGroupingMode === "class") {
+    abxList.sort(
+      (a, b) =>
+        (a.class || "Other").localeCompare(b.class || "Other") ||
+        a.name.localeCompare(b.name),
+    );
+  } else if (currentGroupingMode === "aware") {
+    abxList.sort(
+      (a, b) =>
+        ((AWARE_ORDER[a.aware || getAwareCategory(a.code)] || 4) -
+          (AWARE_ORDER[b.aware || getAwareCategory(b.code)] || 4)) ||
+        (a.class || "Other").localeCompare(b.class || "Other") ||
+        a.name.localeCompare(b.name),
+    );
   } else {
     abxList.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Group contiguous antibiotics by drug class or AWaRe tier for hierarchical header
+  const classGroups = [];
+  const awareGroups = [];
+
+  if (currentGroupingMode === "class") {
+    let currentGroup = null;
+    for (const drug of abxList) {
+      const cls = drug.class || "Other";
+      if (!currentGroup || currentGroup.name !== cls) {
+        currentGroup = { name: cls, count: 1, drugs: [drug] };
+        classGroups.push(currentGroup);
+      } else {
+        currentGroup.count++;
+        currentGroup.drugs.push(drug);
+      }
+    }
+  } else if (currentGroupingMode === "aware") {
+    let currentGroup = null;
+    for (const drug of abxList) {
+      const cat = drug.aware || getAwareCategory(drug.code);
+      const cls = drug.class || "Other";
+      if (!currentGroup || currentGroup.name !== cat) {
+        currentGroup = {
+          name: cat,
+          count: 1,
+          drugs: [drug],
+          classSubGroups: [{ name: cls, count: 1, drugs: [drug] }],
+        };
+        awareGroups.push(currentGroup);
+      } else {
+        currentGroup.count++;
+        currentGroup.drugs.push(drug);
+        const lastClassSubGroup =
+          currentGroup.classSubGroups[currentGroup.classSubGroups.length - 1];
+        if (lastClassSubGroup && lastClassSubGroup.name === cls) {
+          lastClassSubGroup.count++;
+          lastClassSubGroup.drugs.push(drug);
+        } else {
+          currentGroup.classSubGroups.push({
+            name: cls,
+            count: 1,
+            drugs: [drug],
+          });
+        }
+      }
+    }
   }
 
   // Build Table HTML
   let html = `
     <div style="overflow-x: auto; width: 100%;">
       <table class="data-table antibiogram-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px;">
-        <thead>
-          <tr style="background: var(--bg3); position: sticky; top: 0; z-index: 5;">
-            <th style="min-width: 240px; text-align: left; padding: 12px 16px; border-bottom: 2px solid var(--border); position: sticky; left: 0; background: var(--bg3); z-index: 6;">
-              Organism Name
-            </th>
-            <th style="min-width: 70px; text-align: center; padding: 12px 8px; border-bottom: 2px solid var(--border);">
-              Total (N)
-            </th>
+        <thead style="position: sticky; top: 0; z-index: 6; background: var(--bg3);">
   `;
 
-  for (const drug of abxList) {
-    const isUrine = drug.isUrineOnly;
-    const urineBadge = isUrine ? `
-      <div style="margin-top: 3px;">
-        <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: var(--accent); border: 1px solid rgba(14, 165, 233, 0.3); font-size: 9.5px; padding: 1px 5px; border-radius: 3px; font-weight: 700;" title="CLSI M39: Susceptibility calculated strictly from urine specimens">
-          <i class="fa-solid fa-vial" style="font-size: 8.5px;"></i> Urine only
-        </span>
-      </div>
-    ` : '';
+  if (currentGroupingMode === "aware" && awareGroups.length > 0) {
+    // Three-row hierarchical header: Row 1 = WHO AWaRe Category, Row 2 = Antibiotic Class/Group, Row 3 = Drug Name/Code
+    const awareThemes = {
+      Access: {
+        bg: "rgba(16, 185, 129, 0.12)",
+        color: "#10b981",
+        border: "#10b981",
+        icon: "fa-solid fa-circle-check",
+        label: "WHO ACCESS",
+        desc: "Core first/second-choice empiric agents with favorable safety and resistance profile",
+      },
+      Watch: {
+        bg: "rgba(245, 158, 11, 0.12)",
+        color: "#f59e0b",
+        border: "#f59e0b",
+        icon: "fa-solid fa-eye",
+        label: "WHO WATCH",
+        desc: "Agents with higher resistance potential; highest-priority targets for stewardship",
+      },
+      Reserve: {
+        bg: "rgba(239, 68, 68, 0.12)",
+        color: "#ef4444",
+        border: "#ef4444",
+        icon: "fa-solid fa-shield-halved",
+        label: "WHO RESERVE",
+        desc: "Last-resort agents reserved strictly for confirmed multi-drug resistant pathogens",
+      },
+      Other: {
+        bg: "var(--bg2)",
+        color: "var(--text3)",
+        border: "var(--border)",
+        icon: "fa-solid fa-capsules",
+        label: "OTHER / UNCLASSIFIED",
+        desc: "Antifungals or unclassified antimicrobials",
+      },
+    };
 
     html += `
-      <th style="min-width: 95px; text-align: center; padding: 8px 6px; border-bottom: 2px solid var(--border);" title="${escapeHtml(drug.name)} (${escapeHtml(drug.code)})${drug.class ? ' — ' + escapeHtml(drug.class) : ''}${isUrine ? ' — CLSI M39: Calculated strictly from urine isolates' : ''}">
-        <div style="font-weight: 700; color: var(--text);">${escapeHtml(drug.name)}</div>
-        <div style="font-size: 10px; color: var(--text3); font-weight: normal; margin-top: 2px;">(${escapeHtml(drug.code)})${drug.class ? ' ' + escapeHtml(drug.class) : ''}</div>
-        ${urineBadge}
-      </th>
+          <tr style="background: var(--bg3);">
+            <th rowspan="3" style="min-width: 240px; text-align: left; padding: 10px 16px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); position: sticky; left: 0; background: var(--bg3); z-index: 8; vertical-align: middle;">
+              Organism Name
+            </th>
+            <th rowspan="3" style="min-width: 75px; text-align: center; padding: 10px 8px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); background: var(--bg3); vertical-align: middle;">
+              Total (N)
+            </th>
     `;
-  }
 
-  html += `
+    for (const grp of awareGroups) {
+      const th = awareThemes[grp.name] || awareThemes.Other;
+      html += `
+            <th colspan="${grp.count}" style="text-align: center; padding: 7px 10px; background: ${th.bg}; border-bottom: 2px solid ${th.border}; border-right: 1px solid var(--border); font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: ${th.color}; white-space: nowrap;" title="${escapeHtml(th.desc)}">
+              <i class="${th.icon}" style="font-size: 11px; margin-right: 5px;"></i>${escapeHtml(th.label)}
+            </th>
+      `;
+    }
+
+    html += `
+          </tr>
+          <tr style="background: var(--bg3);">
+    `;
+
+    for (const grp of awareGroups) {
+      for (const clsGrp of grp.classSubGroups) {
+        html += `
+            <th colspan="${clsGrp.count}" style="text-align: center; padding: 6px 8px; background: var(--bg2); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); white-space: nowrap;" title="${escapeHtml(clsGrp.name)} (WHO ${escapeHtml(grp.name)})">
+              <i class="fa-solid fa-layer-group" style="font-size: 9.5px; margin-right: 4px; opacity: 0.75;"></i>${escapeHtml(clsGrp.name)}
+            </th>
+        `;
+      }
+    }
+
+    html += `
+          </tr>
+          <tr style="background: var(--bg3);">
+    `;
+
+    for (const drug of abxList) {
+      const isUrine = drug.isUrineOnly;
+      const drugCat = drug.aware || getAwareCategory(drug.code);
+      const urineBadge = isUrine
+        ? `
+        <div style="margin-top: 2px;">
+          <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: var(--accent); border: 1px solid rgba(14, 165, 233, 0.3); font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700;" title="CLSI M39: Susceptibility calculated strictly from urine specimens">
+            Urine only
+          </span>
+        </div>
+      `
+        : "";
+
+      html += `
+            <th style="min-width: 95px; text-align: center; padding: 7px 6px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border);" title="${escapeHtml(drug.name)} (${escapeHtml(drug.code)}) — WHO ${escapeHtml(drugCat)} • ${escapeHtml(drug.class || "Other")}${isUrine ? " — CLSI M39: Calculated strictly from urine isolates" : ""}">
+              <div style="font-weight: 700; color: var(--text);">${escapeHtml(drug.name)}</div>
+              <div style="font-size: 10px; color: var(--text3); font-weight: 600; font-family: monospace; margin-top: 1px;">(${escapeHtml(drug.code)})</div>
+              ${urineBadge}
+            </th>
+      `;
+    }
+
+    html += `
           </tr>
         </thead>
         <tbody>
-  `;
+    `;
+  } else if (currentGroupingMode === "class" && classGroups.length > 0) {
+    // Two-row hierarchical header: Top row for class, bottom row for drug name/code
+    html += `
+          <tr style="background: var(--bg3);">
+            <th rowspan="2" style="min-width: 240px; text-align: left; padding: 10px 16px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); position: sticky; left: 0; background: var(--bg3); z-index: 8; vertical-align: middle;">
+              Organism Name
+            </th>
+            <th rowspan="2" style="min-width: 75px; text-align: center; padding: 10px 8px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); background: var(--bg3); vertical-align: middle;">
+              Total (N)
+            </th>
+    `;
+
+    for (const grp of classGroups) {
+      html += `
+            <th colspan="${grp.count}" style="text-align: center; padding: 6px 10px; background: var(--bg2); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); white-space: nowrap;">
+              <i class="fa-solid fa-layer-group" style="font-size: 10px; margin-right: 5px; opacity: 0.75;"></i>${escapeHtml(grp.name)}
+            </th>
+      `;
+    }
+
+    html += `
+          </tr>
+          <tr style="background: var(--bg3);">
+    `;
+
+    for (const drug of abxList) {
+      const isUrine = drug.isUrineOnly;
+      const urineBadge = isUrine
+        ? `
+        <div style="margin-top: 2px;">
+          <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: var(--accent); border: 1px solid rgba(14, 165, 233, 0.3); font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700;" title="CLSI M39: Susceptibility calculated strictly from urine specimens">
+            Urine only
+          </span>
+        </div>
+      `
+        : "";
+
+      html += `
+            <th style="min-width: 95px; text-align: center; padding: 7px 6px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border);" title="${escapeHtml(drug.name)} (${escapeHtml(drug.code)})${drug.class ? " — " + escapeHtml(drug.class) : ""}${isUrine ? " — CLSI M39: Calculated strictly from urine isolates" : ""}">
+              <div style="font-weight: 700; color: var(--text);">${escapeHtml(drug.name)}</div>
+              <div style="font-size: 10px; color: var(--text3); font-weight: 600; font-family: monospace; margin-top: 1px;">(${escapeHtml(drug.code)})</div>
+              ${urineBadge}
+            </th>
+      `;
+    }
+
+    html += `
+          </tr>
+        </thead>
+        <tbody>
+    `;
+  } else {
+    // Single-row header for Alphabetical mode
+    html += `
+          <tr style="background: var(--bg3);">
+            <th style="min-width: 240px; text-align: left; padding: 12px 16px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); position: sticky; left: 0; background: var(--bg3); z-index: 8;">
+              Organism Name
+            </th>
+            <th style="min-width: 75px; text-align: center; padding: 12px 8px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); background: var(--bg3);">
+              Total (N)
+            </th>
+    `;
+
+    for (const drug of abxList) {
+      const isUrine = drug.isUrineOnly;
+      const urineBadge = isUrine
+        ? `
+        <div style="margin-top: 2px;">
+          <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: var(--accent); border: 1px solid rgba(14, 165, 233, 0.3); font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700;" title="CLSI M39: Susceptibility calculated strictly from urine specimens">
+            Urine only
+          </span>
+        </div>
+      `
+        : "";
+
+      html += `
+            <th style="min-width: 95px; text-align: center; padding: 8px 6px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border);" title="${escapeHtml(drug.name)} (${escapeHtml(drug.code)})${drug.class ? " — " + escapeHtml(drug.class) : ""}${isUrine ? " — CLSI M39: Calculated strictly from urine isolates" : ""}">
+              <div style="font-weight: 700; color: var(--text);">${escapeHtml(drug.name)}</div>
+              <div style="font-size: 10px; color: var(--text3); font-weight: 600; font-family: monospace; margin-top: 1px;">(${escapeHtml(drug.code)})</div>
+              ${urineBadge}
+            </th>
+      `;
+    }
+
+    html += `
+          </tr>
+        </thead>
+        <tbody>
+    `;
+  }
 
   for (const org of filteredOrgs) {
     const isUnderThreshold = !org.meetsThreshold;
-    const rowClass = isUnderThreshold ? 'under-threshold' : '';
+    const rowClass = isUnderThreshold ? "under-threshold" : "";
 
     html += `
       <tr class="${rowClass}" style="border-bottom: 1px solid var(--border);">
@@ -345,7 +613,7 @@ export function renderAntibiogramTable() {
             <div>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <span>${escapeHtml(org.orgName)}</span>
-                ${isUnderThreshold ? `<span title="Fewer than ${currentReportData.minIsolatesThreshold} isolates: CLSI suggests cautious interpretation" style="color: var(--yellow); font-size: 12px; font-weight: bold;">*</span>` : ''}
+                ${isUnderThreshold ? `<span title="Fewer than ${currentReportData.minIsolatesThreshold} isolates: CLSI suggests cautious interpretation" style="color: var(--yellow); font-size: 12px; font-weight: bold;">*</span>` : ""}
               </div>
               <div style="font-size: 10.5px; color: var(--text3); font-family: monospace;">${escapeHtml(org.orgCode)}</div>
             </div>
@@ -371,24 +639,24 @@ export function renderAntibiogramTable() {
       } else if (stats.isIntrinsic) {
         html += `
           <td style="text-align: center; background: var(--red-bg); color: var(--red); font-weight: 800; font-family: 'JetBrains Mono', monospace;" title="CLSI Intrinsic Resistance: Inherently resistant (${stats.rCount} of ${stats.testedCount} tested resistant)">
-            <span style="border: 1px solid var(--red-border); padding: 2px 6px; border-radius: 4px; font-size: 11px;">${currentMetric === 'R' ? '100% (R)' : 'R'}</span>
-            ${stats.testedCount > 0 ? `<div style="font-size: 9.5px; color: var(--red); font-weight: normal; margin-top: 2px;">(${stats.rCount}/${stats.testedCount})</div>` : ''}
+            <span style="border: 1px solid var(--red-border); padding: 2px 6px; border-radius: 4px; font-size: 11px;">${currentMetric === "R" ? "100% (R)" : "R"}</span>
+            ${stats.testedCount > 0 ? `<div style="font-size: 9.5px; color: var(--red); font-weight: normal; margin-top: 2px;">(${stats.rCount}/${stats.testedCount})</div>` : ""}
           </td>
         `;
       } else {
-        if (currentMetric === 'R') {
+        if (currentMetric === "R") {
           const pctR = stats.pctR;
-          let cellBg = 'transparent';
-          let cellColor = 'var(--text)';
+          let cellBg = "transparent";
+          let cellColor = "var(--text)";
           if (pctR <= 20) {
-            cellBg = 'var(--green-bg)';
-            cellColor = 'var(--green)';
+            cellBg = "var(--green-bg)";
+            cellColor = "var(--green)";
           } else if (pctR <= 50) {
-            cellBg = 'var(--yellow-bg)';
-            cellColor = 'var(--yellow)';
+            cellBg = "var(--yellow-bg)";
+            cellColor = "var(--yellow)";
           } else {
-            cellBg = 'rgba(244, 63, 94, 0.08)';
-            cellColor = 'var(--red)';
+            cellBg = "rgba(244, 63, 94, 0.08)";
+            cellColor = "var(--red)";
           }
 
           html += `
@@ -399,17 +667,17 @@ export function renderAntibiogramTable() {
           `;
         } else {
           const pctS = stats.pctS;
-          let cellBg = 'transparent';
-          let cellColor = 'var(--text)';
+          let cellBg = "transparent";
+          let cellColor = "var(--text)";
           if (pctS >= 80) {
-            cellBg = 'var(--green-bg)';
-            cellColor = 'var(--green)';
+            cellBg = "var(--green-bg)";
+            cellColor = "var(--green)";
           } else if (pctS >= 50) {
-            cellBg = 'var(--yellow-bg)';
-            cellColor = 'var(--yellow)';
+            cellBg = "var(--yellow-bg)";
+            cellColor = "var(--yellow)";
           } else {
-            cellBg = 'rgba(244, 63, 94, 0.08)';
-            cellColor = 'var(--red)';
+            cellBg = "rgba(244, 63, 94, 0.08)";
+            cellColor = "var(--red)";
           }
 
           html += `
@@ -437,88 +705,104 @@ export function renderAntibiogramTable() {
 // ── WHONET "One Isolate of Species by Patient" Modal Dialog ──
 
 export function setModalMinCutoff(cutoff) {
-  const input = document.getElementById('abx-modal-min-isolates');
+  const input = document.getElementById("abx-modal-min-isolates");
   if (input) {
     input.value = cutoff;
   }
-  document.querySelectorAll('.abx-cutoff-pill').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.dataset.cutoff, 10) === cutoff);
+  document.querySelectorAll(".abx-cutoff-pill").forEach((btn) => {
+    btn.classList.toggle("active", parseInt(btn.dataset.cutoff, 10) === cutoff);
   });
 }
 
 export function handleModalMinCutoffChange() {
-  const input = document.getElementById('abx-modal-min-isolates');
+  const input = document.getElementById("abx-modal-min-isolates");
   const val = input ? parseInt(input.value, 10) : 30;
-  document.querySelectorAll('.abx-cutoff-pill').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.dataset.cutoff, 10) === val);
+  document.querySelectorAll(".abx-cutoff-pill").forEach((btn) => {
+    btn.classList.toggle("active", parseInt(btn.dataset.cutoff, 10) === val);
   });
 }
 
 export function handleModalPeriodPreset(preset) {
-  const startEl = document.getElementById('abx-modal-start-date');
-  const endEl = document.getElementById('abx-modal-end-date');
+  const startEl = document.getElementById("abx-modal-start-date");
+  const endEl = document.getElementById("abx-modal-end-date");
   if (!startEl || !endEl) return;
-  if (preset === 'all') {
-    startEl.value = '';
-    endEl.value = '';
+  if (preset === "all") {
+    startEl.value = "";
+    endEl.value = "";
   } else {
     const now = new Date();
     let days = 365;
-    if (preset === '30d') days = 30;
-    else if (preset === '90d') days = 90;
-    else if (preset === '6m') days = 180;
+    if (preset === "30d") days = 30;
+    else if (preset === "90d") days = 90;
+    else if (preset === "6m") days = 180;
     endEl.value = now.toISOString().slice(0, 10);
-    startEl.value = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
+    startEl.value = new Date(now.getTime() - days * 86400000)
+      .toISOString()
+      .slice(0, 10);
   }
 }
 
 export function resetAntibiogramOptionsDefaults() {
-  const radioByPatientFirst = document.getElementById('abx-opt-by-patient-first');
+  const radioByPatientFirst = document.getElementById(
+    "abx-opt-by-patient-first",
+  );
   if (radioByPatientFirst) radioByPatientFirst.checked = true;
 
-  const episodeDaysInput = document.getElementById('abx-opt-episode-days');
+  const episodeDaysInput = document.getElementById("abx-opt-episode-days");
   if (episodeDaysInput) episodeDaysInput.value = 30;
 
-  const modalPeriodPreset = document.getElementById('abx-modal-period-preset');
-  if (modalPeriodPreset) modalPeriodPreset.value = 'all';
+  const modalPeriodPreset = document.getElementById("abx-modal-period-preset");
+  if (modalPeriodPreset) modalPeriodPreset.value = "all";
 
-  const modalStartDate = document.getElementById('abx-modal-start-date');
-  if (modalStartDate) modalStartDate.value = '';
+  const modalStartDate = document.getElementById("abx-modal-start-date");
+  if (modalStartDate) modalStartDate.value = "";
 
-  const modalEndDate = document.getElementById('abx-modal-end-date');
-  if (modalEndDate) modalEndDate.value = '';
+  const modalEndDate = document.getElementById("abx-modal-end-date");
+  if (modalEndDate) modalEndDate.value = "";
 
-  const hideEmptyInput = document.getElementById('abx-modal-hide-empty-abx');
+  const hideEmptyInput = document.getElementById("abx-modal-hide-empty-abx");
   if (hideEmptyInput) hideEmptyInput.checked = true;
   hideEmptyAbx = true;
 
   setModalMinCutoff(30);
-  toast('Antibiogram options reset to CLSI M39 defaults', 'info');
+  toast("Antibiogram options reset to CLSI M39 defaults", "info");
 }
 
 export function openAntibiogramOptionsModal() {
-  const modal = document.getElementById('antibiogram-options-modal');
+  const modal = document.getElementById("antibiogram-options-modal");
   if (!modal) return;
 
   // Sync inputs with current state
-  const radioByIsolate = document.getElementById('abx-opt-by-isolate');
-  const radioByPatientFirst = document.getElementById('abx-opt-by-patient-first');
-  const radioByPatientAst = document.getElementById('abx-opt-by-patient-ast');
-  const radioByPatientRes = document.getElementById('abx-opt-by-patient-res');
-  const radioByPatientSusc = document.getElementById('abx-opt-by-patient-susc');
-  const radioByEpisode = document.getElementById('abx-opt-by-episode');
-  const episodeDaysInput = document.getElementById('abx-opt-episode-days');
-  const modalMinIsolatesInput = document.getElementById('abx-modal-min-isolates');
-  const modalPeriodPreset = document.getElementById('abx-modal-period-preset');
-  const modalStartDate = document.getElementById('abx-modal-start-date');
-  const modalEndDate = document.getElementById('abx-modal-end-date');
-  const hideEmptyInput = document.getElementById('abx-modal-hide-empty-abx');
+  const radioByIsolate = document.getElementById("abx-opt-by-isolate");
+  const radioByPatientFirst = document.getElementById(
+    "abx-opt-by-patient-first",
+  );
+  const radioByPatientAst = document.getElementById("abx-opt-by-patient-ast");
+  const radioByPatientRes = document.getElementById("abx-opt-by-patient-res");
+  const radioByPatientSusc = document.getElementById("abx-opt-by-patient-susc");
+  const radioByEpisode = document.getElementById("abx-opt-by-episode");
+  const episodeDaysInput = document.getElementById("abx-opt-episode-days");
+  const modalMinIsolatesInput = document.getElementById(
+    "abx-modal-min-isolates",
+  );
+  const modalPeriodPreset = document.getElementById("abx-modal-period-preset");
+  const modalStartDate = document.getElementById("abx-modal-start-date");
+  const modalEndDate = document.getElementById("abx-modal-end-date");
+  const hideEmptyInput = document.getElementById("abx-modal-hide-empty-abx");
 
-  if (currentDedupMode === 'isolate' && radioByIsolate) radioByIsolate.checked = true;
-  else if (currentDedupMode === 'patient_first_ast' && radioByPatientAst) radioByPatientAst.checked = true;
-  else if (currentDedupMode === 'patient_most_resistant' && radioByPatientRes) radioByPatientRes.checked = true;
-  else if (currentDedupMode === 'patient_most_susceptible' && radioByPatientSusc) radioByPatientSusc.checked = true;
-  else if (currentDedupMode === 'episode' && radioByEpisode) radioByEpisode.checked = true;
+  if (currentDedupMode === "isolate" && radioByIsolate)
+    radioByIsolate.checked = true;
+  else if (currentDedupMode === "patient_first_ast" && radioByPatientAst)
+    radioByPatientAst.checked = true;
+  else if (currentDedupMode === "patient_most_resistant" && radioByPatientRes)
+    radioByPatientRes.checked = true;
+  else if (
+    currentDedupMode === "patient_most_susceptible" &&
+    radioByPatientSusc
+  )
+    radioByPatientSusc.checked = true;
+  else if (currentDedupMode === "episode" && radioByEpisode)
+    radioByEpisode.checked = true;
   else if (radioByPatientFirst) radioByPatientFirst.checked = true;
 
   if (episodeDaysInput) episodeDaysInput.value = currentEpisodeDays;
@@ -529,151 +813,289 @@ export function openAntibiogramOptionsModal() {
   if (hideEmptyInput) hideEmptyInput.checked = hideEmptyAbx;
 
   // Sync cutoff pills highlight
-  const curCutoff = parseInt(modalMinIsolatesInput ? modalMinIsolatesInput.value : currentMinIsolates, 10);
-  document.querySelectorAll('.abx-cutoff-pill').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.dataset.cutoff, 10) === curCutoff);
+  const curCutoff = parseInt(
+    modalMinIsolatesInput ? modalMinIsolatesInput.value : currentMinIsolates,
+    10,
+  );
+  document.querySelectorAll(".abx-cutoff-pill").forEach((btn) => {
+    btn.classList.toggle(
+      "active",
+      parseInt(btn.dataset.cutoff, 10) === curCutoff,
+    );
   });
 
-  modal.classList.add('open');
+  modal.classList.add("open");
 }
 
 export function closeAntibiogramOptionsModal() {
-  const modal = document.getElementById('antibiogram-options-modal');
+  const modal = document.getElementById("antibiogram-options-modal");
   if (modal) {
-    modal.classList.remove('open');
+    modal.classList.remove("open");
   }
 }
 
 export function applyAntibiogramOptions() {
-  const selectedRadio = document.querySelector('input[name="abx-dedup-mode-opt"]:checked');
+  const selectedRadio = document.querySelector(
+    'input[name="abx-dedup-mode-opt"]:checked',
+  );
   if (selectedRadio) {
     currentDedupMode = selectedRadio.value;
-    const selectEl = document.getElementById('abx-dedup-select');
+    const selectEl = document.getElementById("abx-dedup-select");
     if (selectEl) selectEl.value = currentDedupMode;
   }
 
-  const episodeDaysInput = document.getElementById('abx-opt-episode-days');
+  const episodeDaysInput = document.getElementById("abx-opt-episode-days");
   if (episodeDaysInput) {
     const days = parseInt(episodeDaysInput.value, 10);
     currentEpisodeDays = isNaN(days) || days < 1 ? 30 : days;
   }
 
-  const modalMinIsolatesInput = document.getElementById('abx-modal-min-isolates');
+  const modalMinIsolatesInput = document.getElementById(
+    "abx-modal-min-isolates",
+  );
   if (modalMinIsolatesInput) {
     const minIso = parseInt(modalMinIsolatesInput.value, 10);
     currentMinIsolates = isNaN(minIso) || minIso < 1 ? 1 : minIso;
-    const barInput = document.getElementById('abx-min-isolates-input');
+    const barInput = document.getElementById("abx-min-isolates-input");
     if (barInput) barInput.value = currentMinIsolates;
   }
 
-  const modalPeriodPreset = document.getElementById('abx-modal-period-preset');
-  const modalStartDate = document.getElementById('abx-modal-start-date');
-  const modalEndDate = document.getElementById('abx-modal-end-date');
+  const modalPeriodPreset = document.getElementById("abx-modal-period-preset");
+  const modalStartDate = document.getElementById("abx-modal-start-date");
+  const modalEndDate = document.getElementById("abx-modal-end-date");
   if (modalPeriodPreset) {
     currentPeriodPreset = modalPeriodPreset.value;
-    const barPreset = document.getElementById('abx-period-preset');
+    const barPreset = document.getElementById("abx-period-preset");
     if (barPreset) barPreset.value = currentPeriodPreset;
   }
   if (modalStartDate && modalEndDate) {
     currentStartDate = modalStartDate.value;
     currentEndDate = modalEndDate.value;
-    const barStart = document.getElementById('abx-start-date');
-    const barEnd = document.getElementById('abx-end-date');
+    const barStart = document.getElementById("abx-start-date");
+    const barEnd = document.getElementById("abx-end-date");
     if (barStart) barStart.value = currentStartDate;
     if (barEnd) barEnd.value = currentEndDate;
   }
 
-  const hideEmptyInput = document.getElementById('abx-modal-hide-empty-abx');
+  const hideEmptyInput = document.getElementById("abx-modal-hide-empty-abx");
   if (hideEmptyInput) {
     hideEmptyAbx = hideEmptyInput.checked;
   }
 
   closeAntibiogramOptionsModal();
-  toast('Antibiogram options updated', 'info');
+  toast("Antibiogram options updated", "info");
   loadAntibiogram();
 }
 
 // ── Export Functions ──
 
 export function exportAntibiogramCsv() {
-  if (!currentReportData || !currentReportData.organisms) return toast('No antibiogram data to export', 'error');
+  if (!currentReportData || !currentReportData.organisms)
+    return toast("No antibiogram data to export", "error");
 
   const { organisms, antibiotics } = currentReportData;
-  const activeOrgs = organisms.filter(o => o.meetsThreshold);
+  const activeOrgs = organisms.filter((o) => o.meetsThreshold);
 
   let activeAbxList = [...antibiotics];
   if (hideEmptyAbx) {
-    activeAbxList = activeAbxList.filter(drug => {
-      return activeOrgs.some(org => {
+    activeAbxList = activeAbxList.filter((drug) => {
+      return activeOrgs.some((org) => {
         const stats = org.drugStats[drug.code];
         return stats && (stats.testedCount > 0 || stats.isIntrinsic);
       });
     });
   }
 
-  const metricLabel = currentMetric === 'R' ? '% Resistant' : '% Susceptible';
-  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...activeAbxList.map(a => `${a.name} (${a.code}${a.isUrineOnly ? ' - Urine Only' : ''}) [${metricLabel}]`)];
-  const rows = [headers.join(',')];
+  if (currentGroupingMode === "class") {
+    activeAbxList.sort(
+      (a, b) =>
+        (a.class || "Other").localeCompare(b.class || "Other") ||
+        a.name.localeCompare(b.name),
+    );
+  } else if (currentGroupingMode === "aware") {
+    activeAbxList.sort(
+      (a, b) =>
+        ((AWARE_ORDER[a.aware || getAwareCategory(a.code)] || 4) -
+          (AWARE_ORDER[b.aware || getAwareCategory(b.code)] || 4)) ||
+        (a.class || "Other").localeCompare(b.class || "Other") ||
+        a.name.localeCompare(b.name),
+    );
+  } else {
+    activeAbxList.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const metricLabel = currentMetric === "R" ? "% Resistant" : "% Susceptible";
+  let colHeaders = [];
+  if (currentGroupingMode === "aware") {
+    colHeaders = activeAbxList.map(
+      (a) =>
+        `[WHO ${(a.aware || getAwareCategory(a.code)).toUpperCase()}] ${a.name} (${a.code}${a.isUrineOnly ? " - Urine Only" : ""}) [${metricLabel}]`,
+    );
+  } else if (currentGroupingMode === "class") {
+    colHeaders = activeAbxList.map(
+      (a) =>
+        `[${a.class || "Other"}] ${a.name} (${a.code}${a.isUrineOnly ? " - Urine Only" : ""}) [${metricLabel}]`,
+    );
+  } else {
+    colHeaders = activeAbxList.map(
+      (a) =>
+        `${a.name} (${a.code}${a.isUrineOnly ? " - Urine Only" : ""}) [${metricLabel}]`,
+    );
+  }
+  const headers = [
+    "Organism Code",
+    "Organism Name",
+    "Total Isolates (N)",
+    ...colHeaders,
+  ];
+  const rows = [headers.join(",")];
 
   for (const org of activeOrgs) {
     const row = [
       `"${org.orgCode}"`,
       `"${org.orgName.replace(/"/g, '""')}"`,
-      org.totalCount
+      org.totalCount,
     ];
     for (const drug of activeAbxList) {
       const stats = org.drugStats[drug.code];
       if (!stats) row.push('""');
-      else if (stats.isIntrinsic) row.push(currentMetric === 'R' ? '"100% (R)"' : '"R"');
-      else row.push(currentMetric === 'R' ? `"${stats.pctR}%"` : `"${stats.pctS}%"`);
+      else if (stats.isIntrinsic)
+        row.push(currentMetric === "R" ? '"100% (R)"' : '"R"');
+      else
+        row.push(
+          currentMetric === "R" ? `"${stats.pctR}%"` : `"${stats.pctS}%"`,
+        );
     }
-    rows.push(row.join(','));
+    rows.push(row.join(","));
   }
 
-  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
-  a.download = `Antibiogram_${state.currentDb || 'WHONET'}_${currentDedupMode}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `Antibiogram_${state.currentDb || "WHONET"}_${currentDedupMode}_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  toast('Antibiogram CSV exported successfully!', 'success');
+  toast("Antibiogram CSV exported successfully!", "success");
 }
 
 export function copyAntibiogramTsv() {
-  if (!currentReportData || !currentReportData.organisms) return toast('No antibiogram data to copy', 'error');
+  if (!currentReportData || !currentReportData.organisms)
+    return toast("No antibiogram data to copy", "error");
 
   const { organisms, antibiotics } = currentReportData;
-  const activeOrgs = organisms.filter(o => o.meetsThreshold);
+  const activeOrgs = organisms.filter((o) => o.meetsThreshold);
 
   let activeAbxList = [...antibiotics];
   if (hideEmptyAbx) {
-    activeAbxList = activeAbxList.filter(drug => {
-      return activeOrgs.some(org => {
+    activeAbxList = activeAbxList.filter((drug) => {
+      return activeOrgs.some((org) => {
         const stats = org.drugStats[drug.code];
         return stats && (stats.testedCount > 0 || stats.isIntrinsic);
       });
     });
   }
 
-  const metricLabel = currentMetric === 'R' ? '%R' : '%S';
-  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...activeAbxList.map(a => `${a.name} (${a.code}${a.isUrineOnly ? ' - Urine' : ''}) ${metricLabel}`)];
-  const rows = [headers.join('\t')];
+  if (currentGroupingMode === "class") {
+    activeAbxList.sort(
+      (a, b) =>
+        (a.class || "Other").localeCompare(b.class || "Other") ||
+        a.name.localeCompare(b.name),
+    );
+  } else if (currentGroupingMode === "aware") {
+    activeAbxList.sort(
+      (a, b) =>
+        ((AWARE_ORDER[a.aware || getAwareCategory(a.code)] || 4) -
+          (AWARE_ORDER[b.aware || getAwareCategory(b.code)] || 4)) ||
+        (a.class || "Other").localeCompare(b.class || "Other") ||
+        a.name.localeCompare(b.name),
+    );
+  } else {
+    activeAbxList.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const metricLabel = currentMetric === "R" ? "%R" : "%S";
+  let rows = [];
+
+  if (currentGroupingMode === "aware") {
+    // 3-row header for Excel: Row 1 = WHO AWaRe Group, Row 2 = Drug Class, Row 3 = Drug Name & Code
+    const awareRow = [
+      "Organism Code",
+      "Organism Name",
+      "Total Isolates (N)",
+      ...activeAbxList.map(
+        (a) => `WHO ${(a.aware || getAwareCategory(a.code)).toUpperCase()}`,
+      ),
+    ];
+    const classRow = [
+      "",
+      "",
+      "",
+      ...activeAbxList.map((a) => a.class || "Other"),
+    ];
+    const nameRow = [
+      "",
+      "",
+      "",
+      ...activeAbxList.map(
+        (a) =>
+          `${a.name} (${a.code}${a.isUrineOnly ? " - Urine" : ""}) ${metricLabel}`,
+      ),
+    ];
+    rows = [awareRow.join("\t"), classRow.join("\t"), nameRow.join("\t")];
+  } else if (currentGroupingMode === "class") {
+    // 2-row header for Excel: Row 1 = Drug Class, Row 2 = Drug Name & Code
+    const classRow = [
+      "Organism Code",
+      "Organism Name",
+      "Total Isolates (N)",
+      ...activeAbxList.map((a) => a.class || "Other"),
+    ];
+    const nameRow = [
+      "",
+      "",
+      "",
+      ...activeAbxList.map(
+        (a) =>
+          `${a.name} (${a.code}${a.isUrineOnly ? " - Urine" : ""}) ${metricLabel}`,
+      ),
+    ];
+    rows = [classRow.join("\t"), nameRow.join("\t")];
+  } else {
+    const headers = [
+      "Organism Code",
+      "Organism Name",
+      "Total Isolates (N)",
+      ...activeAbxList.map(
+        (a) =>
+          `${a.name} (${a.code}${a.isUrineOnly ? " - Urine" : ""}) ${metricLabel}`,
+      ),
+    ];
+    rows = [headers.join("\t")];
+  }
 
   for (const org of activeOrgs) {
     const row = [org.orgCode, org.orgName, org.totalCount];
     for (const drug of activeAbxList) {
       const stats = org.drugStats[drug.code];
-      if (!stats) row.push('');
-      else if (stats.isIntrinsic) row.push(currentMetric === 'R' ? '100% (R)' : 'R');
-      else row.push(currentMetric === 'R' ? `${stats.pctR}%` : `${stats.pctS}%`);
+      if (!stats) row.push("");
+      else if (stats.isIntrinsic)
+        row.push(currentMetric === "R" ? "100% (R)" : "R");
+      else
+        row.push(currentMetric === "R" ? `${stats.pctR}%` : `${stats.pctS}%`);
     }
-    rows.push(row.join('\t'));
+    rows.push(row.join("\t"));
   }
 
-  navigator.clipboard.writeText(rows.join('\n'))
-    .then(() => toast('Antibiogram table copied to clipboard (ready to paste into Excel or Word)', 'success'))
-    .catch(() => toast('Could not copy to clipboard', 'error'));
+  navigator.clipboard
+    .writeText(rows.join("\n"))
+    .then(() =>
+      toast(
+        "Antibiogram table copied to clipboard (ready to paste into Excel or Word)",
+        "success",
+      ),
+    )
+    .catch(() => toast("Could not copy to clipboard", "error"));
 }
 
 // ── Organism Susceptibility Spectrum Chart (%S / %I / %R) ──
@@ -683,79 +1105,106 @@ let activeSpectrumOrgCode = null;
 
 export function openOrganismSpectrumModal(orgCode) {
   if (!currentReportData || !currentReportData.organisms) {
-    return toast('Please generate or load an antibiogram first', 'warning');
+    return toast("Please generate or load an antibiogram first", "warning");
   }
-  const org = currentReportData.organisms.find(o => o.orgCode.toLowerCase() === (orgCode || '').toLowerCase());
-  if (!org) return toast(`Organism data for '${orgCode}' not found`, 'error');
+  const org = currentReportData.organisms.find(
+    (o) => o.orgCode.toLowerCase() === (orgCode || "").toLowerCase(),
+  );
+  if (!org) return toast(`Organism data for '${orgCode}' not found`, "error");
 
   activeSpectrumOrgCode = orgCode;
 
-  const modal = document.getElementById('organism-spectrum-modal');
+  const modal = document.getElementById("organism-spectrum-modal");
   if (!modal) {
-    console.error('Modal #organism-spectrum-modal not found');
+    console.error("Modal #organism-spectrum-modal not found");
     return;
   }
 
-  const titleEl = document.getElementById('spectrum-modal-title');
-  const subtitleEl = document.getElementById('spectrum-modal-subtitle');
+  const titleEl = document.getElementById("spectrum-modal-title");
+  const subtitleEl = document.getElementById("spectrum-modal-subtitle");
   if (titleEl) {
     titleEl.textContent = `${org.orgName} (${org.orgCode.toUpperCase()})`;
   }
   if (subtitleEl) {
-    subtitleEl.textContent = `Analyzed: ${org.totalCount} isolates • Guideline: ${currentReportData.guideline || 'CLSI'} • AMRIE Interpretation`;
+    subtitleEl.textContent = `Analyzed: ${org.totalCount} isolates • Guideline: ${currentReportData.guideline || "CLSI"} • AMRIE Interpretation`;
   }
 
-  modal.classList.add('open');
+  modal.classList.add("open");
+  const modalBody = modal.querySelector(".modal-body");
+  if (modalBody) {
+    modalBody.scrollTop = 0;
+    modalBody.scrollLeft = 0;
+  }
   requestAnimationFrame(() => {
     renderOrganismSpectrumChart();
   });
 }
 
 export function closeOrganismSpectrumModal() {
-  const modal = document.getElementById('organism-spectrum-modal');
+  const modal = document.getElementById("organism-spectrum-modal");
   if (modal) {
-    modal.classList.remove('open');
+    modal.classList.remove("open");
   }
   if (spectrumChartInstance) {
-    try { spectrumChartInstance.destroy(); } catch (_) {}
+    try {
+      spectrumChartInstance.destroy();
+    } catch (_) {}
     spectrumChartInstance = null;
   }
   activeSpectrumOrgCode = null;
 }
 
 export function renderOrganismSpectrumChart() {
-  if (!activeSpectrumOrgCode || !currentReportData || !currentReportData.organisms) return;
-  const org = currentReportData.organisms.find(o => o.orgCode.toLowerCase() === activeSpectrumOrgCode.toLowerCase());
+  if (
+    !activeSpectrumOrgCode ||
+    !currentReportData ||
+    !currentReportData.organisms
+  )
+    return;
+  const org = currentReportData.organisms.find(
+    (o) => o.orgCode.toLowerCase() === activeSpectrumOrgCode.toLowerCase(),
+  );
   if (!org) return;
 
-  const sortSelect = document.getElementById('spectrum-sort-select');
-  const sortMode = sortSelect ? sortSelect.value : 'susc_desc';
-  const hideUntested = document.getElementById('spectrum-hide-untested')?.checked ?? true;
-  const metric = document.getElementById('spectrum-metric-select')?.value || 'all';
-  const orientation = document.getElementById('spectrum-orientation-select')?.value || 'horizontal';
-  const isVertical = orientation === 'vertical';
+  const sortSelect = document.getElementById("spectrum-sort-select");
+  const sortMode = sortSelect ? sortSelect.value : "class";
+  const hideUntested =
+    document.getElementById("spectrum-hide-untested")?.checked ?? true;
+  const metric =
+    document.getElementById("spectrum-metric-select")?.value || "all";
+  const orientation =
+    document.getElementById("spectrum-orientation-select")?.value ||
+    "horizontal";
+  const isVertical = orientation === "vertical";
 
   const allAntibiotics = currentReportData.antibiotics || [];
 
   // Update dynamic modal subtitle & legend badges based on selected metric
-  const subtitleEl = document.getElementById('spectrum-modal-subtitle');
+  const subtitleEl = document.getElementById("spectrum-modal-subtitle");
   if (subtitleEl) {
-    const metricText = metric === 'S'
-      ? '% Susceptible (%S) Profile'
-      : metric === 'R'
-      ? '% Resistant (%R) Profile'
-      : 'Cumulative AST Profile (%S / %I / %R)';
-    subtitleEl.textContent = `${metricText} • Analyzed: ${org.totalCount} isolates • Guideline: ${currentReportData.guideline || 'CLSI'} • AMRIE Interpretation`;
+    const metricText =
+      metric === "S"
+        ? "% Susceptible (%S) Profile"
+        : metric === "R"
+          ? "% Resistant (%R) Profile"
+          : "Cumulative AST Profile (%S / %I / %R)";
+    subtitleEl.textContent = `${metricText} • Analyzed: ${org.totalCount} isolates • Guideline: ${currentReportData.guideline || "CLSI"} • AMRIE Interpretation`;
   }
 
-  const bS = document.getElementById('spectrum-badge-s');
-  const bI = document.getElementById('spectrum-badge-i');
-  const bR = document.getElementById('spectrum-badge-r');
-  const bIntr = document.getElementById('spectrum-badge-intrinsic');
-  if (bS) bS.style.display = (metric === 'all' || metric === 'S') ? 'inline-flex' : 'none';
-  if (bI) bI.style.display = (metric === 'all') ? 'inline-flex' : 'none';
-  if (bR) bR.style.display = (metric === 'all' || metric === 'R') ? 'inline-flex' : 'none';
-  if (bIntr) bIntr.style.display = (metric === 'all' || metric === 'R') ? 'inline-flex' : 'none';
+  const bS = document.getElementById("spectrum-badge-s");
+  const bI = document.getElementById("spectrum-badge-i");
+  const bR = document.getElementById("spectrum-badge-r");
+  const bIntr = document.getElementById("spectrum-badge-intrinsic");
+  if (bS)
+    bS.style.display =
+      metric === "all" || metric === "S" ? "inline-flex" : "none";
+  if (bI) bI.style.display = metric === "all" ? "inline-flex" : "none";
+  if (bR)
+    bR.style.display =
+      metric === "all" || metric === "R" ? "inline-flex" : "none";
+  if (bIntr)
+    bIntr.style.display =
+      metric === "all" || metric === "R" ? "inline-flex" : "none";
 
   // Build drug list for this organism
   let items = [];
@@ -787,8 +1236,9 @@ export function renderOrganismSpectrumChart() {
 
     items.push({
       code: drug.code,
-      name: drug.name || drug.code || 'Unknown',
-      drugClass: drug.class || 'Other',
+      name: drug.name || drug.code || "Unknown",
+      drugClass: drug.class || "Other",
+      aware: drug.aware || getAwareCategory(drug.code),
       isUrineOnly: !!drug.isUrineOnly,
       pctS,
       pctI,
@@ -798,300 +1248,379 @@ export function renderOrganismSpectrumChart() {
       sCount,
       iCount,
       rCount,
-      isTested
+      isTested,
     });
   }
 
   // Sort items according to active sort mode
-  if (sortMode === 'susc_desc') {
+  if (sortMode === "susc_desc") {
     items.sort((a, b) => b.pctS - a.pctS || a.name.localeCompare(b.name));
-  } else if (sortMode === 'susc_asc') {
+  } else if (sortMode === "susc_asc") {
     items.sort((a, b) => a.pctS - b.pctS || a.name.localeCompare(b.name));
-  } else if (sortMode === 'res_desc') {
+  } else if (sortMode === "res_desc") {
     items.sort((a, b) => b.pctR - a.pctR || a.name.localeCompare(b.name));
-  } else if (sortMode === 'res_asc') {
+  } else if (sortMode === "res_asc") {
     items.sort((a, b) => a.pctR - b.pctR || a.name.localeCompare(b.name));
-  } else if (sortMode === 'class') {
-    items.sort((a, b) => a.drugClass.localeCompare(b.drugClass) || (metric === 'R' ? b.pctR - a.pctR : b.pctS - a.pctS) || a.name.localeCompare(b.name));
-  } else if (sortMode === 'alpha') {
+  } else if (sortMode === "class") {
+    items.sort(
+      (a, b) =>
+        a.drugClass.localeCompare(b.drugClass) ||
+        (metric === "R" ? b.pctR - a.pctR : b.pctS - a.pctS) ||
+        a.name.localeCompare(b.name),
+    );
+  } else if (sortMode === "aware") {
+    items.sort(
+      (a, b) =>
+        ((AWARE_ORDER[a.aware] || 4) - (AWARE_ORDER[b.aware] || 4)) ||
+        (metric === "R" ? b.pctR - a.pctR : b.pctS - a.pctS) ||
+        a.drugClass.localeCompare(b.drugClass) ||
+        a.name.localeCompare(b.name),
+    );
+  } else if (sortMode === "alpha") {
     items.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  const statsEl = document.getElementById('spectrum-modal-stats');
+  const statsEl = document.getElementById("spectrum-modal-stats");
   if (statsEl) {
-    const testedDrugsCount = items.filter(i => i.isTested).length;
+    const testedDrugsCount = items.filter((i) => i.isTested).length;
     statsEl.textContent = `Displaying ${items.length} antimicrobial agents (${testedDrugsCount} tested on this species, N = ${org.totalCount} isolates)`;
   }
 
-  const canvas = document.getElementById('spectrum-chart-canvas');
-  const container = document.getElementById('spectrum-canvas-container');
+  const canvas = document.getElementById("spectrum-chart-canvas");
+  const container = document.getElementById("spectrum-canvas-container");
   if (!canvas || !container) return;
 
   // Dynamically size container based on orientation so all bars and labels have generous room
+  container.style.flexShrink = "0";
+  container.style.flexGrow = "0";
+  const isHierarchicalSort = sortMode === "class" || sortMode === "aware";
+  const rowHeight = sortMode === "aware" ? 56 : (sortMode === "class" ? 48 : 44);
   if (isVertical) {
-    const minWidth = Math.max(760, items.length * 38 + 60);
+    const colWidth = sortMode === "aware" ? 72 : (sortMode === "class" ? 64 : 60);
+    const minWidth = Math.max(850, items.length * colWidth + 140);
     container.style.width = `${minWidth}px`;
-    container.style.height = '480px';
+    container.style.minWidth = `${minWidth}px`;
+    container.style.maxWidth = "none";
+    container.style.height = "520px";
+    container.style.minHeight = "520px";
   } else {
-    container.style.width = '100%';
-    const dynamicHeight = Math.max(420, items.length * 36 + 60);
+    // 56px per row for 3-line AWaRe, 48px for 2-line class, ensures room for labels + generous bar spacing
+    const dynamicHeight = Math.max(480, items.length * rowHeight + 90);
+    container.style.width = "100%";
+    container.style.minWidth = "100%";
+    container.style.maxWidth = "100%";
     container.style.height = `${dynamicHeight}px`;
+    container.style.minHeight = `${dynamicHeight}px`;
   }
 
-  if (typeof Chart === 'undefined') {
-    console.warn('Chart.js is not loaded');
+  if (typeof Chart === "undefined") {
+    console.warn("Chart.js is not loaded");
     return;
   }
 
   if (spectrumChartInstance) {
-    try { spectrumChartInstance.destroy(); } catch (_) {}
+    try {
+      spectrumChartInstance.destroy();
+    } catch (_) {}
     spectrumChartInstance = null;
   }
 
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const textColor = isDark ? '#e2e8f0' : '#334155';
-  const mutedColor = isDark ? '#94a3b8' : '#64748b';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.8)';
-  const tooltipBg = isDark ? 'rgba(18, 24, 38, 0.96)' : 'rgba(15, 23, 42, 0.95)';
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const textColor = isDark ? "#e2e8f0" : "#334155";
+  const mutedColor = isDark ? "#94a3b8" : "#64748b";
+  const gridColor = isDark
+    ? "rgba(255, 255, 255, 0.08)"
+    : "rgba(226, 232, 240, 0.8)";
+  const tooltipBg = isDark
+    ? "rgba(18, 24, 38, 0.96)"
+    : "rgba(15, 23, 42, 0.95)";
 
-  const labels = items.map(d => {
-    let lbl = d.name || d.code || 'Unknown';
-    if (d.isUrineOnly) lbl += ' [Urine]';
-    return lbl;
+  const labels = items.map((d) => {
+    const nameCode = `${d.name || d.code || "Unknown"} (${d.code})${d.isUrineOnly ? " [Urine]" : ""}`;
+    if (sortMode === "class") {
+      // 2-line label: Top line for drug class, bottom line for name/code
+      return [d.drugClass || "Other", nameCode];
+    }
+    if (sortMode === "aware") {
+      // 3-line label: Line 1 = WHO AWaRe, Line 2 = Drug Class, Line 3 = Name/Code
+      return [`[WHO ${(d.aware || "OTHER").toUpperCase()}]`, d.drugClass || "Other", nameCode];
+    }
+    return nameCode;
   });
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
 
-  const rBgColors = items.map(d => d.isIntrinsic ? '#991b1b' : '#ef4444');
-  const rBorderColors = items.map(d => d.isIntrinsic ? '#7f1d1d' : '#dc2626');
+  const rBgColors = items.map((d) => (d.isIntrinsic ? "#991b1b" : "#ef4444"));
+  const rBorderColors = items.map((d) =>
+    d.isIntrinsic ? "#7f1d1d" : "#dc2626",
+  );
+
+  // Spacing parameters: categoryPercentage & barPercentage ensure ~44% whitespace between bars
+  const maxBarThick = isVertical ? 26 : 20;
+  const catPct = 0.68;
+  const barPct = 0.82;
 
   // Build datasets according to metric mode
   let datasets = [];
-  if (metric === 'all') {
+  if (metric === "all") {
     datasets = [
       {
-        label: '% Susceptible (%S)',
-        data: items.map(d => d.pctS),
-        backgroundColor: '#10b981',
-        borderColor: '#059669',
+        label: "% Susceptible (%S)",
+        data: items.map((d) => d.pctS),
+        backgroundColor: "#10b981",
+        borderColor: "#059669",
         borderWidth: 1,
-        hoverBackgroundColor: '#059669',
-        barThickness: isVertical ? 20 : 16,
-        maxBarThickness: isVertical ? 26 : 18,
+        hoverBackgroundColor: "#059669",
+        maxBarThickness: maxBarThick,
+        categoryPercentage: catPct,
+        barPercentage: barPct,
         borderRadius: isVertical
           ? { topLeft: 0, topRight: 0, bottomLeft: 4, bottomRight: 4 }
-          : { topLeft: 4, bottomLeft: 4, topRight: 0, bottomRight: 0 }
+          : { topLeft: 4, bottomLeft: 4, topRight: 0, bottomRight: 0 },
       },
       {
-        label: '% Intermediate / SDD (%I)',
-        data: items.map(d => d.pctI),
-        backgroundColor: '#f59e0b',
-        borderColor: '#d97706',
+        label: "% Intermediate / SDD (%I)",
+        data: items.map((d) => d.pctI),
+        backgroundColor: "#f59e0b",
+        borderColor: "#d97706",
         borderWidth: 1,
-        hoverBackgroundColor: '#d97706',
-        barThickness: isVertical ? 20 : 16,
-        maxBarThickness: isVertical ? 26 : 18,
-        borderRadius: 0
+        hoverBackgroundColor: "#d97706",
+        maxBarThickness: maxBarThick,
+        categoryPercentage: catPct,
+        barPercentage: barPct,
+        borderRadius: 0,
       },
       {
-        label: '% Resistant (%R)',
-        data: items.map(d => d.pctR),
+        label: "% Resistant (%R)",
+        data: items.map((d) => d.pctR),
         backgroundColor: rBgColors,
         borderColor: rBorderColors,
         borderWidth: 1,
-        hoverBackgroundColor: '#dc2626',
-        barThickness: isVertical ? 20 : 16,
-        maxBarThickness: isVertical ? 26 : 18,
+        hoverBackgroundColor: "#dc2626",
+        maxBarThickness: maxBarThick,
+        categoryPercentage: catPct,
+        barPercentage: barPct,
         borderRadius: isVertical
           ? { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 }
-          : { topRight: 4, bottomRight: 4, topLeft: 0, bottomLeft: 0 }
-      }
+          : { topRight: 4, bottomRight: 4, topLeft: 0, bottomLeft: 0 },
+      },
     ];
-  } else if (metric === 'S') {
+  } else if (metric === "S") {
     datasets = [
       {
-        label: '% Susceptible (%S)',
-        data: items.map(d => d.pctS),
-        backgroundColor: '#10b981',
-        borderColor: '#059669',
+        label: "% Susceptible (%S)",
+        data: items.map((d) => d.pctS),
+        backgroundColor: "#10b981",
+        borderColor: "#059669",
         borderWidth: 1,
-        hoverBackgroundColor: '#059669',
-        barThickness: isVertical ? 22 : 16,
-        maxBarThickness: isVertical ? 28 : 20,
-        borderRadius: 4
-      }
+        hoverBackgroundColor: "#059669",
+        maxBarThickness: maxBarThick,
+        categoryPercentage: catPct,
+        barPercentage: barPct,
+        borderRadius: 4,
+      },
     ];
-  } else if (metric === 'R') {
+  } else if (metric === "R") {
     datasets = [
       {
-        label: '% Resistant (%R)',
-        data: items.map(d => d.pctR),
+        label: "% Resistant (%R)",
+        data: items.map((d) => d.pctR),
         backgroundColor: rBgColors,
         borderColor: rBorderColors,
         borderWidth: 1,
-        hoverBackgroundColor: '#dc2626',
-        barThickness: isVertical ? 22 : 16,
-        maxBarThickness: isVertical ? 28 : 20,
-        borderRadius: 4
-      }
+        hoverBackgroundColor: "#dc2626",
+        maxBarThickness: maxBarThick,
+        categoryPercentage: catPct,
+        barPercentage: barPct,
+        borderRadius: 4,
+      },
     ];
   }
 
-  const isStacked = metric === 'all';
+  const isStacked = metric === "all";
 
-  const scales = isVertical ? {
-    x: {
-      stacked: isStacked,
-      grid: { display: false },
-      ticks: {
-        autoSkip: false,
-        maxRotation: 55,
-        minRotation: 45,
-        color: textColor,
-        font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' },
-        padding: 6
+  const scales = isVertical
+    ? {
+        x: {
+          stacked: isStacked,
+          grid: { display: false },
+          ticks: {
+            autoSkip: false,
+            maxRotation: 45,
+            minRotation: 45,
+            color: textColor,
+            font: { family: "Plus Jakarta Sans", size: 11.5, weight: "600" },
+            padding: 8,
+          },
+        },
+        y: {
+          stacked: isStacked,
+          min: 0,
+          max: 100,
+          grid: { color: gridColor },
+          ticks: {
+            color: mutedColor,
+            font: { family: "JetBrains Mono", size: 11, weight: "500" },
+            callback: (v) => `${v}%`,
+          },
+          title: {
+            display: true,
+            text:
+              metric === "S"
+                ? "% Susceptible"
+                : metric === "R"
+                  ? "% Resistant"
+                  : "% Susceptible / Intermediate / Resistant",
+            color: mutedColor,
+            font: { family: "Plus Jakarta Sans", size: 11, weight: "600" },
+          },
+        },
       }
-    },
-    y: {
-      stacked: isStacked,
-      min: 0,
-      max: 100,
-      grid: { color: gridColor },
-      ticks: {
-        color: mutedColor,
-        font: { family: 'JetBrains Mono', size: 11, weight: '500' },
-        callback: v => `${v}%`
-      },
-      title: {
-        display: true,
-        text: metric === 'S' ? '% Susceptible' : metric === 'R' ? '% Resistant' : '% Susceptible / Intermediate / Resistant',
-        color: mutedColor,
-        font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' }
-      }
-    }
-  } : {
-    x: {
-      stacked: isStacked,
-      min: 0,
-      max: 100,
-      grid: { color: gridColor },
-      ticks: {
-        color: mutedColor,
-        font: { family: 'JetBrains Mono', size: 11, weight: '500' },
-        callback: v => `${v}%`
-      }
-    },
-    y: {
-      stacked: isStacked,
-      grid: { display: false },
-      ticks: {
-        autoSkip: false,
-        color: textColor,
-        font: { family: 'Plus Jakarta Sans', size: 11.5, weight: '600' },
-        padding: 8
-      }
-    }
-  };
+    : {
+        x: {
+          stacked: isStacked,
+          min: 0,
+          max: 100,
+          grid: { color: gridColor },
+          ticks: {
+            color: mutedColor,
+            font: { family: "JetBrains Mono", size: 11, weight: "500" },
+            callback: (v) => `${v}%`,
+          },
+        },
+        y: {
+          stacked: isStacked,
+          grid: { display: false },
+          ticks: {
+            autoSkip: false,
+            color: textColor,
+            font: { family: "Plus Jakarta Sans", size: 12, weight: "600" },
+            padding: 10,
+          },
+        },
+      };
 
   const layoutPadding = isVertical
     ? { left: 14, right: 20, top: 12, bottom: 16 }
     : { left: 12, right: 24, top: 10, bottom: 12 };
 
   spectrumChartInstance = new Chart(ctx, {
-    type: 'bar',
+    type: "bar",
     data: {
       labels,
-      datasets
+      datasets,
     },
     options: {
-      indexAxis: isVertical ? 'x' : 'y',
+      indexAxis: isVertical ? "x" : "y",
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: 250 },
       layout: {
-        padding: layoutPadding
+        padding: layoutPadding,
       },
       scales,
       plugins: {
         legend: { display: false },
         tooltip: {
           backgroundColor: tooltipBg,
-          titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: 'bold' },
-          bodyFont: { family: 'Plus Jakarta Sans', size: 11.5 },
+          titleFont: { family: "Plus Jakarta Sans", size: 12, weight: "bold" },
+          bodyFont: { family: "Plus Jakarta Sans", size: 11.5 },
           padding: 12,
           cornerRadius: 8,
           callbacks: {
-            title: tooltipItems => {
+            title: (tooltipItems) => {
               const idx = tooltipItems[0].dataIndex;
               const d = items[idx];
-              return `${d.name} (${d.code}) • ${d.drugClass}${d.isUrineOnly ? ' [Urine only]' : ''}`;
+              const awareBadge = d.aware ? ` • WHO ${d.aware}` : "";
+              return `${d.name} (${d.code}) • ${d.drugClass}${awareBadge}${d.isUrineOnly ? " [Urine only]" : ""}`;
             },
-            label: ctx => {
+            label: (ctx) => {
               const idx = ctx.dataIndex;
               const d = items[idx];
-              if (!d.isTested) return 'Untested on this species';
-              if (d.isIntrinsic) return 'CLSI Intrinsic Resistance: Inherently resistant (100% R)';
-              if (metric === 'S') {
+              if (!d.isTested) return "Untested on this species";
+              if (d.isIntrinsic)
+                return "CLSI Intrinsic Resistance: Inherently resistant (100% R)";
+              if (metric === "S") {
                 return `Susceptible (%S): ${d.pctS}% (${d.sCount} / ${d.testedCount} isolates)`;
               }
-              if (metric === 'R') {
+              if (metric === "R") {
                 return `Resistant (%R): ${d.pctR}% (${d.rCount} / ${d.testedCount} isolates)`;
               }
-              if (ctx.datasetIndex === 0) return `Susceptible (%S): ${d.pctS}% (${d.sCount} / ${d.testedCount} isolates)`;
-              if (ctx.datasetIndex === 1) return `Intermediate / SDD (%I): ${d.pctI}% (${d.iCount} / ${d.testedCount} isolates)`;
-              if (ctx.datasetIndex === 2) return `Resistant (%R): ${d.pctR}% (${d.rCount} / ${d.testedCount} isolates)`;
-              return '';
-            }
-          }
-        }
-      }
-    }
+              if (ctx.datasetIndex === 0)
+                return `Susceptible (%S): ${d.pctS}% (${d.sCount} / ${d.testedCount} isolates)`;
+              if (ctx.datasetIndex === 1)
+                return `Intermediate / SDD (%I): ${d.pctI}% (${d.iCount} / ${d.testedCount} isolates)`;
+              if (ctx.datasetIndex === 2)
+                return `Resistant (%R): ${d.pctR}% (${d.rCount} / ${d.testedCount} isolates)`;
+              return "";
+            },
+          },
+        },
+      },
+    },
   });
 }
 
-async function copyCanvasToClipboard(canvas, chartTitle = 'Chart') {
-  if (!canvas) return toast('No chart canvas found', 'error');
+async function copyCanvasToClipboard(canvas, chartTitle = "Chart") {
+  if (!canvas) return toast("No chart canvas found", "error");
 
   try {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const bgColor = isDark ? '#121826' : '#ffffff';
+    const isDark =
+      document.documentElement.getAttribute("data-theme") === "dark";
+    const bgColor = isDark ? "#121826" : "#ffffff";
 
-    const offscreen = document.createElement('canvas');
+    const offscreen = document.createElement("canvas");
     offscreen.width = canvas.width;
     offscreen.height = canvas.height;
-    const ctx = offscreen.getContext('2d');
+    const ctx = offscreen.getContext("2d");
 
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, offscreen.width, offscreen.height);
     ctx.drawImage(canvas, 0, 0);
 
-    const blob = await new Promise((resolve) => offscreen.toBlob(resolve, 'image/png', 1.0));
-    if (!blob) throw new Error('Could not generate image blob');
+    const blob = await new Promise((resolve) =>
+      offscreen.toBlob(resolve, "image/png", 1.0),
+    );
+    if (!blob) throw new Error("Could not generate image blob");
 
-    if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
-      const item = new ClipboardItem({ 'image/png': blob });
+    if (navigator.clipboard && typeof ClipboardItem !== "undefined") {
+      const item = new ClipboardItem({ "image/png": blob });
       await navigator.clipboard.write([item]);
-      toast(`${chartTitle} copied to clipboard! Paste directly into Word or Excel (Ctrl + V)`, 'success');
+      toast(
+        `${chartTitle} copied to clipboard! Paste directly into Word or Excel (Ctrl + V)`,
+        "success",
+      );
     } else {
-      throw new Error('ClipboardItem API not supported in this browser');
+      throw new Error("ClipboardItem API not supported in this browser");
     }
   } catch (err) {
-    console.warn('Could not copy image to clipboard directly:', err);
-    toast('Direct clipboard image copy not supported by your browser. Please use Download PNG.', 'info');
+    console.warn("Could not copy image to clipboard directly:", err);
+    toast(
+      "Direct clipboard image copy not supported by your browser. Please use Download PNG.",
+      "info",
+    );
   }
 }
 
 export function copySpectrumChartData() {
-  if (!activeSpectrumOrgCode || !currentReportData || !currentReportData.organisms) {
-    return toast('No chart data available to copy', 'error');
+  if (
+    !activeSpectrumOrgCode ||
+    !currentReportData ||
+    !currentReportData.organisms
+  ) {
+    return toast("No chart data available to copy", "error");
   }
-  const org = currentReportData.organisms.find(o => o.orgCode.toLowerCase() === activeSpectrumOrgCode.toLowerCase());
-  if (!org) return toast('Organism data not found', 'error');
+  const org = currentReportData.organisms.find(
+    (o) => o.orgCode.toLowerCase() === activeSpectrumOrgCode.toLowerCase(),
+  );
+  if (!org) return toast("Organism data not found", "error");
 
-  const sortSelect = document.getElementById('spectrum-sort-select');
-  const sortMode = sortSelect ? sortSelect.value : 'susc_desc';
-  const hideUntested = document.getElementById('spectrum-hide-untested')?.checked ?? true;
-  const metric = document.getElementById('spectrum-metric-select')?.value || 'all';
+  const sortSelect = document.getElementById("spectrum-sort-select");
+  const sortMode = sortSelect ? sortSelect.value : "class";
+  const hideUntested =
+    document.getElementById("spectrum-hide-untested")?.checked ?? true;
+  const metric =
+    document.getElementById("spectrum-metric-select")?.value || "all";
 
   const allAntibiotics = currentReportData.antibiotics || [];
   let items = [];
@@ -1102,8 +1631,9 @@ export function copySpectrumChartData() {
 
     items.push({
       code: drug.code,
-      name: drug.name || drug.code || 'Unknown',
-      drugClass: drug.class || 'Other',
+      name: drug.name || drug.code || "Unknown",
+      drugClass: drug.class || "Other",
+      aware: drug.aware || getAwareCategory(drug.code),
       isUrineOnly: !!drug.isUrineOnly,
       pctS: stats?.pctS || 0,
       pctI: stats?.pctI || 0,
@@ -1113,149 +1643,248 @@ export function copySpectrumChartData() {
       sCount: stats?.sCount || 0,
       iCount: stats?.iCount || 0,
       rCount: stats?.rCount || 0,
-      isTested
+      isTested,
     });
   }
 
   // Sort identical to chart
-  if (sortMode === 'susc_desc') {
+  if (sortMode === "susc_desc") {
     items.sort((a, b) => b.pctS - a.pctS || a.name.localeCompare(b.name));
-  } else if (sortMode === 'susc_asc') {
+  } else if (sortMode === "susc_asc") {
     items.sort((a, b) => a.pctS - b.pctS || a.name.localeCompare(b.name));
-  } else if (sortMode === 'res_desc') {
+  } else if (sortMode === "res_desc") {
     items.sort((a, b) => b.pctR - a.pctR || a.name.localeCompare(b.name));
-  } else if (sortMode === 'res_asc') {
+  } else if (sortMode === "res_asc") {
     items.sort((a, b) => a.pctR - b.pctR || a.name.localeCompare(b.name));
-  } else if (sortMode === 'class') {
-    items.sort((a, b) => a.drugClass.localeCompare(b.drugClass) || (metric === 'R' ? b.pctR - a.pctR : b.pctS - a.pctS) || a.name.localeCompare(b.name));
-  } else if (sortMode === 'alpha') {
+  } else if (sortMode === "class") {
+    items.sort(
+      (a, b) =>
+        a.drugClass.localeCompare(b.drugClass) ||
+        (metric === "R" ? b.pctR - a.pctR : b.pctS - a.pctS) ||
+        a.name.localeCompare(b.name),
+    );
+  } else if (sortMode === "aware") {
+    items.sort(
+      (a, b) =>
+        ((AWARE_ORDER[a.aware] || 4) - (AWARE_ORDER[b.aware] || 4)) ||
+        (metric === "R" ? b.pctR - a.pctR : b.pctS - a.pctS) ||
+        a.drugClass.localeCompare(b.drugClass) ||
+        a.name.localeCompare(b.name),
+    );
+  } else if (sortMode === "alpha") {
     items.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   if (!items.length) {
-    return toast('No antibiotic data to copy for this selection', 'warning');
+    return toast("No antibiotic data to copy for this selection", "warning");
   }
 
   // Build TSV and HTML table
   let headers = [];
-  if (metric === 'S') {
-    headers = ['Antibiotic', 'Code', 'Class', '% Susceptible (%S)', 'Susceptible (n)', 'Tested (N)'];
-  } else if (metric === 'R') {
-    headers = ['Antibiotic', 'Code', 'Class', '% Resistant (%R)', 'Resistant (n)', 'Tested (N)', 'Intrinsic Resistance'];
+  if (metric === "S") {
+    headers = [
+      "Antibiotic",
+      "Code",
+      "Class",
+      "AWaRe Group",
+      "% Susceptible (%S)",
+      "Susceptible (n)",
+      "Tested (N)",
+    ];
+  } else if (metric === "R") {
+    headers = [
+      "Antibiotic",
+      "Code",
+      "Class",
+      "AWaRe Group",
+      "% Resistant (%R)",
+      "Resistant (n)",
+      "Tested (N)",
+      "Intrinsic Resistance",
+    ];
   } else {
-    headers = ['Antibiotic', 'Code', 'Class', '% Susceptible (%S)', '% Intermediate (%I)', '% Resistant (%R)', 'Tested (N)'];
+    headers = [
+      "Antibiotic",
+      "Code",
+      "Class",
+      "AWaRe Group",
+      "% Susceptible (%S)",
+      "% Intermediate (%I)",
+      "% Resistant (%R)",
+      "Tested (N)",
+    ];
   }
 
-  const tsvRows = [headers.join('\t')];
-  let htmlRows = `<tr>${headers.map(h => `<th style="background:#f1f5f9;border:1px solid #cbd5e1;padding:6px 10px;font-weight:bold;text-align:center;">${h}</th>`).join('')}</tr>`;
+  const tsvRows = [headers.join("\t")];
+  let htmlRows = `<tr>${headers.map((h) => `<th style="background:#f1f5f9;border:1px solid #cbd5e1;padding:6px 10px;font-weight:bold;text-align:center;">${h}</th>`).join("")}</tr>`;
 
   for (const d of items) {
     let drugDisplayName = d.name;
-    if (d.isUrineOnly) drugDisplayName += ' [Urine]';
+    if (d.isUrineOnly) drugDisplayName += " [Urine]";
 
     let row = [];
-    if (metric === 'S') {
-      row = [drugDisplayName, d.code, d.drugClass, `${d.pctS}%`, d.sCount, d.testedCount];
-    } else if (metric === 'R') {
-      row = [drugDisplayName, d.code, d.drugClass, `${d.pctR}%`, d.rCount, d.testedCount, d.isIntrinsic ? 'Yes' : 'No'];
+    if (metric === "S") {
+      row = [
+        drugDisplayName,
+        d.code,
+        d.drugClass,
+        d.aware || "Other",
+        `${d.pctS}%`,
+        d.sCount,
+        d.testedCount,
+      ];
+    } else if (metric === "R") {
+      row = [
+        drugDisplayName,
+        d.code,
+        d.drugClass,
+        d.aware || "Other",
+        `${d.pctR}%`,
+        d.rCount,
+        d.testedCount,
+        d.isIntrinsic ? "Yes" : "No",
+      ];
     } else {
-      row = [drugDisplayName, d.code, d.drugClass, `${d.pctS}%`, `${d.pctI}%`, `${d.pctR}%`, d.testedCount];
+      row = [
+        drugDisplayName,
+        d.code,
+        d.drugClass,
+        d.aware || "Other",
+        `${d.pctS}%`,
+        `${d.pctI}%`,
+        `${d.pctR}%`,
+        d.testedCount,
+      ];
     }
 
-    tsvRows.push(row.join('\t'));
-    htmlRows += `<tr>${row.map(c => `<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:${typeof c === 'number' || (typeof c === 'string' && c.endsWith('%')) ? 'center' : 'left'};">${c}</td>`).join('')}</tr>`;
+    tsvRows.push(row.join("\t"));
+    htmlRows += `<tr>${row.map((c) => `<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:${typeof c === "number" || (typeof c === "string" && c.endsWith("%")) ? "center" : "left"};">${c}</td>`).join("")}</tr>`;
   }
 
-  const tsvText = tsvRows.join('\n');
+  const tsvText = tsvRows.join("\n");
   const htmlTable = `<table border="1" style="border-collapse:collapse;font-family:sans-serif;font-size:12px;">${htmlRows}</table>`;
 
-  if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
-    const textBlob = new Blob([tsvText], { type: 'text/plain' });
-    const htmlBlob = new Blob([htmlTable], { type: 'text/html' });
-    navigator.clipboard.write([
-      new ClipboardItem({
-        'text/plain': textBlob,
-        'text/html': htmlBlob
+  if (navigator.clipboard && typeof ClipboardItem !== "undefined") {
+    const textBlob = new Blob([tsvText], { type: "text/plain" });
+    const htmlBlob = new Blob([htmlTable], { type: "text/html" });
+    navigator.clipboard
+      .write([
+        new ClipboardItem({
+          "text/plain": textBlob,
+          "text/html": htmlBlob,
+        }),
+      ])
+      .then(() => {
+        toast(
+          "Chart data copied to clipboard! Paste into Excel (Ctrl + V) and press Alt + F1 to create a native editable chart.",
+          "success",
+        );
       })
-    ]).then(() => {
-      toast('Chart data copied to clipboard! Paste into Excel (Ctrl + V) and press Alt + F1 to create a native editable chart.', 'success');
-    }).catch(() => {
-      navigator.clipboard.writeText(tsvText)
-        .then(() => toast('Chart data copied to clipboard (TSV format for Excel)', 'success'))
-        .catch(() => toast('Failed to copy data', 'error'));
-    });
+      .catch(() => {
+        navigator.clipboard
+          .writeText(tsvText)
+          .then(() =>
+            toast(
+              "Chart data copied to clipboard (TSV format for Excel)",
+              "success",
+            ),
+          )
+          .catch(() => toast("Failed to copy data", "error"));
+      });
   } else {
-    navigator.clipboard.writeText(tsvText)
-      .then(() => toast('Chart data copied to clipboard (TSV format for Excel)', 'success'))
-      .catch(() => toast('Failed to copy data', 'error'));
+    navigator.clipboard
+      .writeText(tsvText)
+      .then(() =>
+        toast(
+          "Chart data copied to clipboard (TSV format for Excel)",
+          "success",
+        ),
+      )
+      .catch(() => toast("Failed to copy data", "error"));
   }
 }
 
 export function copySpectrumChartImage() {
-  if (!spectrumChartInstance) return toast('No spectrum chart to copy', 'error');
-  const canvas = document.getElementById('spectrum-chart-canvas');
-  const metric = document.getElementById('spectrum-metric-select')?.value || 'all';
-  const metricTitle = metric === 'S' ? '%S' : metric === 'R' ? '%R' : 'Spectrum';
-  copyCanvasToClipboard(canvas, `${activeSpectrumOrgCode || 'Organism'} AST ${metricTitle} Chart`);
+  if (!spectrumChartInstance)
+    return toast("No spectrum chart to copy", "error");
+  const canvas = document.getElementById("spectrum-chart-canvas");
+  const metric =
+    document.getElementById("spectrum-metric-select")?.value || "all";
+  const metricTitle =
+    metric === "S" ? "%S" : metric === "R" ? "%R" : "Spectrum";
+  copyCanvasToClipboard(
+    canvas,
+    `${activeSpectrumOrgCode || "Organism"} AST ${metricTitle} Chart`,
+  );
 }
 
 export function downloadSpectrumChartPng() {
-  if (!spectrumChartInstance) return toast('No spectrum chart to download', 'error');
-  const canvas = document.getElementById('spectrum-chart-canvas');
+  if (!spectrumChartInstance)
+    return toast("No spectrum chart to download", "error");
+  const canvas = document.getElementById("spectrum-chart-canvas");
   if (!canvas) return;
 
-  const metric = document.getElementById('spectrum-metric-select')?.value || 'all';
-  const orientation = document.getElementById('spectrum-orientation-select')?.value || 'horizontal';
+  const metric =
+    document.getElementById("spectrum-metric-select")?.value || "all";
+  const orientation =
+    document.getElementById("spectrum-orientation-select")?.value ||
+    "horizontal";
 
-  const url = canvas.toDataURL('image/png', 1.0);
-  const a = document.createElement('a');
+  const url = canvas.toDataURL("image/png", 1.0);
+  const a = document.createElement("a");
   a.href = url;
-  a.download = `Spectrum_${activeSpectrumOrgCode || 'Organism'}_${metric}_${orientation}_${new Date().toISOString().slice(0, 10)}.png`;
+  a.download = `Spectrum_${activeSpectrumOrgCode || "Organism"}_${metric}_${orientation}_${new Date().toISOString().slice(0, 10)}.png`;
   a.click();
-  toast('Spectrum chart downloaded as PNG image', 'success');
+  toast("Spectrum chart downloaded as PNG image", "success");
 }
 
 // Close spectrum modal on backdrop click
-document.getElementById('organism-spectrum-modal')?.addEventListener('click', (e) => {
-  if (e.target.id === 'organism-spectrum-modal') {
-    closeOrganismSpectrumModal();
-  }
-});
+document
+  .getElementById("organism-spectrum-modal")
+  ?.addEventListener("click", (e) => {
+    if (e.target.id === "organism-spectrum-modal") {
+      closeOrganismSpectrumModal();
+    }
+  });
 
 // ── Longitudinal AMR Trends State & Controller ──
 
-export let currentAntibiogramViewMode = 'table'; // 'table' | 'trends' | 'locations'
-let currentTrendIndicator = 'mrsa'; // 'mrsa' | 'cre' | 'esbl' | 'crab' | 'crpa' | 'vre' | 'fq_gn' | 'custom'
-let currentTrendMetric = 'R'; // 'R' | 'S'
+export let currentAntibiogramViewMode = "table"; // 'table' | 'trends' | 'locations'
+let currentTrendIndicator = "mrsa"; // 'mrsa' | 'cre' | 'esbl' | 'crab' | 'crpa' | 'vre' | 'fq_gn' | 'custom'
+let currentTrendMetric = "R"; // 'R' | 'S'
 let trendChartInstance = null;
 
-let currentLocationMetric = 'S'; // 'S' | 'R'
+let currentLocationMetric = "S"; // 'S' | 'R'
 let currentLocationOrgCode = null;
 let locationChartInstance = null;
 
 export function setAntibiogramViewMode(mode) {
   currentAntibiogramViewMode = mode;
-  const btnTable = document.getElementById('btn-abx-view-table');
-  const btnTrends = document.getElementById('btn-abx-view-trends');
-  const btnLocations = document.getElementById('btn-abx-view-locations');
-  const tableView = document.getElementById('antibiogram-table-view');
-  const trendsView = document.getElementById('antibiogram-trends-view');
-  const locationsView = document.getElementById('antibiogram-locations-view');
-  const btnCopyTable = document.getElementById('btn-abx-copy-table');
+  const btnTable = document.getElementById("btn-abx-view-table");
+  const btnTrends = document.getElementById("btn-abx-view-trends");
+  const btnLocations = document.getElementById("btn-abx-view-locations");
+  const tableView = document.getElementById("antibiogram-table-view");
+  const trendsView = document.getElementById("antibiogram-trends-view");
+  const locationsView = document.getElementById("antibiogram-locations-view");
+  const btnCopyTable = document.getElementById("btn-abx-copy-table");
 
-  if (btnTable) btnTable.classList.toggle('active', mode === 'table');
-  if (btnTrends) btnTrends.classList.toggle('active', mode === 'trends');
-  if (btnLocations) btnLocations.classList.toggle('active', mode === 'locations');
+  if (btnTable) btnTable.classList.toggle("active", mode === "table");
+  if (btnTrends) btnTrends.classList.toggle("active", mode === "trends");
+  if (btnLocations)
+    btnLocations.classList.toggle("active", mode === "locations");
 
-  if (tableView) tableView.style.display = mode === 'table' ? 'block' : 'none';
-  if (trendsView) trendsView.style.display = mode === 'trends' ? 'block' : 'none';
-  if (locationsView) locationsView.style.display = mode === 'locations' ? 'block' : 'none';
+  if (tableView) tableView.style.display = mode === "table" ? "block" : "none";
+  if (trendsView)
+    trendsView.style.display = mode === "trends" ? "block" : "none";
+  if (locationsView)
+    locationsView.style.display = mode === "locations" ? "block" : "none";
 
-  if (btnCopyTable) btnCopyTable.style.display = mode === 'table' ? 'inline-flex' : 'none';
+  if (btnCopyTable)
+    btnCopyTable.style.display = mode === "table" ? "inline-flex" : "none";
 
-  if (mode === 'trends') {
+  if (mode === "trends") {
     renderAmrTrendChart();
-  } else if (mode === 'locations') {
+  } else if (mode === "locations") {
     populateLocationOrgDropdown();
     renderLocationStratificationChart();
   }
@@ -1263,14 +1892,18 @@ export function setAntibiogramViewMode(mode) {
 
 export function setAmrTrendIndicator(indicator) {
   currentTrendIndicator = indicator;
-  document.querySelectorAll('.abx-trend-pill').forEach(btn => {
-    btn.classList.toggle('active', btn.id === `pill-trend-${indicator}` || (indicator === 'fq_gn' && btn.id === 'pill-trend-fq'));
+  document.querySelectorAll(".abx-trend-pill").forEach((btn) => {
+    btn.classList.toggle(
+      "active",
+      btn.id === `pill-trend-${indicator}` ||
+        (indicator === "fq_gn" && btn.id === "pill-trend-fq"),
+    );
   });
 
-  const customRow = document.getElementById('trend-custom-controls');
+  const customRow = document.getElementById("trend-custom-controls");
   if (customRow) {
-    customRow.style.display = indicator === 'custom' ? 'flex' : 'none';
-    if (indicator === 'custom') {
+    customRow.style.display = indicator === "custom" ? "flex" : "none";
+    if (indicator === "custom") {
       populateTrendCustomDropdowns();
     }
   }
@@ -1280,29 +1913,35 @@ export function setAmrTrendIndicator(indicator) {
 
 export function setTrendMetric(metric) {
   currentTrendMetric = metric;
-  const btnR = document.getElementById('btn-trend-metric-r');
-  const btnS = document.getElementById('btn-trend-metric-s');
-  if (btnR) btnR.classList.toggle('active', metric === 'R');
-  if (btnS) btnS.classList.toggle('active', metric === 'S');
+  const btnR = document.getElementById("btn-trend-metric-r");
+  const btnS = document.getElementById("btn-trend-metric-s");
+  if (btnR) btnR.classList.toggle("active", metric === "R");
+  if (btnS) btnS.classList.toggle("active", metric === "S");
   renderAmrTrendChart();
 }
 
 function populateTrendCustomDropdowns() {
   if (!currentReportData) return;
-  const orgSel = document.getElementById('trend-custom-org-select');
-  const abxSel = document.getElementById('trend-custom-abx-select');
+  const orgSel = document.getElementById("trend-custom-org-select");
+  const abxSel = document.getElementById("trend-custom-abx-select");
   if (!orgSel || !abxSel) return;
 
   if (orgSel.options.length === 0 && currentReportData.organisms) {
-    orgSel.innerHTML = currentReportData.organisms.map(o =>
-      `<option value="${o.orgCode}">${escapeHtml(o.orgName)} (${o.orgCode})</option>`
-    ).join('');
+    orgSel.innerHTML = currentReportData.organisms
+      .map(
+        (o) =>
+          `<option value="${o.orgCode}">${escapeHtml(o.orgName)} (${o.orgCode})</option>`,
+      )
+      .join("");
   }
 
   if (abxSel.options.length === 0 && currentReportData.antibiotics) {
-    abxSel.innerHTML = currentReportData.antibiotics.map(a =>
-      `<option value="${a.code}">${escapeHtml(a.name)} (${a.code})</option>`
-    ).join('');
+    abxSel.innerHTML = currentReportData.antibiotics
+      .map(
+        (a) =>
+          `<option value="${a.code}">${escapeHtml(a.name)} (${a.code})</option>`,
+      )
+      .join("");
   }
 }
 
@@ -1310,86 +1949,87 @@ export function renderAmrTrendChart() {
   const trends = currentReportData?.trends;
   const monthlyList = trends?.monthly || [];
 
-  const canvas = document.getElementById('amr-trends-chart-canvas');
+  const canvas = document.getElementById("amr-trends-chart-canvas");
   if (!canvas) return;
 
-  if (typeof Chart === 'undefined') {
-    console.warn('Chart.js is not loaded');
+  if (typeof Chart === "undefined") {
+    console.warn("Chart.js is not loaded");
     return;
   }
 
-  const headingEl = document.getElementById('trend-chart-heading');
-  const subEl = document.getElementById('trend-chart-sub');
-  const dateBadge = document.getElementById('trend-date-range-badge');
-  const kpiTested = document.getElementById('trend-kpi-tested');
-  const kpiTestedSub = document.getElementById('trend-kpi-tested-sub');
-  const kpiAvg = document.getElementById('trend-kpi-avg');
-  const kpiAvgSub = document.getElementById('trend-kpi-avg-sub');
-  const kpiLatest = document.getElementById('trend-kpi-latest');
-  const kpiLatestSub = document.getElementById('trend-kpi-latest-sub');
-  const kpiStatus = document.getElementById('trend-kpi-status');
-  const kpiStatusSub = document.getElementById('trend-kpi-status-sub');
-  const tableBody = document.getElementById('trend-table-body');
+  const headingEl = document.getElementById("trend-chart-heading");
+  const subEl = document.getElementById("trend-chart-sub");
+  const dateBadge = document.getElementById("trend-date-range-badge");
+  const kpiTested = document.getElementById("trend-kpi-tested");
+  const kpiTestedSub = document.getElementById("trend-kpi-tested-sub");
+  const kpiAvg = document.getElementById("trend-kpi-avg");
+  const kpiAvgSub = document.getElementById("trend-kpi-avg-sub");
+  const kpiLatest = document.getElementById("trend-kpi-latest");
+  const kpiLatestSub = document.getElementById("trend-kpi-latest-sub");
+  const kpiStatus = document.getElementById("trend-kpi-status");
+  const kpiStatusSub = document.getElementById("trend-kpi-status-sub");
+  const tableBody = document.getElementById("trend-table-body");
 
-  const locFilter = document.getElementById('trend-location-filter')?.value || 'all';
+  const locFilter =
+    document.getElementById("trend-location-filter")?.value || "all";
 
   const INDICATOR_META = {
     mrsa: {
-      title: 'Methicillin-Resistant Staphylococcus aureus (MRSA)',
-      pathogen: 'S. aureus',
-      agents: 'Cefoxitin / Oxacillin',
-      whoStatus: 'High Priority (WHO Priority 2)',
-      whoColor: '#f59e0b'
+      title: "Methicillin-Resistant Staphylococcus aureus (MRSA)",
+      pathogen: "S. aureus",
+      agents: "Cefoxitin / Oxacillin",
+      whoStatus: "High Priority (WHO Priority 2)",
+      whoColor: "#f59e0b",
     },
     cre: {
-      title: 'Carbapenem-Resistant Enterobacterales (CRE)',
-      pathogen: 'E. coli, K. pneumoniae, Enterobacter spp.',
-      agents: 'Meropenem, Imipenem, Ertapenem',
-      whoStatus: 'Critical Priority (WHO Priority 1)',
-      whoColor: '#ef4444'
+      title: "Carbapenem-Resistant Enterobacterales (CRE)",
+      pathogen: "E. coli, K. pneumoniae, Enterobacter spp.",
+      agents: "Meropenem, Imipenem, Ertapenem",
+      whoStatus: "Critical Priority (WHO Priority 1)",
+      whoColor: "#ef4444",
     },
     esbl: {
-      title: 'Extended-Spectrum Beta-Lactamase (ESBL)',
-      pathogen: 'E. coli & K. pneumoniae',
-      agents: 'Ceftriaxone, Cefotaxime, Ceftazidime',
-      whoStatus: 'Critical Priority (WHO Priority 1)',
-      whoColor: '#ef4444'
+      title: "Extended-Spectrum Beta-Lactamase (ESBL)",
+      pathogen: "E. coli & K. pneumoniae",
+      agents: "Ceftriaxone, Cefotaxime, Ceftazidime",
+      whoStatus: "Critical Priority (WHO Priority 1)",
+      whoColor: "#ef4444",
     },
     crab: {
-      title: 'Carbapenem-Resistant Acinetobacter baumannii (CRAB)',
-      pathogen: 'Acinetobacter baumannii',
-      agents: 'Meropenem, Imipenem',
-      whoStatus: 'Critical Priority (WHO Priority 1)',
-      whoColor: '#ef4444'
+      title: "Carbapenem-Resistant Acinetobacter baumannii (CRAB)",
+      pathogen: "Acinetobacter baumannii",
+      agents: "Meropenem, Imipenem",
+      whoStatus: "Critical Priority (WHO Priority 1)",
+      whoColor: "#ef4444",
     },
     crpa: {
-      title: 'Carbapenem-Resistant Pseudomonas aeruginosa (CRPA)',
-      pathogen: 'Pseudomonas aeruginosa',
-      agents: 'Meropenem, Imipenem',
-      whoStatus: 'Critical Priority (WHO Priority 1)',
-      whoColor: '#ef4444'
+      title: "Carbapenem-Resistant Pseudomonas aeruginosa (CRPA)",
+      pathogen: "Pseudomonas aeruginosa",
+      agents: "Meropenem, Imipenem",
+      whoStatus: "Critical Priority (WHO Priority 1)",
+      whoColor: "#ef4444",
     },
     vre: {
-      title: 'Vancomycin-Resistant Enterococcus (VRE)',
-      pathogen: 'Enterococcus faecalis & E. faecium',
-      agents: 'Vancomycin',
-      whoStatus: 'High Priority (WHO Priority 2)',
-      whoColor: '#f59e0b'
+      title: "Vancomycin-Resistant Enterococcus (VRE)",
+      pathogen: "Enterococcus faecalis & E. faecium",
+      agents: "Vancomycin",
+      whoStatus: "High Priority (WHO Priority 2)",
+      whoColor: "#f59e0b",
     },
     fq_gn: {
-      title: 'Fluoroquinolone Resistance in Gram-Negatives',
-      pathogen: 'Enterobacterales, A. baumannii, P. aeruginosa',
-      agents: 'Ciprofloxacin, Levofloxacin',
-      whoStatus: 'Medium Priority (WHO Priority 3)',
-      whoColor: '#3b82f6'
+      title: "Fluoroquinolone Resistance in Gram-Negatives",
+      pathogen: "Enterobacterales, A. baumannii, P. aeruginosa",
+      agents: "Ciprofloxacin, Levofloxacin",
+      whoStatus: "Medium Priority (WHO Priority 3)",
+      whoColor: "#3b82f6",
     },
     custom: {
-      title: 'Custom Organism & Antibiotic Longitudinal Trend',
-      pathogen: 'Custom',
-      agents: 'Custom',
-      whoStatus: 'Custom Monitored Pair',
-      whoColor: 'var(--accent)'
-    }
+      title: "Custom Organism & Antibiotic Longitudinal Trend",
+      pathogen: "Custom",
+      agents: "Custom",
+      whoStatus: "Custom Monitored Pair",
+      whoColor: "var(--accent)",
+    },
   };
 
   const meta = INDICATOR_META[currentTrendIndicator] || INDICATOR_META.mrsa;
@@ -1404,29 +2044,43 @@ export function renderAmrTrendChart() {
   let sumI = 0;
   let sumTotal = 0;
 
-  const customOrg = document.getElementById('trend-custom-org-select')?.value || 'eco';
-  const customAbx = document.getElementById('trend-custom-abx-select')?.value || 'CRO';
+  const customOrg =
+    document.getElementById("trend-custom-org-select")?.value || "eco";
+  const customAbx =
+    document.getElementById("trend-custom-abx-select")?.value || "CRO";
 
   for (const m of monthlyList) {
     const monthLabel = formatAmrMonthLabel(m.month);
     labels.push(monthLabel);
 
     let stat = null;
-    if (currentTrendIndicator === 'custom') {
-      const pair = m.pairs?.[`${customOrg.toLowerCase()}:${customAbx.toUpperCase()}`];
-      stat = pair ? {
-        total: pair.total,
-        R: pair.R,
-        S: pair.S,
-        I: pair.I,
-        pctR: pair.total > 0 ? Math.round((pair.R / pair.total) * 100) : null,
-        pctS: pair.total > 0 ? Math.round((pair.S / pair.total) * 100) : null
-      } : { total: 0, R: 0, S: 0, I: 0, pctR: null, pctS: null };
+    if (currentTrendIndicator === "custom") {
+      const pair =
+        m.pairs?.[`${customOrg.toLowerCase()}:${customAbx.toUpperCase()}`];
+      stat = pair
+        ? {
+            total: pair.total,
+            R: pair.R,
+            S: pair.S,
+            I: pair.I,
+            pctR:
+              pair.total > 0 ? Math.round((pair.R / pair.total) * 100) : null,
+            pctS:
+              pair.total > 0 ? Math.round((pair.S / pair.total) * 100) : null,
+          }
+        : { total: 0, R: 0, S: 0, I: 0, pctR: null, pctS: null };
     } else {
-      stat = m[currentTrendIndicator] || { total: 0, R: 0, S: 0, I: 0, pctR: null, pctS: null };
+      stat = m[currentTrendIndicator] || {
+        total: 0,
+        R: 0,
+        S: 0,
+        I: 0,
+        pctR: null,
+        pctS: null,
+      };
     }
 
-    if (locFilter !== 'all' && m.locations && stat.total > 0) {
+    if (locFilter !== "all" && m.locations && stat.total > 0) {
       const locRate = m.locations[locFilter];
       const locVol = m.locations[`${locFilter}Total`] || 0;
       if (locVol > 0) {
@@ -1436,14 +2090,14 @@ export function renderAmrTrendChart() {
           S: locVol - Math.round((locRate / 100) * locVol),
           I: 0,
           pctR: locRate,
-          pctS: 100 - locRate
+          pctS: 100 - locRate,
         };
       } else {
         stat = { total: 0, R: 0, S: 0, I: 0, pctR: null, pctS: null };
       }
     }
 
-    const rate = currentTrendMetric === 'R' ? stat.pctR : stat.pctS;
+    const rate = currentTrendMetric === "R" ? stat.pctR : stat.pctS;
     rateData.push(rate);
     volumeData.push(stat.total);
 
@@ -1459,14 +2113,15 @@ export function renderAmrTrendChart() {
         <td style="padding: 8px 10px; text-align: center; color: var(--red); font-weight: 700; font-family: 'JetBrains Mono', monospace;">${stat.R || 0}</td>
         <td style="padding: 8px 10px; text-align: center; color: var(--green); font-weight: 700; font-family: 'JetBrains Mono', monospace;">${stat.S || 0}</td>
         <td style="padding: 8px 10px; text-align: center; color: var(--yellow); font-family: 'JetBrains Mono', monospace;">${stat.I || 0}</td>
-        <td style="padding: 8px 12px; text-align: right; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: ${rate !== null && rate > 40 ? 'var(--red)' : (rate !== null && rate < 20 ? 'var(--green)' : 'var(--text)')};">
-          ${rate !== null ? rate + '%' : '—'}
+        <td style="padding: 8px 12px; text-align: right; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: ${rate !== null && rate > 40 ? "var(--red)" : rate !== null && rate < 20 ? "var(--green)" : "var(--text)"};">
+          ${rate !== null ? rate + "%" : "—"}
         </td>
       </tr>
     `);
   }
 
-  const metricName = currentTrendMetric === 'R' ? 'Resistance' : 'Susceptibility';
+  const metricName =
+    currentTrendMetric === "R" ? "Resistance" : "Susceptibility";
   if (headingEl) {
     headingEl.innerHTML = `<i class="fa-solid fa-chart-line" style="color: var(--accent);"></i> ${meta.title} — ${metricName} (%${currentTrendMetric})`;
   }
@@ -1480,28 +2135,46 @@ export function renderAmrTrendChart() {
   if (kpiTested) kpiTested.textContent = sumTotal.toLocaleString();
   if (kpiTestedSub) kpiTestedSub.textContent = `Isolates evaluated in period`;
 
-  const weightedAvg = sumTotal > 0 ? Math.round((currentTrendMetric === 'R' ? sumR : sumS) / sumTotal * 100) : null;
+  const weightedAvg =
+    sumTotal > 0
+      ? Math.round(
+          ((currentTrendMetric === "R" ? sumR : sumS) / sumTotal) * 100,
+        )
+      : null;
   if (kpiAvg) {
-    kpiAvg.textContent = weightedAvg !== null ? `${weightedAvg}%` : '—';
-    kpiAvg.style.color = currentTrendMetric === 'R' && weightedAvg > 40 ? 'var(--red)' : (currentTrendMetric === 'S' && weightedAvg > 75 ? 'var(--green)' : 'var(--accent)');
+    kpiAvg.textContent = weightedAvg !== null ? `${weightedAvg}%` : "—";
+    kpiAvg.style.color =
+      currentTrendMetric === "R" && weightedAvg > 40
+        ? "var(--red)"
+        : currentTrendMetric === "S" && weightedAvg > 75
+          ? "var(--green)"
+          : "var(--accent)";
   }
-  if (kpiAvgSub) kpiAvgSub.textContent = `Weighted mean %${currentTrendMetric} (${sumTotal} tested)`;
+  if (kpiAvgSub)
+    kpiAvgSub.textContent = `Weighted mean %${currentTrendMetric} (${sumTotal} tested)`;
 
-  const validRates = rateData.filter(r => r !== null);
-  const latestRate = validRates.length ? validRates[validRates.length - 1] : null;
-  const priorRate = validRates.length > 1 ? validRates[validRates.length - 2] : null;
+  const validRates = rateData.filter((r) => r !== null);
+  const latestRate = validRates.length
+    ? validRates[validRates.length - 1]
+    : null;
+  const priorRate =
+    validRates.length > 1 ? validRates[validRates.length - 2] : null;
 
   if (kpiLatest) {
-    kpiLatest.textContent = latestRate !== null ? `${latestRate}%` : '—';
+    kpiLatest.textContent = latestRate !== null ? `${latestRate}%` : "—";
   }
   if (kpiLatestSub) {
     if (latestRate !== null && priorRate !== null) {
       const diff = latestRate - priorRate;
-      const arrow = diff > 0 ? '↑' : (diff < 0 ? '↓' : '→');
-      const color = (currentTrendMetric === 'R' && diff > 0) || (currentTrendMetric === 'S' && diff < 0) ? 'var(--red)' : 'var(--green)';
+      const arrow = diff > 0 ? "↑" : diff < 0 ? "↓" : "→";
+      const color =
+        (currentTrendMetric === "R" && diff > 0) ||
+        (currentTrendMetric === "S" && diff < 0)
+          ? "var(--red)"
+          : "var(--green)";
       kpiLatestSub.innerHTML = `<span style="color: ${color}; font-weight: 700;">${arrow} ${Math.abs(diff)}%</span> vs previous month`;
     } else {
-      kpiLatestSub.textContent = 'Most recent surveillance month';
+      kpiLatestSub.textContent = "Most recent surveillance month";
     }
   }
 
@@ -1510,36 +2183,52 @@ export function renderAmrTrendChart() {
     kpiStatus.style.color = meta.whoColor;
   }
   if (kpiStatusSub) {
-    kpiStatusSub.textContent = currentTrendIndicator === 'custom' ? 'User-defined AST query' : 'Clinical priority benchmark';
+    kpiStatusSub.textContent =
+      currentTrendIndicator === "custom"
+        ? "User-defined AST query"
+        : "Clinical priority benchmark";
   }
 
   if (tableBody) {
-    tableBody.innerHTML = tableRows.length ? tableRows.join('') : '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">No records found for this indicator</td></tr>';
+    tableBody.innerHTML = tableRows.length
+      ? tableRows.join("")
+      : '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">No records found for this indicator</td></tr>';
   }
 
   if (trendChartInstance) {
-    try { trendChartInstance.destroy(); } catch (_) {}
+    try {
+      trendChartInstance.destroy();
+    } catch (_) {}
     trendChartInstance = null;
   }
 
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const textColor = isDark ? '#e2e8f0' : '#334155';
-  const mutedColor = isDark ? '#94a3b8' : '#64748b';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.8)';
-  const tooltipBg = isDark ? 'rgba(18, 24, 38, 0.96)' : 'rgba(15, 23, 42, 0.95)';
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const textColor = isDark ? "#e2e8f0" : "#334155";
+  const mutedColor = isDark ? "#94a3b8" : "#64748b";
+  const gridColor = isDark
+    ? "rgba(255, 255, 255, 0.08)"
+    : "rgba(226, 232, 240, 0.8)";
+  const tooltipBg = isDark
+    ? "rgba(18, 24, 38, 0.96)"
+    : "rgba(15, 23, 42, 0.95)";
 
-  const primaryLineColor = currentTrendMetric === 'R' ? '#ef4444' : '#10b981';
-  const primaryAreaColor = currentTrendMetric === 'R' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)';
-  const barVolumeColor = isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(100, 116, 139, 0.15)';
+  const primaryLineColor = currentTrendMetric === "R" ? "#ef4444" : "#10b981";
+  const primaryAreaColor =
+    currentTrendMetric === "R"
+      ? "rgba(239, 68, 68, 0.12)"
+      : "rgba(16, 185, 129, 0.12)";
+  const barVolumeColor = isDark
+    ? "rgba(148, 163, 184, 0.2)"
+    : "rgba(100, 116, 139, 0.15)";
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
 
   trendChartInstance = new Chart(ctx, {
     data: {
       labels,
       datasets: [
         {
-          type: 'line',
+          type: "line",
           label: `% ${metricName} (%${currentTrendMetric})`,
           data: rateData,
           borderColor: primaryLineColor,
@@ -1550,155 +2239,161 @@ export function renderAmrTrendChart() {
           pointRadius: 4,
           pointHoverRadius: 6,
           pointBackgroundColor: primaryLineColor,
-          pointBorderColor: '#ffffff',
+          pointBorderColor: "#ffffff",
           pointBorderWidth: 1.5,
-          yAxisID: 'y'
+          yAxisID: "y",
         },
         {
-          type: 'bar',
-          label: 'Isolates Tested (Volume)',
+          type: "bar",
+          label: "Isolates Tested (Volume)",
           data: volumeData,
           backgroundColor: barVolumeColor,
           borderRadius: 4,
           maxBarThickness: 28,
-          yAxisID: 'y1'
-        }
-      ]
+          yAxisID: "y1",
+        },
+      ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: 300 },
       interaction: {
-        mode: 'index',
-        intersect: false
+        mode: "index",
+        intersect: false,
       },
       scales: {
         x: {
           grid: { display: false },
           ticks: {
             color: mutedColor,
-            font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' }
-          }
+            font: { family: "Plus Jakarta Sans", size: 11, weight: "600" },
+          },
         },
         y: {
-          type: 'linear',
+          type: "linear",
           display: true,
-          position: 'left',
+          position: "left",
           min: 0,
           max: 100,
           grid: { color: gridColor },
           ticks: {
             color: textColor,
-            font: { family: 'JetBrains Mono', size: 11, weight: '600' },
-            callback: v => `${v}%`
+            font: { family: "JetBrains Mono", size: 11, weight: "600" },
+            callback: (v) => `${v}%`,
           },
           title: {
             display: true,
             text: `% ${metricName} (%${currentTrendMetric})`,
             color: mutedColor,
-            font: { family: 'Plus Jakarta Sans', size: 11, weight: '700' }
-          }
+            font: { family: "Plus Jakarta Sans", size: 11, weight: "700" },
+          },
         },
         y1: {
-          type: 'linear',
+          type: "linear",
           display: true,
-          position: 'right',
+          position: "right",
           beginAtZero: true,
           grid: { drawOnChartArea: false },
           ticks: {
             color: mutedColor,
-            font: { family: 'JetBrains Mono', size: 10.5 },
-            precision: 0
+            font: { family: "JetBrains Mono", size: 10.5 },
+            precision: 0,
           },
           title: {
             display: true,
-            text: 'Tested Isolates (N)',
+            text: "Tested Isolates (N)",
             color: mutedColor,
-            font: { family: 'Plus Jakarta Sans', size: 11 }
-          }
-        }
+            font: { family: "Plus Jakarta Sans", size: 11 },
+          },
+        },
       },
       plugins: {
         legend: {
-          position: 'top',
-          align: 'end',
+          position: "top",
+          align: "end",
           labels: {
             color: textColor,
             boxWidth: 12,
             boxHeight: 12,
-            font: { family: 'Plus Jakarta Sans', size: 11.5, weight: '600' }
-          }
+            font: { family: "Plus Jakarta Sans", size: 11.5, weight: "600" },
+          },
         },
         tooltip: {
           backgroundColor: tooltipBg,
-          titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: 'bold' },
-          bodyFont: { family: 'Plus Jakarta Sans', size: 11.5 },
+          titleFont: { family: "Plus Jakarta Sans", size: 12, weight: "bold" },
+          bodyFont: { family: "Plus Jakarta Sans", size: 11.5 },
           padding: 12,
           cornerRadius: 8,
           callbacks: {
-            label: ctx => {
+            label: (ctx) => {
               if (ctx.datasetIndex === 0) {
                 const val = ctx.parsed.y;
-                return val !== null ? `Rate: ${val}% (${currentTrendMetric === 'R' ? 'Resistant' : 'Susceptible'})` : 'No data in month';
+                return val !== null
+                  ? `Rate: ${val}% (${currentTrendMetric === "R" ? "Resistant" : "Susceptible"})`
+                  : "No data in month";
               }
               return `Volume Tested: ${ctx.parsed.y} isolates`;
-            }
-          }
-        }
-      }
-    }
+            },
+          },
+        },
+      },
+    },
   });
 }
 
 export function copyAmrTrendImage() {
-  if (!trendChartInstance) return toast('No AMR trend chart to copy', 'error');
-  const canvas = document.getElementById('amr-trends-chart-canvas');
-  copyCanvasToClipboard(canvas, 'AMR Trend chart');
+  if (!trendChartInstance) return toast("No AMR trend chart to copy", "error");
+  const canvas = document.getElementById("amr-trends-chart-canvas");
+  copyCanvasToClipboard(canvas, "AMR Trend chart");
 }
 
 export function downloadAmrTrendPng() {
-  if (!trendChartInstance) return toast('No AMR trend chart to download', 'error');
-  const canvas = document.getElementById('amr-trends-chart-canvas');
+  if (!trendChartInstance)
+    return toast("No AMR trend chart to download", "error");
+  const canvas = document.getElementById("amr-trends-chart-canvas");
   if (!canvas) return;
 
-  const url = canvas.toDataURL('image/png', 1.0);
-  const a = document.createElement('a');
+  const url = canvas.toDataURL("image/png", 1.0);
+  const a = document.createElement("a");
   a.href = url;
   a.download = `AMR_Trend_${currentTrendIndicator}_${new Date().toISOString().slice(0, 10)}.png`;
   a.click();
-  toast('AMR trend chart downloaded as PNG image', 'success');
+  toast("AMR trend chart downloaded as PNG image", "success");
 }
 
 export function copyTrendTableTsv() {
-  const table = document.querySelector('#antibiogram-trends-view table');
-  if (!table) return toast('No trend table to copy', 'error');
+  const table = document.querySelector("#antibiogram-trends-view table");
+  if (!table) return toast("No trend table to copy", "error");
 
   const rows = [];
-  table.querySelectorAll('tr').forEach(tr => {
+  table.querySelectorAll("tr").forEach((tr) => {
     const cols = [];
-    tr.querySelectorAll('th, td').forEach(td => cols.push(td.textContent.trim()));
-    rows.push(cols.join('\t'));
+    tr.querySelectorAll("th, td").forEach((td) =>
+      cols.push(td.textContent.trim()),
+    );
+    rows.push(cols.join("\t"));
   });
 
-  navigator.clipboard.writeText(rows.join('\n'))
-    .then(() => toast('Monthly AMR breakdown copied to clipboard', 'success'))
-    .catch(() => toast('Could not copy to clipboard', 'error'));
+  navigator.clipboard
+    .writeText(rows.join("\n"))
+    .then(() => toast("Monthly AMR breakdown copied to clipboard", "success"))
+    .catch(() => toast("Could not copy to clipboard", "error"));
 }
 
 // ── Care Location Stratification (CLSI M39 Section 6.4) Controller ──
 
 export function setLocationMetric(metric) {
   currentLocationMetric = metric;
-  const btnS = document.getElementById('btn-loc-metric-s');
-  const btnR = document.getElementById('btn-loc-metric-r');
-  if (btnS) btnS.classList.toggle('active', metric === 'S');
-  if (btnR) btnR.classList.toggle('active', metric === 'R');
+  const btnS = document.getElementById("btn-loc-metric-s");
+  const btnR = document.getElementById("btn-loc-metric-r");
+  if (btnS) btnS.classList.toggle("active", metric === "S");
+  if (btnR) btnR.classList.toggle("active", metric === "R");
   renderLocationStratificationChart();
 }
 
 export function populateLocationOrgDropdown() {
-  const select = document.getElementById('loc-org-select');
+  const select = document.getElementById("loc-org-select");
   if (!select || !currentReportData?.locations?.orgList) return;
 
   const orgList = currentReportData.locations.orgList;
@@ -1708,10 +2403,12 @@ export function populateLocationOrgDropdown() {
   }
 
   const prevValue = select.value || currentLocationOrgCode;
-  const optionsHtml = orgList.map(o => {
-    const isSelected = o.orgCode === prevValue;
-    return `<option value="${o.orgCode}" ${isSelected ? 'selected' : ''}>${escapeHtml(o.orgName)} (${o.orgCode.toUpperCase()}) — ${o.totalCount} isolates</option>`;
-  }).join('');
+  const optionsHtml = orgList
+    .map((o) => {
+      const isSelected = o.orgCode === prevValue;
+      return `<option value="${o.orgCode}" ${isSelected ? "selected" : ""}>${escapeHtml(o.orgName)} (${o.orgCode.toUpperCase()}) — ${o.totalCount} isolates</option>`;
+    })
+    .join("");
 
   select.innerHTML = optionsHtml;
   if (!select.value && orgList.length > 0) {
@@ -1723,50 +2420,66 @@ export function populateLocationOrgDropdown() {
 export function renderLocationStratificationChart() {
   const locData = currentReportData?.locations;
   if (!locData || !locData.orgList || !locData.orgList.length) {
-    const tableBody = document.getElementById('loc-table-body');
+    const tableBody = document.getElementById("loc-table-body");
     if (tableBody) {
-      tableBody.innerHTML = '<tr><td colspan="9" style="padding: 24px; text-align: center; color: var(--text3);">Load an active database to view location stratification</td></tr>';
+      tableBody.innerHTML =
+        '<tr><td colspan="9" style="padding: 24px; text-align: center; color: var(--text3);">Load an active database to view location stratification</td></tr>';
     }
     return;
   }
 
-  const select = document.getElementById('loc-org-select');
-  if (select && (!select.options.length || select.options[0]?.value === '')) {
+  const select = document.getElementById("loc-org-select");
+  if (select && (!select.options.length || select.options[0]?.value === "")) {
     populateLocationOrgDropdown();
   }
 
-  const orgCode = (select?.value || currentLocationOrgCode || locData.orgList[0]?.orgCode || '').toLowerCase();
+  const orgCode = (
+    select?.value ||
+    currentLocationOrgCode ||
+    locData.orgList[0]?.orgCode ||
+    ""
+  ).toLowerCase();
   currentLocationOrgCode = orgCode;
 
   const org = locData.byOrg[orgCode];
   if (!org) return;
 
-  const hideEmpty = document.getElementById('loc-hide-empty')?.checked ?? true;
-  const isMetricS = currentLocationMetric === 'S';
+  const hideEmpty = document.getElementById("loc-hide-empty")?.checked ?? true;
+  const isMetricS = currentLocationMetric === "S";
 
   // 1. KPI Cards
-  const kpiIcu = document.getElementById('loc-kpi-icu');
-  const kpiIcuSub = document.getElementById('loc-kpi-icu-sub');
-  const kpiInpat = document.getElementById('loc-kpi-inpatient');
-  const kpiInpatSub = document.getElementById('loc-kpi-inpatient-sub');
-  const kpiOutpat = document.getElementById('loc-kpi-outpatient');
-  const kpiOutpatSub = document.getElementById('loc-kpi-outpatient-sub');
-  const kpiDisparity = document.getElementById('loc-kpi-disparity');
-  const kpiDisparitySub = document.getElementById('loc-kpi-disparity-sub');
-  const metaBadge = document.getElementById('loc-org-meta-badge');
+  const kpiIcu = document.getElementById("loc-kpi-icu");
+  const kpiIcuSub = document.getElementById("loc-kpi-icu-sub");
+  const kpiInpat = document.getElementById("loc-kpi-inpatient");
+  const kpiInpatSub = document.getElementById("loc-kpi-inpatient-sub");
+  const kpiOutpat = document.getElementById("loc-kpi-outpatient");
+  const kpiOutpatSub = document.getElementById("loc-kpi-outpatient-sub");
+  const kpiDisparity = document.getElementById("loc-kpi-disparity");
+  const kpiDisparitySub = document.getElementById("loc-kpi-disparity-sub");
+  const metaBadge = document.getElementById("loc-org-meta-badge");
 
-  const icuPct = org.totalCount > 0 ? Math.round((org.icuCount / org.totalCount) * 100) : 0;
-  const inpatPct = org.totalCount > 0 ? Math.round((org.inpatientCount / org.totalCount) * 100) : 0;
-  const outpatPct = org.totalCount > 0 ? Math.round((org.outpatientCount / org.totalCount) * 100) : 0;
+  const icuPct =
+    org.totalCount > 0 ? Math.round((org.icuCount / org.totalCount) * 100) : 0;
+  const inpatPct =
+    org.totalCount > 0
+      ? Math.round((org.inpatientCount / org.totalCount) * 100)
+      : 0;
+  const outpatPct =
+    org.totalCount > 0
+      ? Math.round((org.outpatientCount / org.totalCount) * 100)
+      : 0;
 
   if (kpiIcu) kpiIcu.textContent = org.icuCount.toLocaleString();
-  if (kpiIcuSub) kpiIcuSub.textContent = `${icuPct}% of ${org.orgName} (${org.totalCount} total)`;
+  if (kpiIcuSub)
+    kpiIcuSub.textContent = `${icuPct}% of ${org.orgName} (${org.totalCount} total)`;
 
   if (kpiInpat) kpiInpat.textContent = org.inpatientCount.toLocaleString();
-  if (kpiInpatSub) kpiInpatSub.textContent = `${inpatPct}% of ${org.orgName} (${org.totalCount} total)`;
+  if (kpiInpatSub)
+    kpiInpatSub.textContent = `${inpatPct}% of ${org.orgName} (${org.totalCount} total)`;
 
   if (kpiOutpat) kpiOutpat.textContent = org.outpatientCount.toLocaleString();
-  if (kpiOutpatSub) kpiOutpatSub.textContent = `${outpatPct}% of ${org.orgName} (${org.totalCount} total)`;
+  if (kpiOutpatSub)
+    kpiOutpatSub.textContent = `${outpatPct}% of ${org.orgName} (${org.totalCount} total)`;
 
   if (metaBadge) {
     metaBadge.innerHTML = `Total Evaluated: <strong style="color:var(--text);">${org.totalCount} isolates</strong> (CLSI M39 §6.4)`;
@@ -1775,10 +2488,14 @@ export function renderLocationStratificationChart() {
   // 2. Prepare Drug Items for Chart & Table
   let drugEntries = Object.values(org.drugs);
   if (hideEmpty) {
-    drugEntries = drugEntries.filter(d => (d.icu.total > 0 || d.inpatient.total > 0 || d.outpatient.total > 0));
+    drugEntries = drugEntries.filter(
+      (d) => d.icu.total > 0 || d.inpatient.total > 0 || d.outpatient.total > 0,
+    );
   }
   // Sort by drug class, then name
-  drugEntries.sort((a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name));
+  drugEntries.sort(
+    (a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name),
+  );
 
   // Find maximum disparity
   let maxDeltaDrug = null;
@@ -1795,25 +2512,26 @@ export function renderLocationStratificationChart() {
   if (kpiDisparity) {
     if (maxDeltaDrug && maxDeltaVal >= 0) {
       kpiDisparity.textContent = `Δ ${maxDeltaVal}% (${maxDeltaDrug.code})`;
-      kpiDisparity.style.color = maxDeltaVal >= 25 ? 'var(--red)' : 'var(--accent)';
+      kpiDisparity.style.color =
+        maxDeltaVal >= 25 ? "var(--red)" : "var(--accent)";
     } else {
-      kpiDisparity.textContent = '—';
-      kpiDisparity.style.color = 'var(--text)';
+      kpiDisparity.textContent = "—";
+      kpiDisparity.style.color = "var(--text)";
     }
   }
   if (kpiDisparitySub) {
     if (maxDeltaDrug && maxDeltaVal >= 0) {
-      const metricLabel = isMetricS ? 'susceptibility delta' : 'resistance gap';
+      const metricLabel = isMetricS ? "susceptibility delta" : "resistance gap";
       kpiDisparitySub.textContent = `${maxDeltaDrug.name} — highest ${metricLabel}`;
     } else {
-      kpiDisparitySub.textContent = 'Insufficient multi-setting data';
+      kpiDisparitySub.textContent = "Insufficient multi-setting data";
     }
   }
 
   // Headings
-  const headingEl = document.getElementById('loc-chart-heading');
-  const subEl = document.getElementById('loc-chart-sub');
-  const metricText = isMetricS ? 'Susceptibility (%S)' : 'Resistance (%R)';
+  const headingEl = document.getElementById("loc-chart-heading");
+  const subEl = document.getElementById("loc-chart-sub");
+  const metricText = isMetricS ? "Susceptibility (%S)" : "Resistance (%R)";
   if (headingEl) {
     headingEl.innerHTML = `<i class="fa-solid fa-hospital-user" style="color: var(--accent);"></i> ${escapeHtml(org.orgName)} (${org.orgCode.toUpperCase()}) — ${metricText} Stratification`;
   }
@@ -1822,125 +2540,154 @@ export function renderLocationStratificationChart() {
   }
 
   // 3. Render Table Rows
-  const tableBody = document.getElementById('loc-table-body');
+  const tableBody = document.getElementById("loc-table-body");
   if (tableBody) {
     if (!drugEntries.length) {
-      tableBody.innerHTML = '<tr><td colspan="9" style="padding: 24px; text-align: center; color: var(--text3);">No tested antibiotics found for this organism</td></tr>';
+      tableBody.innerHTML =
+        '<tr><td colspan="9" style="padding: 24px; text-align: center; color: var(--text3);">No tested antibiotics found for this organism</td></tr>';
     } else {
-      const rowsHtml = drugEntries.map(d => {
-        const icuRate = isMetricS ? d.icu.pctS : d.icu.pctR;
-        const inpatRate = isMetricS ? d.inpatient.pctS : d.inpatient.pctR;
-        const outpatRate = isMetricS ? d.outpatient.pctS : d.outpatient.pctR;
-        const delta = isMetricS ? d.deltaS : d.deltaR;
+      const rowsHtml = drugEntries
+        .map((d) => {
+          const icuRate = isMetricS ? d.icu.pctS : d.icu.pctR;
+          const inpatRate = isMetricS ? d.inpatient.pctS : d.inpatient.pctR;
+          const outpatRate = isMetricS ? d.outpatient.pctS : d.outpatient.pctR;
+          const delta = isMetricS ? d.deltaS : d.deltaR;
 
-        const formatRate = (rate, total, isIntrinsic) => {
-          if (isIntrinsic) return `<span class="badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);padding:2px 6px;border-radius:4px;font-weight:700;">${isMetricS ? '0% (R)' : '100% (R)'}</span>`;
-          if (total === 0 || rate === null) return `<span style="color:var(--text4);">—</span>`;
-          const color = isMetricS
-            ? (rate >= 75 ? 'var(--green)' : (rate < 50 ? 'var(--red)' : 'var(--text)'))
-            : (rate >= 40 ? 'var(--red)' : (rate < 20 ? 'var(--green)' : 'var(--text)'));
-          const warningNote = total < 30 ? ` <span title="Sample size < 30 (CLSI cautionary notice)" style="color:var(--yellow);font-size:10px;">⚠</span>` : '';
-          return `<span style="font-weight:700;font-family:'JetBrains Mono',monospace;color:${color};">${rate}%</span>${warningNote}`;
-        };
+          const formatRate = (rate, total, isIntrinsic) => {
+            if (isIntrinsic)
+              return `<span class="badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);padding:2px 6px;border-radius:4px;font-weight:700;">${isMetricS ? "0% (R)" : "100% (R)"}</span>`;
+            if (total === 0 || rate === null)
+              return `<span style="color:var(--text4);">—</span>`;
+            const color = isMetricS
+              ? rate >= 75
+                ? "var(--green)"
+                : rate < 50
+                  ? "var(--red)"
+                  : "var(--text)"
+              : rate >= 40
+                ? "var(--red)"
+                : rate < 20
+                  ? "var(--green)"
+                  : "var(--text)";
+            const warningNote =
+              total < 30
+                ? ` <span title="Sample size < 30 (CLSI cautionary notice)" style="color:var(--yellow);font-size:10px;">⚠</span>`
+                : "";
+            return `<span style="font-weight:700;font-family:'JetBrains Mono',monospace;color:${color};">${rate}%</span>${warningNote}`;
+          };
 
-        const formatDelta = (dt) => {
-          if (dt === null || dt === undefined) return '<span style="color:var(--text4);">—</span>';
-          const sign = dt > 0 ? `+${dt}%` : (dt < 0 ? `${dt}%` : '0%');
-          let color = 'var(--text)';
-          let bg = 'var(--bg3)';
-          if (Math.abs(dt) >= 20) {
-            color = dt > 0 ? 'var(--red)' : 'var(--green)';
-            bg = dt > 0 ? 'var(--red-bg)' : 'var(--green-bg)';
-          }
-          return `<span class="badge" style="background:${bg};color:${color};padding:2px 7px;border-radius:4px;font-weight:700;font-family:'JetBrains Mono',monospace;">${sign}</span>`;
-        };
+          const formatDelta = (dt) => {
+            if (dt === null || dt === undefined)
+              return '<span style="color:var(--text4);">—</span>';
+            const sign = dt > 0 ? `+${dt}%` : dt < 0 ? `${dt}%` : "0%";
+            let color = "var(--text)";
+            let bg = "var(--bg3)";
+            if (Math.abs(dt) >= 20) {
+              color = dt > 0 ? "var(--red)" : "var(--green)";
+              bg = dt > 0 ? "var(--red-bg)" : "var(--green-bg)";
+            }
+            return `<span class="badge" style="background:${bg};color:${color};padding:2px 7px;border-radius:4px;font-weight:700;font-family:'JetBrains Mono',monospace;">${sign}</span>`;
+          };
 
-        const urineBadge = d.isUrineOnly ? ` <span class="badge" style="background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);font-size:9.5px;padding:1px 5px;border-radius:3px;">Urine</span>` : '';
+          const urineBadge = d.isUrineOnly
+            ? ` <span class="badge" style="background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);font-size:9.5px;padding:1px 5px;border-radius:3px;">Urine</span>`
+            : "";
 
-        return `
+          return `
           <tr style="border-bottom: 1px solid var(--border);">
             <td style="padding: 8px 12px; font-weight: 600; color: var(--text);">
               ${escapeHtml(d.name)} <span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px;">(${d.code})</span>${urineBadge}
             </td>
             <td style="padding: 8px 10px; color: var(--text3); font-size: 11px;">${escapeHtml(d.class)}</td>
-            <td style="padding: 8px 10px; text-align: center; font-family: 'JetBrains Mono', monospace; border-left: 2px solid #6366f1; color: var(--text2);">${d.icu.total || '—'}</td>
+            <td style="padding: 8px 10px; text-align: center; font-family: 'JetBrains Mono', monospace; border-left: 2px solid #6366f1; color: var(--text2);">${d.icu.total || "—"}</td>
             <td style="padding: 8px 10px; text-align: center;">${formatRate(icuRate, d.icu.total, d.icu.isIntrinsic)}</td>
-            <td style="padding: 8px 10px; text-align: center; font-family: 'JetBrains Mono', monospace; border-left: 2px solid #10b981; color: var(--text2);">${d.inpatient.total || '—'}</td>
+            <td style="padding: 8px 10px; text-align: center; font-family: 'JetBrains Mono', monospace; border-left: 2px solid #10b981; color: var(--text2);">${d.inpatient.total || "—"}</td>
             <td style="padding: 8px 10px; text-align: center;">${formatRate(inpatRate, d.inpatient.total, d.inpatient.isIntrinsic)}</td>
-            <td style="padding: 8px 10px; text-align: center; font-family: 'JetBrains Mono', monospace; border-left: 2px solid #f59e0b; color: var(--text2);">${d.outpatient.total || '—'}</td>
+            <td style="padding: 8px 10px; text-align: center; font-family: 'JetBrains Mono', monospace; border-left: 2px solid #f59e0b; color: var(--text2);">${d.outpatient.total || "—"}</td>
             <td style="padding: 8px 10px; text-align: center;">${formatRate(outpatRate, d.outpatient.total, d.outpatient.isIntrinsic)}</td>
             <td style="padding: 8px 12px; text-align: right; border-left: 1px solid var(--border);">${formatDelta(delta)}</td>
           </tr>
         `;
-      }).join('');
+        })
+        .join("");
       tableBody.innerHTML = rowsHtml;
     }
   }
 
   // 4. Render Grouped Bar Chart
-  const canvas = document.getElementById('loc-comparison-canvas');
-  if (!canvas || typeof Chart === 'undefined') return;
+  const canvas = document.getElementById("loc-comparison-canvas");
+  if (!canvas || typeof Chart === "undefined") return;
 
   if (locationChartInstance) {
-    try { locationChartInstance.destroy(); } catch (_) {}
+    try {
+      locationChartInstance.destroy();
+    } catch (_) {}
     locationChartInstance = null;
   }
 
   if (!drugEntries.length) return;
 
   // Dynamically size chart height so labels don't get truncated
-  const canvasWrap = document.getElementById('loc-chart-wrapper');
+  const canvasWrap = document.getElementById("loc-chart-wrapper");
   const neededHeight = Math.max(380, drugEntries.length * 30);
   if (canvasWrap) {
     canvasWrap.style.height = `${neededHeight}px`;
   }
 
-  const labels = drugEntries.map(d => `${d.name} (${d.code})`);
-  const icuData = drugEntries.map(d => isMetricS ? d.icu.pctS : d.icu.pctR);
-  const inpatData = drugEntries.map(d => isMetricS ? d.inpatient.pctS : d.inpatient.pctR);
-  const outpatData = drugEntries.map(d => isMetricS ? d.outpatient.pctS : d.outpatient.pctR);
+  const labels = drugEntries.map((d) => `${d.name} (${d.code})`);
+  const icuData = drugEntries.map((d) => (isMetricS ? d.icu.pctS : d.icu.pctR));
+  const inpatData = drugEntries.map((d) =>
+    isMetricS ? d.inpatient.pctS : d.inpatient.pctR,
+  );
+  const outpatData = drugEntries.map((d) =>
+    isMetricS ? d.outpatient.pctS : d.outpatient.pctR,
+  );
 
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const textColor = isDark ? '#e2e8f0' : '#334155';
-  const mutedColor = isDark ? '#94a3b8' : '#64748b';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.8)';
-  const tooltipBg = isDark ? 'rgba(18, 24, 38, 0.96)' : 'rgba(15, 23, 42, 0.95)';
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const textColor = isDark ? "#e2e8f0" : "#334155";
+  const mutedColor = isDark ? "#94a3b8" : "#64748b";
+  const gridColor = isDark
+    ? "rgba(255, 255, 255, 0.08)"
+    : "rgba(226, 232, 240, 0.8)";
+  const tooltipBg = isDark
+    ? "rgba(18, 24, 38, 0.96)"
+    : "rgba(15, 23, 42, 0.95)";
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
 
   locationChartInstance = new Chart(ctx, {
-    type: 'bar',
+    type: "bar",
     data: {
       labels,
       datasets: [
         {
           label: `ICU Wards (N=${org.icuCount})`,
           data: icuData,
-          backgroundColor: 'rgba(99, 102, 241, 0.85)',
-          borderColor: '#6366f1',
+          backgroundColor: "rgba(99, 102, 241, 0.85)",
+          borderColor: "#6366f1",
           borderWidth: 1.5,
-          borderRadius: 3
+          borderRadius: 3,
         },
         {
           label: `Inpatient Non-ICU (N=${org.inpatientCount})`,
           data: inpatData,
-          backgroundColor: 'rgba(16, 185, 129, 0.85)',
-          borderColor: '#10b981',
+          backgroundColor: "rgba(16, 185, 129, 0.85)",
+          borderColor: "#10b981",
           borderWidth: 1.5,
-          borderRadius: 3
+          borderRadius: 3,
         },
         {
           label: `Outpatient / OPD (N=${org.outpatientCount})`,
           data: outpatData,
-          backgroundColor: 'rgba(245, 158, 11, 0.85)',
-          borderColor: '#f59e0b',
+          backgroundColor: "rgba(245, 158, 11, 0.85)",
+          borderColor: "#f59e0b",
           borderWidth: 1.5,
-          borderRadius: 3
-        }
-      ]
+          borderRadius: 3,
+        },
+      ],
     },
     options: {
-      indexAxis: 'y', // Horizontal grouped bars for readable drug names
+      indexAxis: "y", // Horizontal grouped bars for readable drug names
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: 300 },
@@ -1951,90 +2698,106 @@ export function renderLocationStratificationChart() {
           grid: { color: gridColor },
           ticks: {
             color: textColor,
-            font: { family: 'JetBrains Mono', size: 11, weight: '600' },
-            callback: v => `${v}%`
+            font: { family: "JetBrains Mono", size: 11, weight: "600" },
+            callback: (v) => `${v}%`,
           },
           title: {
             display: true,
             text: `% ${metricText}`,
             color: mutedColor,
-            font: { family: 'Plus Jakarta Sans', size: 11, weight: '700' }
-          }
+            font: { family: "Plus Jakarta Sans", size: 11, weight: "700" },
+          },
         },
         y: {
           grid: { display: false },
           ticks: {
             color: textColor,
-            font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' },
-            autoSkip: false
-          }
-        }
+            font: { family: "Plus Jakarta Sans", size: 11, weight: "600" },
+            autoSkip: false,
+          },
+        },
       },
       plugins: {
         legend: {
-          position: 'top',
-          align: 'end',
+          position: "top",
+          align: "end",
           labels: {
             color: textColor,
             boxWidth: 12,
             boxHeight: 12,
-            font: { family: 'Plus Jakarta Sans', size: 11.5, weight: '600' }
-          }
+            font: { family: "Plus Jakarta Sans", size: 11.5, weight: "600" },
+          },
         },
         tooltip: {
           backgroundColor: tooltipBg,
-          titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: 'bold' },
-          bodyFont: { family: 'Plus Jakarta Sans', size: 11.5 },
+          titleFont: { family: "Plus Jakarta Sans", size: 12, weight: "bold" },
+          bodyFont: { family: "Plus Jakarta Sans", size: 11.5 },
           padding: 12,
           cornerRadius: 8,
           callbacks: {
             label: (ctx) => {
               const drug = drugEntries[ctx.dataIndex];
               const val = ctx.parsed.x;
-              const setKey = ctx.datasetIndex === 0 ? 'icu' : (ctx.datasetIndex === 1 ? 'inpatient' : 'outpatient');
-              const setName = ctx.datasetIndex === 0 ? 'ICU' : (ctx.datasetIndex === 1 ? 'Inpatient' : 'Outpatient');
+              const setKey =
+                ctx.datasetIndex === 0
+                  ? "icu"
+                  : ctx.datasetIndex === 1
+                    ? "inpatient"
+                    : "outpatient";
+              const setName =
+                ctx.datasetIndex === 0
+                  ? "ICU"
+                  : ctx.datasetIndex === 1
+                    ? "Inpatient"
+                    : "Outpatient";
               const testedN = drug[setKey]?.total || 0;
-              if (val === null || val === undefined) return `${setName}: Not tested`;
-              return `${setName}: ${val}% (N=${testedN})${testedN < 30 && testedN > 0 ? ' [N<30]' : ''}`;
-            }
-          }
-        }
-      }
-    }
+              if (val === null || val === undefined)
+                return `${setName}: Not tested`;
+              return `${setName}: ${val}% (N=${testedN})${testedN < 30 && testedN > 0 ? " [N<30]" : ""}`;
+            },
+          },
+        },
+      },
+    },
   });
 }
 
 export function copyLocationChartData() {
   const locData = currentReportData?.locations;
-  const orgCode = currentLocationOrgCode || document.getElementById('loc-org-select')?.value;
+  const orgCode =
+    currentLocationOrgCode || document.getElementById("loc-org-select")?.value;
   const org = locData?.byOrg?.[orgCode];
-  if (!org) return toast('No location comparison data to copy', 'error');
+  if (!org) return toast("No location comparison data to copy", "error");
 
-  const hideEmpty = document.getElementById('loc-hide-empty')?.checked ?? true;
-  const isMetricS = currentLocationMetric === 'S';
-  const metricName = isMetricS ? '% Susceptible (%S)' : '% Resistant (%R)';
+  const hideEmpty = document.getElementById("loc-hide-empty")?.checked ?? true;
+  const isMetricS = currentLocationMetric === "S";
+  const metricName = isMetricS ? "% Susceptible (%S)" : "% Resistant (%R)";
 
   let drugEntries = Object.values(org.drugs);
   if (hideEmpty) {
-    drugEntries = drugEntries.filter(d => (d.icu.total > 0 || d.inpatient.total > 0 || d.outpatient.total > 0));
+    drugEntries = drugEntries.filter(
+      (d) => d.icu.total > 0 || d.inpatient.total > 0 || d.outpatient.total > 0,
+    );
   }
-  drugEntries.sort((a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name));
+  drugEntries.sort(
+    (a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name),
+  );
 
   const headers = [
-    'Antibiotic',
-    'Code',
-    'Class',
+    "Antibiotic",
+    "Code",
+    "Class",
     `ICU ${metricName}`,
-    'ICU Tested (N)',
+    "ICU Tested (N)",
     `Inpatient ${metricName}`,
-    'Inpatient Tested (N)',
+    "Inpatient Tested (N)",
     `Outpatient ${metricName}`,
-    'Outpatient Tested (N)',
-    'Disparity (Delta)'
+    "Outpatient Tested (N)",
+    "Disparity (Delta)",
   ];
 
-  const tsvRows = [headers.join('\t')];
-  let htmlRows = `<tr>${headers.map(h => `<th style="background:#f1f5f9;border:1px solid #cbd5e1;padding:6px 10px;font-weight:bold;text-align:center;">${h}</th>`).join('')}</tr>`;
+  const tsvRows = [headers.join("\t")];
+  let htmlRows = `<tr>${headers.map((h) => `<th style="background:#f1f5f9;border:1px solid #cbd5e1;padding:6px 10px;font-weight:bold;text-align:center;">${h}</th>`).join("")}</tr>`;
 
   for (const d of drugEntries) {
     const icuRate = isMetricS ? d.icu.pctS : d.icu.pctR;
@@ -2043,80 +2806,106 @@ export function copyLocationChartData() {
     const delta = isMetricS ? d.deltaS : d.deltaR;
 
     const row = [
-      d.name + (d.isUrineOnly ? ' [Urine]' : ''),
+      d.name + (d.isUrineOnly ? " [Urine]" : ""),
       d.code,
       d.class,
-      icuRate !== null ? `${icuRate}%` : '—',
+      icuRate !== null ? `${icuRate}%` : "—",
       d.icu.total,
-      inpatRate !== null ? `${inpatRate}%` : '—',
+      inpatRate !== null ? `${inpatRate}%` : "—",
       d.inpatient.total,
-      outpatRate !== null ? `${outpatRate}%` : '—',
+      outpatRate !== null ? `${outpatRate}%` : "—",
       d.outpatient.total,
-      delta !== null ? (delta > 0 ? `+${delta}%` : `${delta}%`) : '—'
+      delta !== null ? (delta > 0 ? `+${delta}%` : `${delta}%`) : "—",
     ];
 
-    tsvRows.push(row.join('\t'));
-    htmlRows += `<tr>${row.map(c => `<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:${typeof c === 'number' || (typeof c === 'string' && c.endsWith('%')) ? 'center' : 'left'};">${c}</td>`).join('')}</tr>`;
+    tsvRows.push(row.join("\t"));
+    htmlRows += `<tr>${row.map((c) => `<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:${typeof c === "number" || (typeof c === "string" && c.endsWith("%")) ? "center" : "left"};">${c}</td>`).join("")}</tr>`;
   }
 
-  const tsvText = tsvRows.join('\n');
+  const tsvText = tsvRows.join("\n");
   const htmlTable = `<table border="1" style="border-collapse:collapse;font-family:sans-serif;font-size:12px;">${htmlRows}</table>`;
 
-  if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
-    const textBlob = new Blob([tsvText], { type: 'text/plain' });
-    const htmlBlob = new Blob([htmlTable], { type: 'text/html' });
-    navigator.clipboard.write([
-      new ClipboardItem({
-        'text/plain': textBlob,
-        'text/html': htmlBlob
+  if (navigator.clipboard && typeof ClipboardItem !== "undefined") {
+    const textBlob = new Blob([tsvText], { type: "text/plain" });
+    const htmlBlob = new Blob([htmlTable], { type: "text/html" });
+    navigator.clipboard
+      .write([
+        new ClipboardItem({
+          "text/plain": textBlob,
+          "text/html": htmlBlob,
+        }),
+      ])
+      .then(() => {
+        toast(
+          "Location comparison data copied! Paste into Excel (Ctrl + V) and press Alt + F1 to create a native editable chart.",
+          "success",
+        );
       })
-    ]).then(() => {
-      toast('Location comparison data copied! Paste into Excel (Ctrl + V) and press Alt + F1 to create a native editable chart.', 'success');
-    }).catch(() => {
-      navigator.clipboard.writeText(tsvText)
-        .then(() => toast('Location comparison data copied to clipboard (TSV format for Excel)', 'success'))
-        .catch(() => toast('Failed to copy data', 'error'));
-    });
+      .catch(() => {
+        navigator.clipboard
+          .writeText(tsvText)
+          .then(() =>
+            toast(
+              "Location comparison data copied to clipboard (TSV format for Excel)",
+              "success",
+            ),
+          )
+          .catch(() => toast("Failed to copy data", "error"));
+      });
   } else {
-    navigator.clipboard.writeText(tsvText)
-      .then(() => toast('Location comparison data copied to clipboard (TSV format for Excel)', 'success'))
-      .catch(() => toast('Failed to copy data', 'error'));
+    navigator.clipboard
+      .writeText(tsvText)
+      .then(() =>
+        toast(
+          "Location comparison data copied to clipboard (TSV format for Excel)",
+          "success",
+        ),
+      )
+      .catch(() => toast("Failed to copy data", "error"));
   }
 }
 
 export function copyLocationChartImage() {
-  if (!locationChartInstance) return toast('No location comparison chart to copy', 'error');
-  const canvas = document.getElementById('loc-comparison-canvas');
-  copyCanvasToClipboard(canvas, `${currentLocationOrgCode || 'Organism'} Care Location Comparison Chart`);
+  if (!locationChartInstance)
+    return toast("No location comparison chart to copy", "error");
+  const canvas = document.getElementById("loc-comparison-canvas");
+  copyCanvasToClipboard(
+    canvas,
+    `${currentLocationOrgCode || "Organism"} Care Location Comparison Chart`,
+  );
 }
 
 export function downloadLocationChartPng() {
-  if (!locationChartInstance) return toast('No location comparison chart to download', 'error');
-  const canvas = document.getElementById('loc-comparison-canvas');
+  if (!locationChartInstance)
+    return toast("No location comparison chart to download", "error");
+  const canvas = document.getElementById("loc-comparison-canvas");
   if (!canvas) return;
 
-  const url = canvas.toDataURL('image/png', 1.0);
-  const a = document.createElement('a');
+  const url = canvas.toDataURL("image/png", 1.0);
+  const a = document.createElement("a");
   a.href = url;
-  a.download = `Location_Comparison_${currentLocationOrgCode || 'Organism'}_${currentLocationMetric}_${new Date().toISOString().slice(0, 10)}.png`;
+  a.download = `Location_Comparison_${currentLocationOrgCode || "Organism"}_${currentLocationMetric}_${new Date().toISOString().slice(0, 10)}.png`;
   a.click();
-  toast('Location comparison chart downloaded as PNG image', 'success');
+  toast("Location comparison chart downloaded as PNG image", "success");
 }
 
 export function copyLocationTableTsv() {
-  const table = document.getElementById('loc-matrix-table');
-  if (!table) return toast('No location table to copy', 'error');
+  const table = document.getElementById("loc-matrix-table");
+  if (!table) return toast("No location table to copy", "error");
 
   const rows = [];
-  table.querySelectorAll('tr').forEach(tr => {
+  table.querySelectorAll("tr").forEach((tr) => {
     const cols = [];
-    tr.querySelectorAll('th, td').forEach(td => cols.push(td.textContent.trim().replace(/\s+/g, ' ')));
-    rows.push(cols.join('\t'));
+    tr.querySelectorAll("th, td").forEach((td) =>
+      cols.push(td.textContent.trim().replace(/\s+/g, " ")),
+    );
+    rows.push(cols.join("\t"));
   });
 
-  navigator.clipboard.writeText(rows.join('\n'))
-    .then(() => toast('Location comparison matrix copied to clipboard', 'success'))
-    .catch(() => toast('Could not copy to clipboard', 'error'));
+  navigator.clipboard
+    .writeText(rows.join("\n"))
+    .then(() =>
+      toast("Location comparison matrix copied to clipboard", "success"),
+    )
+    .catch(() => toast("Could not copy to clipboard", "error"));
 }
-
-

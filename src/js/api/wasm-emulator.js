@@ -54,6 +54,9 @@ export function handleWasmApi(path, options = {}) {
       const wards = cols.includes('WARD')
         ? wasmSelect("SELECT DISTINCT WARD FROM Isolates WHERE WARD IS NOT NULL AND WARD != '' ORDER BY WARD").map(r => r.WARD)
         : [];
+      const wardTypes = cols.includes('WARD_TYPE')
+        ? wasmSelect("SELECT DISTINCT WARD_TYPE FROM Isolates WHERE WARD_TYPE IS NOT NULL AND WARD_TYPE != '' ORDER BY WARD_TYPE").map(r => r.WARD_TYPE)
+        : [];
       const specimens = cols.includes('SPEC_TYPE')
         ? wasmSelect("SELECT DISTINCT SPEC_TYPE FROM Isolates WHERE SPEC_TYPE IS NOT NULL AND SPEC_TYPE != '' ORDER BY SPEC_TYPE").map(r => r.SPEC_TYPE)
         : [];
@@ -61,7 +64,7 @@ export function handleWasmApi(path, options = {}) {
         ? wasmSelect("SELECT DISTINCT SUBSTR(SPEC_DATE, 1, 7) as ym FROM Isolates WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7 AND SUBSTR(SPEC_DATE, 1, 7) GLOB '[1-2][0-9][0-9][0-9]-[0-1][0-9]' AND SUBSTR(SPEC_DATE, 6, 2) BETWEEN '01' AND '12' ORDER BY ym DESC").map(r => r.ym)
         : [];
 
-      return { total, dupRows, dupGroups, dupPtRows, dupPtGroups, organisms, wards, specimens, months };
+      return { total, dupRows, dupGroups, dupPtRows, dupPtGroups, organisms, wards, wardTypes, specimens, months };
     }
 
     if (pathname === '/api/schema') {
@@ -605,6 +608,7 @@ export function handleWasmApi(path, options = {}) {
       const minIsolates = parseInt(url.searchParams.get('minIsolates') || '30', 10);
       const orgFilter = (url.searchParams.get('organism') || '').trim().toLowerCase();
       const wardFilter = (url.searchParams.get('ward') || '').trim();
+      const locType = (url.searchParams.get('locType') || url.searchParams.get('wardType') || '').trim().toLowerCase();
       const specFilter = (url.searchParams.get('specType') || '').trim();
       const startDate = (url.searchParams.get('startDate') || '').trim();
       const endDate = (url.searchParams.get('endDate') || '').trim();
@@ -617,7 +621,19 @@ export function handleWasmApi(path, options = {}) {
         where.push('LOWER(ORGANISM) = ?');
         params.push(orgFilter);
       }
-      if (wardFilter) {
+      if (locType) {
+        const lt = locType.toLowerCase();
+        if (lt === 'icu') {
+          where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%')");
+        } else if (lt === 'outpatient' || lt === 'out') {
+          where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')");
+        } else if (lt === 'inpatient' || lt === 'in') {
+          where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'in' OR (NOT (LOWER(COALESCE(WARD_TYPE, '')) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%') AND NOT (LOWER(COALESCE(WARD_TYPE, '')) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')))");
+        } else {
+          where.push("(LOWER(COALESCE(WARD_TYPE, '')) = ? OR (COALESCE(WARD_TYPE, '') = '' AND LOWER(COALESCE(WARD, '')) LIKE ?))");
+          params.push(lt, `%${lt}%`);
+        }
+      } else if (wardFilter) {
         where.push('WARD = ?');
         params.push(wardFilter);
       }

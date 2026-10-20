@@ -702,6 +702,9 @@ async function handleApi(req, res) {
         const wards = cols.includes("WARD")
           ? db.prepare("SELECT DISTINCT WARD FROM Isolates WHERE WARD != '' ORDER BY WARD").all().map((r) => r.WARD)
           : [];
+        const wardTypes = cols.includes("WARD_TYPE")
+          ? db.prepare("SELECT DISTINCT WARD_TYPE FROM Isolates WHERE WARD_TYPE IS NOT NULL AND WARD_TYPE != '' ORDER BY WARD_TYPE").all().map((r) => r.WARD_TYPE)
+          : [];
         const specimens = cols.includes("SPEC_TYPE")
           ? db.prepare("SELECT DISTINCT SPEC_TYPE FROM Isolates WHERE SPEC_TYPE IS NOT NULL AND SPEC_TYPE != '' ORDER BY SPEC_TYPE").all().map((r) => r.SPEC_TYPE)
           : [];
@@ -717,6 +720,7 @@ async function handleApi(req, res) {
           dupPtGroups: dupPtInfo?.dupPtGroups || 0,
           organisms,
           wards,
+          wardTypes,
           specimens,
           months,
         });
@@ -734,6 +738,7 @@ async function handleApi(req, res) {
       const minIsolates = parseInt(urlObj.searchParams.get("minIsolates") || "30", 10);
       const orgFilter = (urlObj.searchParams.get("organism") || "").trim().toLowerCase();
       const wardFilter = (urlObj.searchParams.get("ward") || "").trim();
+      const locType = (urlObj.searchParams.get("locType") || urlObj.searchParams.get("wardType") || "").trim().toLowerCase();
       const specFilter = (urlObj.searchParams.get("specType") || "").trim();
       const startDate = (urlObj.searchParams.get("startDate") || "").trim();
       const endDate = (urlObj.searchParams.get("endDate") || "").trim();
@@ -789,7 +794,19 @@ async function handleApi(req, res) {
           where.push("LOWER(ORGANISM) = ?");
           params.push(orgFilter);
         }
-        if (wardFilter) {
+        if (locType) {
+          const lt = locType.toLowerCase();
+          if (lt === "icu") {
+            where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%')");
+          } else if (lt === "outpatient" || lt === "out") {
+            where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')");
+          } else if (lt === "inpatient" || lt === "in") {
+            where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'in' OR (NOT (LOWER(COALESCE(WARD_TYPE, '')) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%') AND NOT (LOWER(COALESCE(WARD_TYPE, '')) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')))");
+          } else {
+            where.push("(LOWER(COALESCE(WARD_TYPE, '')) = ? OR (COALESCE(WARD_TYPE, '') = '' AND LOWER(COALESCE(WARD, '')) LIKE ?))");
+            params.push(lt, `%${lt}%`);
+          }
+        } else if (wardFilter) {
           where.push("WARD = ?");
           params.push(wardFilter);
         }

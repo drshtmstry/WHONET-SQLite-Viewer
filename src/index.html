@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="WHONET Laboratory Database Management, CLSI M39 Cumulative Antibiogram, Deduplication & AMR Surveillance Tool" />
+    <meta name="description" content="WHONET SQLite Viewer — Inspect, Deduplicate &amp; Generate Cumulative Antibiograms (CLSI M39)" />
     <title>WHONET SQLite Viewer</title>
 
     <!-- Favicon: WHONET Official Icon -->
@@ -92,7 +92,7 @@
             <span>WHONET SQLite Viewer</span>
           </div>
           <div class="header-sub">
-            Inspect, Deduplicate &amp; Analyze WHONET Databases
+            Inspect, Deduplicate &amp; Generate Cumulative Antibiograms
           </div>
         </div>
       </div>
@@ -1627,12 +1627,12 @@
                   </button>
                 </div>
 
-                <!-- Grouping Toggle: Class vs Alphabetical -->
+                <!-- Grouping Toggle: Class vs AWaRe vs Alphabetical -->
                 <div class="seg-control" id="abx-grouping-toggle">
                   <button
                     class="seg-btn active"
                     id="btn-abx-group-class"
-                    onclick="setAntibiogramGrouping(true)"
+                    onclick="setAntibiogramGrouping('class')"
                     title="Group antibiotics by drug class (CLSI Appendix E2)"
                     style="padding: 5px 11px; font-size: 12px;"
                   >
@@ -1640,8 +1640,17 @@
                   </button>
                   <button
                     class="seg-btn"
+                    id="btn-abx-group-aware"
+                    onclick="setAntibiogramGrouping('aware')"
+                    title="Group antibiotics by WHO AWaRe classification (Access, Watch, Reserve)"
+                    style="padding: 5px 11px; font-size: 12px;"
+                  >
+                    <i class="fa-solid fa-shield-virus"></i> By AWaRe
+                  </button>
+                  <button
+                    class="seg-btn"
                     id="btn-abx-group-alpha"
-                    onclick="setAntibiogramGrouping(false)"
+                    onclick="setAntibiogramGrouping('alpha')"
                     title="Alphabetical antibiotic listing (CLSI Appendix E1)"
                     style="padding: 5px 11px; font-size: 12px;"
                   >
@@ -1649,16 +1658,16 @@
                   </button>
                 </div>
 
-                <!-- Location / Ward Filter -->
+                <!-- Location Type Filter: Dynamically populated from data file (WARD_TYPE) -->
                 <div class="chart-control-group" style="margin: 0;">
                   <select
-                    id="abx-ward-filter"
+                    id="abx-loctype-filter"
                     class="chart-filter-select"
                     onchange="loadAntibiogram()"
-                    style="min-width: 135px; height: 32px; font-size: 12px; padding: 0 28px 0 10px;"
-                    title="Filter by Location / Ward"
+                    style="min-width: 140px; height: 32px; font-size: 12px; padding: 0 28px 0 10px;"
+                    title="Filter antibiogram by Location Type from data file"
                   >
-                    <option value="" selected>All Locations</option>
+                    <option value="" selected>All Location Types</option>
                   </select>
                 </div>
 
@@ -3006,11 +3015,12 @@
                 onchange="renderOrganismSpectrumChart()"
                 style="height: 30px; font-size: 12px; padding: 0 28px 0 10px; min-width: 205px;"
               >
-                <option value="susc_desc" selected>% Susceptible (Highest)</option>
+                <option value="class" selected>By Drug Class</option>
+                <option value="aware">By WHO AWaRe</option>
+                <option value="susc_desc">% Susceptible (Highest)</option>
                 <option value="susc_asc">% Susceptible (Lowest)</option>
                 <option value="res_desc">% Resistant (Highest)</option>
                 <option value="res_asc">% Resistant (Lowest)</option>
-                <option value="class">By Drug Class</option>
                 <option value="alpha">Alphabetical</option>
               </select>
             </div>
@@ -3064,7 +3074,7 @@
         </div>
 
         <!-- Body -->
-        <div class="modal-body" style="padding: 16px 22px; overflow: auto; flex: 1; display: flex; flex-direction: column; gap: 12px;">
+        <div class="modal-body" style="padding: 16px 22px; overflow-y: auto; overflow-x: auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px;">
           <!-- Custom Legend Badges -->
           <div id="spectrum-legend-badges" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; padding: 8px 12px; background: var(--bg2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
             <div id="spectrum-badge-s" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
@@ -3086,7 +3096,7 @@
           </div>
 
           <!-- Canvas Container -->
-          <div id="spectrum-canvas-container" style="position: relative; width: 100%; min-height: 420px;">
+          <div id="spectrum-canvas-container" style="position: relative; width: 100%; min-height: 460px; flex-shrink: 0;">
             <canvas id="spectrum-chart-canvas"></canvas>
           </div>
         </div>

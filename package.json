@@ -1,7 +1,7 @@
 {
   "name": "whonet-sqlite-viewer",
   "version": "1.0.0",
-  "description": "WHONET Laboratory Database Management, CLSI M39 Cumulative Antibiogram, Deduplication & AMR Surveillance Tool",
+  "description": "Inspect, Deduplicate & Generate Cumulative Antibiograms for WHONET SQLite Databases",
   "type": "module",
   "scripts": {
     "start": "node --watch server.js",

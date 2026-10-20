@@ -3,7 +3,7 @@ import { api, API_BASE } from '../api/client.js';
 import { toast } from '../ui/toast.js';
 import { getOrganismName } from '../utils/organisms.js';
 import { getSpecimenName } from '../utils/specimens.js';
-import { formatAmrMonthLabel } from '../utils/formatters.js';
+import { formatAmrMonthLabel, formatWardTypeLabel, escapeHtml } from '../utils/formatters.js';
 import { getSqlJs, wasmSelect, normaliseSchema } from '../db/wasm.js';
 
 let barChartInstance = null;
@@ -56,12 +56,6 @@ export async function loadStats() {
       data.wards.map(w => `<option value="${w}">${w}</option>`).join('');
   }
 
-  const abxWardFilter = document.getElementById('abx-ward-filter');
-  if (abxWardFilter && data.wards) {
-    abxWardFilter.innerHTML = '<option value="">All Locations</option>' +
-      data.wards.map(w => `<option value="${w}">${w}</option>`).join('');
-  }
-
   const isoSpecFilter = document.getElementById('isolates-spec-filter');
   if (isoSpecFilter && data.specimens) {
     const currentVal = isoSpecFilter.value;
@@ -87,6 +81,19 @@ export async function loadStats() {
       }).join('');
     if (currentVal && data.specimens.includes(currentVal)) {
       abxSpecFilter.value = currentVal;
+    }
+  }
+
+  const abxLocTypeFilter = document.getElementById('abx-loctype-filter');
+  if (abxLocTypeFilter && data.wardTypes) {
+    const currentVal = abxLocTypeFilter.value;
+    abxLocTypeFilter.innerHTML = '<option value="">All Location Types</option>' +
+      data.wardTypes.map(wt => {
+        const label = formatWardTypeLabel(wt);
+        return `<option value="${escapeHtml(wt)}">${label}</option>`;
+      }).join('');
+    if (currentVal && data.wardTypes.includes(currentVal)) {
+      abxLocTypeFilter.value = currentVal;
     }
   }
 
