@@ -16,10 +16,14 @@ const WHONET_ROOT = "C:\\WHONET";
 import {
   parseLabConfig,
   deduplicateFirstIsolates,
-  calculateCumulativeAntibiogram
+  calculateCumulativeAntibiogram,
+  interpretAstValue,
+  getApplicableBreakpoint
 } from "./src/js/utils/antibiogram-engine.js";
 
-// Cached WHONET Resources Tables (CLSI 2026 Breakpoints & Intrinsic Resistance)
+// Cached WHONET Resources Tables (CLSI Breakpoints & Intrinsic Resistance)
+// Attribution: Breakpoints.txt and ExpectedResistancePhenotypes.txt parsing logic
+// is adapted from AMRIE (https://github.com/WHONET-Development/AMRIE)
 let cachedBreakpoints = null;
 let cachedBreakpointKey = null;
 let cachedIntrinsic = null;
@@ -42,17 +46,36 @@ function getWhonetResourceBreakpoints(guideline = "CLSI", year = "2026") {
       const g = parts[0]?.trim();
       const yr = parts[1]?.trim();
       if (g !== guideline || yr !== year) continue;
+
+      // AMRIE Filter: Only Human clinical breakpoints (HOST=Human / BREAKPOINT_TYPE=Human)
+      // Exclude Animal (veterinary), ECOFF (epidemiological cutoffs), and non-human hosts
+      const bpType = (parts[6] || "").trim();
+      const host = (parts[7] || "").trim();
+      if (bpType && bpType.toLowerCase() !== "human") continue;
+      if (host && host.toLowerCase() !== "human") continue;
+
       const orgCode = (parts[4] || "").toLowerCase().trim();
       const testCode = (parts[12] || "").trim();
       const rVal = parseFloat(parts[13]);
       const sVal = parseFloat(parts[16]);
       if (!testCode || (isNaN(rVal) && isNaN(sVal))) continue;
 
+      const site = (parts[8] || "").trim().toLowerCase();
       if (!bpByTest[testCode]) bpByTest[testCode] = {};
+
+      // Prefer systemic / general rows over meningitis / UTI specific rows when resolving standard breakpoints
+      if (bpByTest[testCode][orgCode]) {
+        const existingSite = bpByTest[testCode][orgCode].site || "";
+        if ((site.includes("meningitis") || site.includes("urinary")) && (!existingSite || existingSite === "non-meningitis" || existingSite === "parenteral")) {
+          continue;
+        }
+      }
+
       bpByTest[testCode][orgCode] = {
         r: isNaN(rVal) ? null : rVal,
         s: isNaN(sVal) ? null : sVal,
-        year: yr
+        year: yr,
+        site: site
       };
     }
     cachedBreakpoints = bpByTest;

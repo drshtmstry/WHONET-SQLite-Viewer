@@ -131,8 +131,11 @@ For complete technical specifications, module contracts, and database table diag
 
 ---
 
-## Disclaimer
+## Disclaimer & Acknowledgments
 
 **WHONET** is the intellectual property of the WHO Collaborating Centre for Surveillance of Antimicrobial Resistance (Brigham and Women's Hospital). [whonet.org](https://whonet.org)
 
-This project is an independent open-source utility by [Dr. Darshit Mistry](https://drshtmstry.github.io/) and is not affiliated with, endorsed by, or sponsored by WHONET.
+**AMRIE (Antimicrobial Resistance Test Interpretation Engine)**:
+The antimicrobial susceptibility test (AST) interpretation engine, clinical breakpoint resolution hierarchy (`getApplicableBreakpoint`), intrinsic resistance rules, and guideline resource files (`Breakpoints.txt`, `ExpectedResistancePhenotypes.txt`) utilized in this application are adapted from and based on the open-source **[WHONET-Development/AMRIE](https://github.com/WHONET-Development/AMRIE)** engine developed by the WHONET development team (licensed under the LGPL / WHO open-source terms).
+
+This project is an independent community open-source utility by [Dr. Darshit Mistry](https://drshtmstry.github.io/) and is not officially affiliated with, endorsed by, or sponsored by the WHO Collaborating Centre for Surveillance of Antimicrobial Resistance.

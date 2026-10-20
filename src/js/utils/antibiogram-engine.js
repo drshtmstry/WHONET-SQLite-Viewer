@@ -1,3 +1,18 @@
+/**
+ * Antibiogram & Antimicrobial Susceptibility Test (AST) Interpretation Engine
+ * 
+ * Attributions & Architecture:
+ * The AST interpretation algorithms, clinical breakpoint resolution hierarchy (getApplicableBreakpoint),
+ * taxonomic lookup order, and intrinsic resistance rules in this engine are adapted from and
+ * reference the open-source AMRIE (Antimicrobial Resistance Test Interpretation Engine)
+ * developed by the WHO Collaborating Centre for Surveillance of Antimicrobial Resistance:
+ * https://github.com/WHONET-Development/AMRIE
+ * 
+ * Standards Compliance:
+ * - CLSI M39-A4: Analysis and Presentation of Cumulative Antimicrobial Susceptibility Test Data
+ * - CLSI M100 / EUCAST: Human Clinical Breakpoints & Expected Resistance Phenotypes
+ */
+
 import rulesData from './antibiogram-rules.json' with { type: 'json' };
 
 const { abx, intrinsicMap, bpMatrix, orgNames = {} } = rulesData;
@@ -120,6 +135,84 @@ export const TAXON_PARENT_GROUPS = {
 };
 
 /**
+ * Organism groups that have dedicated CLSI / EUCAST reference tables.
+ * In accordance with CLSI M100 and WHONET AMRIE, these organisms MUST NEVER
+ * fall back to 'general' breakpoints for antibiotics that are omitted, unapproved,
+ * or discontinued (e.g. Gentamicin for Pseudomonas aeruginosa, Ampicillin for Klebsiella).
+ */
+export const DEDICATED_PATHOGEN_GROUPS = new Set([
+  'ebc', 'sta', 'sc+', 'scn', 'ent', 'ac-', 'acb', 'psd', 'pae', 'str', 'stp', 'ha-', 'hin', 'bcs', 'sma', 'ne-'
+]);
+
+/**
+ * AMRIE-compliant resolution of applicable clinical breakpoint.
+ * Adheres strictly to CLSI M100 hierarchy and WHONET AMRIE FilterBreakpoints logic:
+ * 1. Lab config species-specific override
+ * 2. Official WHONET Resource species-specific (CLSI Human)
+ * 3. Bundled Matrix species-specific
+ * 4. Taxonomic parent group (e.g. eco -> ebc, sau -> sta, pae -> psd, aba -> ac-)
+ * 5. General fallback ONLY for organisms without dedicated CLSI guideline tables
+ *
+ * @param {string} orgCode WHONET organism code (e.g. 'pae', 'eco', 'sau')
+ * @param {string} testCol AST Column name (e.g. 'GEN_ND10', 'FOX_ND30')
+ * @param {object} [customLabConfig] Active lab configuration
+ * @returns {object|null} Applicable breakpoint { r, s, [year] } or null if none
+ */
+export function getApplicableBreakpoint(orgCode, testCol, customLabConfig = null) {
+  if (!orgCode || !testCol) return null;
+  const orgLower = orgCode.toLowerCase().trim();
+
+  // 1. Direct Species-Specific Breakpoint:
+  // Custom lab config override -> Official WHONET Resource -> Bundled Matrix
+  if (customLabConfig?.speciesBreakpoints?.[testCol]?.[orgLower]) {
+    return customLabConfig.speciesBreakpoints[testCol][orgLower];
+  }
+  if (customLabConfig?.resourceBreakpoints?.[testCol]?.[orgLower]) {
+    return customLabConfig.resourceBreakpoints[testCol][orgLower];
+  }
+  if (bpMatrix[testCol]?.species?.[orgLower]) {
+    return bpMatrix[testCol].species[orgLower];
+  }
+
+  // 2. Taxonomic Parent Groups (e.g. eco -> ebc, sau -> sta, pae -> psd, aba -> ac-)
+  const parentGroups = TAXON_PARENT_GROUPS[orgLower];
+  if (parentGroups && parentGroups.length > 0) {
+    for (const groupCode of parentGroups) {
+      if (customLabConfig?.speciesBreakpoints?.[testCol]?.[groupCode]) {
+        return customLabConfig.speciesBreakpoints[testCol][groupCode];
+      }
+      if (customLabConfig?.resourceBreakpoints?.[testCol]?.[groupCode]) {
+        return customLabConfig.resourceBreakpoints[testCol][groupCode];
+      }
+      if (bpMatrix[testCol]?.species?.[groupCode]) {
+        return bpMatrix[testCol].species[groupCode];
+      }
+    }
+  }
+
+  // 3. AMRIE Rule: Organisms with dedicated CLSI reference tables (P. aeruginosa, Enterobacterales,
+  // Staphylococci, Enterococci, Acinetobacter, etc.) MUST NEVER fall back to 'general'
+  // breakpoints for drugs omitted or discontinued by CLSI (e.g. Gentamicin in P. aeruginosa).
+  const isDedicatedPathogen = !!parentGroups || DEDICATED_PATHOGEN_GROUPS.has(orgLower);
+  if (isDedicatedPathogen) {
+    return null;
+  }
+
+  // 4. Fallback to General Breakpoints ONLY for non-table / miscellaneous organisms
+  if (customLabConfig?.resourceBreakpoints?.[testCol]?.general) {
+    return customLabConfig.resourceBreakpoints[testCol].general;
+  }
+  if (customLabConfig?.generalBreakpoints?.[testCol]) {
+    return customLabConfig.generalBreakpoints[testCol];
+  }
+  if (bpMatrix[testCol]?.general) {
+    return bpMatrix[testCol].general;
+  }
+
+  return null;
+}
+
+/**
  * Test whether an AST measurement value is blank, empty, or not tested
  * @param {any} val
  * @returns {boolean}
@@ -166,44 +259,8 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
   // Determine if MIC or Disk Diffusion
   const isMic = testCol.endsWith('_NM') || testCol.endsWith('_NE') || testCol.endsWith('_EM') || testCol.endsWith('_EE');
 
-  // 2. Resolve Breakpoint: Custom Lab Config Species-Specific -> Custom Lab General -> WHONET Resources (CLSI 2026) -> Bundled Matrix
-  let bp = null;
-
-  if (customLabConfig?.speciesBreakpoints?.[testCol]?.[orgLower]) {
-    bp = customLabConfig.speciesBreakpoints[testCol][orgLower];
-  } else if (customLabConfig?.generalBreakpoints?.[testCol]) {
-    bp = customLabConfig.generalBreakpoints[testCol];
-  } else if (customLabConfig?.resourceBreakpoints?.[testCol]?.[orgLower]) {
-    bp = customLabConfig.resourceBreakpoints[testCol][orgLower];
-  } else if (bpMatrix[testCol]?.species?.[orgLower]) {
-    bp = bpMatrix[testCol].species[orgLower];
-  } else {
-    // Check taxonomic parent groups (e.g. eco -> ebc, sau -> sta, aba -> ac-)
-    const parentGroups = TAXON_PARENT_GROUPS[orgLower];
-    if (parentGroups) {
-      for (const groupCode of parentGroups) {
-        if (customLabConfig?.speciesBreakpoints?.[testCol]?.[groupCode]) {
-          bp = customLabConfig.speciesBreakpoints[testCol][groupCode];
-          break;
-        }
-        if (customLabConfig?.resourceBreakpoints?.[testCol]?.[groupCode]) {
-          bp = customLabConfig.resourceBreakpoints[testCol][groupCode];
-          break;
-        }
-        if (bpMatrix[testCol]?.species?.[groupCode]) {
-          bp = bpMatrix[testCol].species[groupCode];
-          break;
-        }
-      }
-    }
-    if (!bp && customLabConfig?.resourceBreakpoints?.[testCol]?.general) {
-      bp = customLabConfig.resourceBreakpoints[testCol].general;
-    }
-    if (!bp && bpMatrix[testCol]?.general) {
-      bp = bpMatrix[testCol].general;
-    }
-  }
-
+  // 2. Resolve Applicable Breakpoint via AMRIE logic
+  const bp = getApplicableBreakpoint(orgLower, testCol, customLabConfig);
   if (!bp) return null;
 
   if (isMic) {

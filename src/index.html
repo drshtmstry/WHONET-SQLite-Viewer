@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="WHONET Laboratory Database Management, CLSI M39 Cumulative Antibiogram, Care Location Stratification, Deduplication & AMR Surveillance Tool" />
+    <meta name="description" content="WHONET Laboratory Database Management, CLSI M39 Cumulative Antibiogram, Deduplication & AMR Surveillance Tool" />
     <title>WHONET SQLite Viewer</title>
 
     <!-- Favicon: WHONET Official Icon -->
@@ -1655,7 +1655,7 @@
                     id="abx-ward-filter"
                     class="chart-filter-select"
                     onchange="loadAntibiogram()"
-                    style="min-width: 130px; height: 32px; font-size: 12px; padding: 0 8px;"
+                    style="min-width: 135px; height: 32px; font-size: 12px; padding: 0 28px 0 10px;"
                     title="Filter by Location / Ward"
                   >
                     <option value="" selected>All Locations</option>
@@ -1668,7 +1668,7 @@
                     id="abx-spec-filter"
                     class="chart-filter-select"
                     onchange="loadAntibiogram()"
-                    style="min-width: 130px; height: 32px; font-size: 12px; padding: 0 8px;"
+                    style="min-width: 135px; height: 32px; font-size: 12px; padding: 0 28px 0 10px;"
                     title="Filter by Specimen Type"
                   >
                     <option value="" selected>All Specimens</option>
@@ -2579,12 +2579,9 @@
               margin-bottom: 16px;
             "
           >
-            <strong>Disclaimer:</strong> WHONET is the property of the
-            <strong
-              >WHO Collaborating Centre for Surveillance of Antimicrobial
-              Resistance</strong
-            >
-            (Brigham and Women's Hospital).<br /><br />
+            <strong>Disclaimer &amp; Attributions:</strong><br />
+            • <strong>WHONET</strong> is the intellectual property of the <strong>WHO Collaborating Centre for Surveillance of Antimicrobial Resistance</strong> (Brigham and Women's Hospital).<br />
+            • <strong>AMRIE Architecture:</strong> AST measurement interpretation, clinical breakpoint hierarchy (<code style="font-size: 10.5px;">getApplicableBreakpoint</code>), and intrinsic resistance rules are adapted from and based on the open-source <strong>AMRIE (Antimicrobial Resistance Test Interpretation Engine)</strong> (<a href="https://github.com/WHONET-Development/AMRIE" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;">WHONET-Development/AMRIE</a>).<br /><br />
             This tool is an independent open-source utility developed by
             <a
               href="https://drshtmstry.github.io/"
@@ -2597,8 +2594,7 @@
               "
               >Dr. Darshit Mistry</a
             >
-            as a community tool and is not affiliated with, endorsed by, or
-            sponsored by WHONET.
+            as a community tool and is not officially affiliated with, endorsed by, or sponsored by the WHO Collaborating Centre for Surveillance of Antimicrobial Resistance.
           </div>
           <div style="display: flex; gap: 12px; justify-content: flex-end">
             <button
@@ -2979,7 +2975,7 @@
                 id="spectrum-metric-select"
                 class="chart-filter-select"
                 onchange="renderOrganismSpectrumChart()"
-                style="height: 30px; font-size: 12px; padding: 0 8px; min-width: 142px;"
+                style="height: 30px; font-size: 12px; padding: 0 28px 0 10px; min-width: 165px;"
               >
                 <option value="all" selected>%S / %I / %R (Full)</option>
                 <option value="S">%S Only (Susceptible)</option>
@@ -2994,7 +2990,7 @@
                 id="spectrum-orientation-select"
                 class="chart-filter-select"
                 onchange="renderOrganismSpectrumChart()"
-                style="height: 30px; font-size: 12px; padding: 0 8px; min-width: 110px;"
+                style="height: 30px; font-size: 12px; padding: 0 26px 0 10px; min-width: 120px;"
               >
                 <option value="horizontal" selected>Horizontal</option>
                 <option value="vertical">Vertical</option>
@@ -3008,7 +3004,7 @@
                 id="spectrum-sort-select"
                 class="chart-filter-select"
                 onchange="renderOrganismSpectrumChart()"
-                style="height: 30px; font-size: 12px; padding: 0 8px; min-width: 145px;"
+                style="height: 30px; font-size: 12px; padding: 0 28px 0 10px; min-width: 205px;"
               >
                 <option value="susc_desc" selected>% Susceptible (Highest)</option>
                 <option value="susc_asc">% Susceptible (Lowest)</option>
