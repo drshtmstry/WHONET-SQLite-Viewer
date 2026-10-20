@@ -1531,10 +1531,34 @@
                 gap: 10px;
                 align-items: center;
                 margin-left: auto;
+                flex-wrap: wrap;
               "
             >
+              <!-- View Switcher: Antibiogram Table vs AMR Trends -->
+              <div class="seg-control" id="abx-view-mode-toggle">
+                <button
+                  class="seg-btn active"
+                  id="btn-abx-view-table"
+                  onclick="setAntibiogramViewMode('table')"
+                  title="CLSI M39 Cumulative Antibiogram Table"
+                  style="padding: 5px 12px; font-size: 12px;"
+                >
+                  <i class="fa-solid fa-table-cells"></i> Antibiogram Table
+                </button>
+                <button
+                  class="seg-btn"
+                  id="btn-abx-view-trends"
+                  onclick="setAntibiogramViewMode('trends')"
+                  title="Longitudinal Antimicrobial Resistance (AMR) Trend Analytics (CLSI Appendix F)"
+                  style="padding: 5px 12px; font-size: 12px;"
+                >
+                  <i class="fa-solid fa-chart-line"></i> AMR Longitudinal Trends
+                </button>
+              </div>
+
               <button
                 class="btn btn-outline btn-sm"
+                id="btn-abx-copy-table"
                 onclick="copyAntibiogramTsv()"
                 title="Copy Antibiogram Table to Clipboard (ready to paste into Excel, Word, or Google Sheets)"
               >
@@ -1543,11 +1567,13 @@
             </div>
           </div>
 
-          <!-- Meta and Control Bar -->
-          <div
-            class="chart-analytics-card"
-            style="margin-bottom: 18px; padding: 14px 18px;"
-          >
+          <!-- Cumulative Table View Container -->
+          <div id="antibiogram-table-view">
+            <!-- Meta and Control Bar -->
+            <div
+              class="chart-analytics-card"
+              style="margin-bottom: 18px; padding: 14px 18px;"
+            >
             <div
               id="antibiogram-meta-banner"
               style="
@@ -1688,6 +1714,174 @@
               >
                 <i class="fa-solid fa-arrows-rotate"></i> Generate Antibiogram
               </button>
+            </div>
+          </div>
+          <!-- End #antibiogram-table-view -->
+
+          <!-- AMR Longitudinal Trends Hub (CLSI M39 Appendix F) -->
+          <div id="antibiogram-trends-view" style="display: none;">
+            <!-- Indicator Selector Bar -->
+            <div class="chart-analytics-card" style="margin-bottom: 16px; padding: 14px 18px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+                <div>
+                  <div style="font-size: 13.5px; font-weight: 700; color: var(--text);">
+                    <i class="fa-solid fa-chart-line" style="color: var(--accent);"></i> Priority AMR Surveillance Indicators
+                  </div>
+                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 2px;">
+                    Select an epidemiological indicator or choose a custom organism-antibiotic combination
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-sm"
+                    onclick="downloadAmrTrendPng()"
+                    title="Download AMR trend chart as PNG"
+                    style="height: 30px; font-size: 12px; padding: 0 10px;"
+                  >
+                    <i class="fa-solid fa-download"></i> Download Chart
+                  </button>
+                </div>
+              </div>
+
+              <!-- Indicator Pills -->
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <button type="button" class="abx-trend-pill active" id="pill-trend-mrsa" onclick="setAmrTrendIndicator('mrsa')">
+                  <i class="fa-solid fa-virus"></i> MRSA (S. aureus)
+                </button>
+                <button type="button" class="abx-trend-pill" id="pill-trend-cre" onclick="setAmrTrendIndicator('cre')">
+                  <i class="fa-solid fa-biohazard"></i> CRE (Enterobacterales)
+                </button>
+                <button type="button" class="abx-trend-pill" id="pill-trend-esbl" onclick="setAmrTrendIndicator('esbl')">
+                  <i class="fa-solid fa-shield-halved"></i> ESBL (E. coli / K. pneumoniae)
+                </button>
+                <button type="button" class="abx-trend-pill" id="pill-trend-crab" onclick="setAmrTrendIndicator('crab')">
+                  <i class="fa-solid fa-bacterium"></i> CRAB (A. baumannii)
+                </button>
+                <button type="button" class="abx-trend-pill" id="pill-trend-crpa" onclick="setAmrTrendIndicator('crpa')">
+                  <i class="fa-solid fa-dna"></i> CRPA (P. aeruginosa)
+                </button>
+                <button type="button" class="abx-trend-pill" id="pill-trend-vre" onclick="setAmrTrendIndicator('vre')">
+                  <i class="fa-solid fa-capsules"></i> VRE (Enterococcus)
+                </button>
+                <button type="button" class="abx-trend-pill" id="pill-trend-fq" onclick="setAmrTrendIndicator('fq_gn')">
+                  <i class="fa-solid fa-syringe"></i> Fluoroquinolone-R (Gram-negatives)
+                </button>
+                <button type="button" class="abx-trend-pill" id="pill-trend-custom" onclick="setAmrTrendIndicator('custom')">
+                  <i class="fa-solid fa-sliders"></i> Custom Bug &amp; Drug
+                </button>
+              </div>
+
+              <!-- Custom Organism & Antibiotic Dropdowns (Visible when indicator === 'custom') -->
+              <div id="trend-custom-controls" style="display: none; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); gap: 14px; flex-wrap: wrap; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <label for="trend-custom-org-select" style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Organism:</label>
+                  <select id="trend-custom-org-select" class="chart-filter-select" onchange="renderAmrTrendChart()" style="min-width: 180px; height: 32px; font-size: 12px; padding: 0 8px;">
+                  </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <label for="trend-custom-abx-select" style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Antibiotic:</label>
+                  <select id="trend-custom-abx-select" class="chart-filter-select" onchange="renderAmrTrendChart()" style="min-width: 180px; height: 32px; font-size: 12px; padding: 0 8px;">
+                  </select>
+                </div>
+              </div>
+
+              <!-- Filter & View Controls -->
+              <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);">
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                  <!-- Metric Toggle -->
+                  <div class="seg-control" id="trend-metric-toggle">
+                    <button class="seg-btn active" id="btn-trend-metric-r" onclick="setTrendMetric('R')" style="padding: 4px 10px; font-size: 11.5px;">
+                      <i class="fa-solid fa-biohazard"></i> % Resistant (%R)
+                    </button>
+                    <button class="seg-btn" id="btn-trend-metric-s" onclick="setTrendMetric('S')" style="padding: 4px 10px; font-size: 11.5px;">
+                      <i class="fa-solid fa-shield-virus"></i> % Susceptible (%S)
+                    </button>
+                  </div>
+
+                  <!-- Location Filter -->
+                  <div class="chart-control-group" style="margin: 0;">
+                    <select id="trend-location-filter" class="chart-filter-select" onchange="renderAmrTrendChart()" style="min-width: 140px; height: 30px; font-size: 12px; padding: 0 8px;" title="Stratify by Patient Care Location">
+                      <option value="all" selected>All Locations (Overall)</option>
+                      <option value="icu">ICU Wards</option>
+                      <option value="inpatient">Inpatient (Non-ICU)</option>
+                      <option value="outpatient">Outpatient</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div id="trend-date-range-badge" style="font-size: 11.5px; color: var(--text3);">
+                </div>
+              </div>
+            </div>
+
+            <!-- Summary KPI Stat Cards -->
+            <div class="abx-kpi-grid">
+              <div class="abx-kpi-card">
+                <div class="abx-kpi-title">Total Tested (N)</div>
+                <div class="abx-kpi-value" id="trend-kpi-tested">—</div>
+                <div class="abx-kpi-sub" id="trend-kpi-tested-sub">Isolates evaluated</div>
+              </div>
+              <div class="abx-kpi-card">
+                <div class="abx-kpi-title">Period Average Rate</div>
+                <div class="abx-kpi-value" id="trend-kpi-avg" style="color: var(--accent);">—</div>
+                <div class="abx-kpi-sub" id="trend-kpi-avg-sub">Weighted surveillance mean</div>
+              </div>
+              <div class="abx-kpi-card">
+                <div class="abx-kpi-title">Latest Interval Rate</div>
+                <div class="abx-kpi-value" id="trend-kpi-latest">—</div>
+                <div class="abx-kpi-sub" id="trend-kpi-latest-sub">Most recent month</div>
+              </div>
+              <div class="abx-kpi-card">
+                <div class="abx-kpi-title">Epidemiological Status</div>
+                <div class="abx-kpi-value" id="trend-kpi-status" style="font-size: 14px; font-family: 'Plus Jakarta Sans', sans-serif;">—</div>
+                <div class="abx-kpi-sub" id="trend-kpi-status-sub">WHO Priority Classification</div>
+              </div>
+            </div>
+
+            <!-- Line Chart Box -->
+            <div class="chart-analytics-card" style="margin-bottom: 16px; padding: 18px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div style="font-weight: 700; font-size: 14px; color: var(--text);" id="trend-chart-heading">
+                  Longitudinal Resistance Trajectory
+                </div>
+                <div style="font-size: 11.5px; color: var(--text3);" id="trend-chart-sub">
+                  Monthly trend line with tested isolate volume
+                </div>
+              </div>
+              <div style="position: relative; width: 100%; height: 360px;">
+                <canvas id="amr-trends-chart-canvas"></canvas>
+              </div>
+            </div>
+
+            <!-- Monthly Breakdown Table Card -->
+            <div class="chart-analytics-card" style="padding: 18px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div style="font-weight: 700; font-size: 13.5px; color: var(--text);">
+                  <i class="fa-solid fa-table-list"></i> Monthly Breakdown &amp; Statistical Counts
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" onclick="copyTrendTableTsv()" style="font-size: 11.5px; padding: 3px 9px;">
+                  <i class="fa-solid fa-copy"></i> Copy Breakdown
+                </button>
+              </div>
+              <div style="overflow-x: auto; width: 100%;">
+                <table class="data-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px;">
+                  <thead>
+                    <tr style="background: var(--bg3);">
+                      <th style="padding: 8px 12px; text-align: left;">Surveillance Month</th>
+                      <th style="padding: 8px 10px; text-align: center;">Tested (N)</th>
+                      <th style="padding: 8px 10px; text-align: center;">Resistant (R)</th>
+                      <th style="padding: 8px 10px; text-align: center;">Susceptible (S)</th>
+                      <th style="padding: 8px 10px; text-align: center;">Intermediate (I)</th>
+                      <th style="padding: 8px 12px; text-align: right;">Resistance Rate (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="trend-table-body">
+                    <tr><td colspan="6" style="padding: 24px; text-align: center; color: var(--text3);">Load an active database to display trend records</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

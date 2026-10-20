@@ -614,12 +614,237 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
     isUrineOnly: URINE_SPECIFIC_ANTIBIOTICS.has(code)
   })).sort((a, b) => a.name.localeCompare(b.name));
 
+  const trends = calculateAmrTrends(isolates, options);
+
   return {
     organisms,
     antibiotics,
+    trends,
     totalFirstIsolates: isolates.length,
     minIsolatesThreshold: minIsolates,
     dedupMode: options.mode || 'patient_first',
     episodeDays: options.episodeDays || 30
+  };
+}
+
+/**
+ * Calculate Longitudinal AMR Trends (CLSI M39 Appendix F)
+ * Analyzes monthly and quarterly rates for key resistant phenotypes:
+ * - MRSA (Methicillin-resistant S. aureus)
+ * - CRE (Carbapenem-resistant Enterobacterales)
+ * - ESBL (Extended-spectrum beta-lactamase E. coli / K. pneumoniae)
+ * - CRAB (Carbapenem-resistant A. baumannii)
+ * - CRPA (Carbapenem-resistant P. aeruginosa)
+ * - VRE (Vancomycin-resistant Enterococcus)
+ * - FQ_GN (Fluoroquinolone-resistant Gram-negatives)
+ *
+ * @param {Array<object>} isolates Deduplicated first-isolates
+ * @param {object} [options]
+ * @returns {object} Monthly and quarterly aggregated trend metrics
+ */
+export function calculateAmrTrends(isolates, options = {}) {
+  const customLabConfig = options.customLabConfig || null;
+
+  const monthMap = new Map();
+
+  const ENTEROBACTERALES = new Set(['eco', 'kpn', 'kox', 'ecl', 'eca', 'eae', 'ccl', 'cfr', 'pmi', 'pvu', 'mor', 'sma', 'ebc']);
+  const CARBAPENEMS = new Set(['MEM', 'IPM', 'ETP', 'DOR']);
+  const CEPH_34 = new Set(['CRO', 'CTX', 'CAZ', 'FEP']);
+
+  for (const row of isolates) {
+    const orgCode = (row.ORGANISM || '').trim().toLowerCase();
+    if (!orgCode || isNegativeOrganismResult(orgCode)) continue;
+
+    const rawDate = String(row.SPEC_DATE || row.DATE_DATA || '').trim();
+    if (!rawDate || rawDate.length < 7) continue;
+    const monthKey = rawDate.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(monthKey)) continue;
+
+    if (!monthMap.has(monthKey)) {
+      monthMap.set(monthKey, {
+        month: monthKey,
+        mrsa: { total: 0, R: 0, S: 0, I: 0 },
+        cre: { total: 0, R: 0, S: 0, I: 0 },
+        esbl: { total: 0, R: 0, S: 0, I: 0 },
+        crab: { total: 0, R: 0, S: 0, I: 0 },
+        crpa: { total: 0, R: 0, S: 0, I: 0 },
+        vre: { total: 0, R: 0, S: 0, I: 0 },
+        fq_gn: { total: 0, R: 0, S: 0, I: 0 },
+        locations: {
+          icu: { total: 0, resistant: 0 },
+          inpatient: { total: 0, resistant: 0 },
+          outpatient: { total: 0, resistant: 0 }
+        },
+        pairs: {}
+      });
+    }
+
+    const mData = monthMap.get(monthKey);
+    const wardLower = (row.WARD || '').toLowerCase();
+    const wardTypeLower = (row.WARD_TYPE || '').toLowerCase();
+    const isIcu = wardTypeLower === 'icu' || wardLower.includes('icu') || wardLower.includes('intensive') || wardLower.includes('ccu');
+    const isOutpatient = wardTypeLower === 'out' || wardLower.includes('opd') || wardLower.includes('out') || wardLower.includes('clinic');
+    const locKey = isIcu ? 'icu' : (isOutpatient ? 'outpatient' : 'inpatient');
+
+    const rowIsUrine = isUrineSpecimen(row.SPEC_TYPE);
+
+    const abxInterps = {};
+    for (const [col, val] of Object.entries(row)) {
+      if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && !isBlankAstValue(val)) {
+        const abxCode = col.split('_')[0].toUpperCase();
+        if (URINE_SPECIFIC_ANTIBIOTICS.has(abxCode) && !rowIsUrine) continue;
+
+        const interp = interpretAstValue(orgCode, col, val, customLabConfig);
+        if (interp) {
+          const isMic = col.endsWith('_NM') || col.endsWith('_NE') || col.endsWith('_EM') || col.endsWith('_EE');
+          if (!abxInterps[abxCode] || isMic) {
+            abxInterps[abxCode] = interp;
+          }
+        }
+      }
+    }
+
+    // 1. MRSA: Staphylococcus aureus ('sau') vs Cefoxitin ('FOX') or Oxacillin ('OXA')
+    if (orgCode === 'sau') {
+      const foxInterp = abxInterps['FOX'] || abxInterps['OXA'];
+      if (foxInterp) {
+        mData.mrsa.total++;
+        mData.mrsa[foxInterp]++;
+        mData.locations[locKey].total++;
+        if (foxInterp === 'R') mData.locations[locKey].resistant++;
+      }
+    }
+
+    // 2. CRE: Enterobacterales vs Carbapenems (MEM, IPM, ETP, DOR)
+    if (ENTEROBACTERALES.has(orgCode)) {
+      let testedCarbapenem = false;
+      let isResistant = false;
+      let hasInterm = false;
+      for (const c of CARBAPENEMS) {
+        if (abxInterps[c]) {
+          testedCarbapenem = true;
+          if (abxInterps[c] === 'R') isResistant = true;
+          else if (abxInterps[c] === 'I') hasInterm = true;
+        }
+      }
+      if (testedCarbapenem) {
+        mData.cre.total++;
+        if (isResistant) mData.cre.R++;
+        else if (hasInterm) mData.cre.I++;
+        else mData.cre.S++;
+
+        mData.locations[locKey].total++;
+        if (isResistant) mData.locations[locKey].resistant++;
+      }
+    }
+
+    // 3. ESBL: E. coli ('eco') & K. pneumoniae ('kpn') vs 3rd/4th gen Cephalosporins (CRO, CTX, CAZ, FEP)
+    if (orgCode === 'eco' || orgCode === 'kpn') {
+      let testedCeph = false;
+      let isResistant = false;
+      let hasInterm = false;
+      for (const c of CEPH_34) {
+        if (abxInterps[c]) {
+          testedCeph = true;
+          if (abxInterps[c] === 'R') isResistant = true;
+          else if (abxInterps[c] === 'I') hasInterm = true;
+        }
+      }
+      if (testedCeph) {
+        mData.esbl.total++;
+        if (isResistant) mData.esbl.R++;
+        else if (hasInterm) mData.esbl.I++;
+        else mData.esbl.S++;
+      }
+    }
+
+    // 4. CRAB: Acinetobacter baumannii ('aba') vs Carbapenems
+    if (orgCode === 'aba' || orgCode === 'ac-') {
+      const memInterp = abxInterps['MEM'] || abxInterps['IPM'];
+      if (memInterp) {
+        mData.crab.total++;
+        mData.crab[memInterp]++;
+      }
+    }
+
+    // 5. CRPA: Pseudomonas aeruginosa ('pae') vs Carbapenems
+    if (orgCode === 'pae') {
+      const memInterp = abxInterps['MEM'] || abxInterps['IPM'];
+      if (memInterp) {
+        mData.crpa.total++;
+        mData.crpa[memInterp]++;
+      }
+    }
+
+    // 6. VRE: Enterococcus ('efa', 'efm', 'enc') vs Vancomycin ('VAN')
+    if (orgCode === 'efa' || orgCode === 'efm' || orgCode === 'enc') {
+      const vanInterp = abxInterps['VAN'];
+      if (vanInterp) {
+        mData.vre.total++;
+        mData.vre[vanInterp]++;
+      }
+    }
+
+    // 7. FQ_GN: Gram-negatives vs Fluoroquinolones (CIP, LVX)
+    if (ENTEROBACTERALES.has(orgCode) || orgCode === 'aba' || orgCode === 'pae') {
+      const fqInterp = abxInterps['CIP'] || abxInterps['LVX'];
+      if (fqInterp) {
+        mData.fq_gn.total++;
+        mData.fq_gn[fqInterp]++;
+      }
+    }
+
+    // 8. Individual Bug-Drug Pairs
+    for (const [abxCode, interp] of Object.entries(abxInterps)) {
+      const pairKey = `${orgCode}:${abxCode}`;
+      if (!mData.pairs[pairKey]) {
+        mData.pairs[pairKey] = { total: 0, R: 0, S: 0, I: 0 };
+      }
+      mData.pairs[pairKey].total++;
+      mData.pairs[pairKey][interp]++;
+    }
+  }
+
+  const sortedMonths = Array.from(monthMap.keys()).sort();
+
+  const monthlyList = sortedMonths.map(mKey => {
+    const d = monthMap.get(mKey);
+    const computePct = (st) => {
+      if (!st || st.total === 0) return { pctR: null, pctS: null, pctI: null, total: 0, R: 0, S: 0, I: 0 };
+      return {
+        total: st.total,
+        R: st.R,
+        S: st.S,
+        I: st.I,
+        pctR: Math.round((st.R / st.total) * 100),
+        pctS: Math.round((st.S / st.total) * 100),
+        pctI: Math.round((st.I / st.total) * 100)
+      };
+    };
+
+    return {
+      month: mKey,
+      mrsa: computePct(d.mrsa),
+      cre: computePct(d.cre),
+      esbl: computePct(d.esbl),
+      crab: computePct(d.crab),
+      crpa: computePct(d.crpa),
+      vre: computePct(d.vre),
+      fq_gn: computePct(d.fq_gn),
+      locations: {
+        icu: d.locations.icu.total > 0 ? Math.round((d.locations.icu.resistant / d.locations.icu.total) * 100) : null,
+        icuTotal: d.locations.icu.total,
+        inpatient: d.locations.inpatient.total > 0 ? Math.round((d.locations.inpatient.resistant / d.locations.inpatient.total) * 100) : null,
+        inpatientTotal: d.locations.inpatient.total,
+        outpatient: d.locations.outpatient.total > 0 ? Math.round((d.locations.outpatient.resistant / d.locations.outpatient.total) * 100) : null,
+        outpatientTotal: d.locations.outpatient.total
+      },
+      pairs: d.pairs
+    };
+  });
+
+  return {
+    months: sortedMonths,
+    monthly: monthlyList
   };
 }

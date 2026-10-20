@@ -164,6 +164,9 @@ export async function loadAntibiogram() {
   currentReportData = res;
   updateAntibiogramMetaHeader(res);
   renderAntibiogramTable();
+  if (currentAntibiogramViewMode === 'trends') {
+    renderAmrTrendChart();
+  }
 }
 
 function getDedupModeLabel(mode) {
@@ -928,4 +931,450 @@ document.getElementById('organism-spectrum-modal')?.addEventListener('click', (e
     closeOrganismSpectrumModal();
   }
 });
+
+// ── Longitudinal AMR Trends State & Controller ──
+
+let currentAntibiogramViewMode = 'table'; // 'table' | 'trends'
+let currentTrendIndicator = 'mrsa'; // 'mrsa' | 'cre' | 'esbl' | 'crab' | 'crpa' | 'vre' | 'fq_gn' | 'custom'
+let currentTrendMetric = 'R'; // 'R' | 'S'
+let trendChartInstance = null;
+
+export function setAntibiogramViewMode(mode) {
+  currentAntibiogramViewMode = mode;
+  const btnTable = document.getElementById('btn-abx-view-table');
+  const btnTrends = document.getElementById('btn-abx-view-trends');
+  const tableView = document.getElementById('antibiogram-table-view');
+  const trendsView = document.getElementById('antibiogram-trends-view');
+  const btnCopyTable = document.getElementById('btn-abx-copy-table');
+
+  if (btnTable) btnTable.classList.toggle('active', mode === 'table');
+  if (btnTrends) btnTrends.classList.toggle('active', mode === 'trends');
+  if (tableView) tableView.style.display = mode === 'table' ? 'block' : 'none';
+  if (trendsView) trendsView.style.display = mode === 'trends' ? 'block' : 'none';
+  if (btnCopyTable) btnCopyTable.style.display = mode === 'table' ? 'inline-flex' : 'none';
+
+  if (mode === 'trends') {
+    renderAmrTrendChart();
+  }
+}
+
+export function setAmrTrendIndicator(indicator) {
+  currentTrendIndicator = indicator;
+  document.querySelectorAll('.abx-trend-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `pill-trend-${indicator}` || (indicator === 'fq_gn' && btn.id === 'pill-trend-fq'));
+  });
+
+  const customRow = document.getElementById('trend-custom-controls');
+  if (customRow) {
+    customRow.style.display = indicator === 'custom' ? 'flex' : 'none';
+    if (indicator === 'custom') {
+      populateTrendCustomDropdowns();
+    }
+  }
+
+  renderAmrTrendChart();
+}
+
+export function setTrendMetric(metric) {
+  currentTrendMetric = metric;
+  const btnR = document.getElementById('btn-trend-metric-r');
+  const btnS = document.getElementById('btn-trend-metric-s');
+  if (btnR) btnR.classList.toggle('active', metric === 'R');
+  if (btnS) btnS.classList.toggle('active', metric === 'S');
+  renderAmrTrendChart();
+}
+
+function populateTrendCustomDropdowns() {
+  if (!currentReportData) return;
+  const orgSel = document.getElementById('trend-custom-org-select');
+  const abxSel = document.getElementById('trend-custom-abx-select');
+  if (!orgSel || !abxSel) return;
+
+  if (orgSel.options.length === 0 && currentReportData.organisms) {
+    orgSel.innerHTML = currentReportData.organisms.map(o =>
+      `<option value="${o.orgCode}">${escapeHtml(o.orgName)} (${o.orgCode})</option>`
+    ).join('');
+  }
+
+  if (abxSel.options.length === 0 && currentReportData.antibiotics) {
+    abxSel.innerHTML = currentReportData.antibiotics.map(a =>
+      `<option value="${a.code}">${escapeHtml(a.name)} (${a.code})</option>`
+    ).join('');
+  }
+}
+
+export function renderAmrTrendChart() {
+  const trends = currentReportData?.trends;
+  const monthlyList = trends?.monthly || [];
+
+  const canvas = document.getElementById('amr-trends-chart-canvas');
+  if (!canvas) return;
+
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js is not loaded');
+    return;
+  }
+
+  const headingEl = document.getElementById('trend-chart-heading');
+  const subEl = document.getElementById('trend-chart-sub');
+  const dateBadge = document.getElementById('trend-date-range-badge');
+  const kpiTested = document.getElementById('trend-kpi-tested');
+  const kpiTestedSub = document.getElementById('trend-kpi-tested-sub');
+  const kpiAvg = document.getElementById('trend-kpi-avg');
+  const kpiAvgSub = document.getElementById('trend-kpi-avg-sub');
+  const kpiLatest = document.getElementById('trend-kpi-latest');
+  const kpiLatestSub = document.getElementById('trend-kpi-latest-sub');
+  const kpiStatus = document.getElementById('trend-kpi-status');
+  const kpiStatusSub = document.getElementById('trend-kpi-status-sub');
+  const tableBody = document.getElementById('trend-table-body');
+
+  const locFilter = document.getElementById('trend-location-filter')?.value || 'all';
+
+  const INDICATOR_META = {
+    mrsa: {
+      title: 'Methicillin-Resistant Staphylococcus aureus (MRSA)',
+      pathogen: 'S. aureus',
+      agents: 'Cefoxitin / Oxacillin',
+      whoStatus: 'High Priority (WHO Priority 2)',
+      whoColor: '#f59e0b'
+    },
+    cre: {
+      title: 'Carbapenem-Resistant Enterobacterales (CRE)',
+      pathogen: 'E. coli, K. pneumoniae, Enterobacter spp.',
+      agents: 'Meropenem, Imipenem, Ertapenem',
+      whoStatus: 'Critical Priority (WHO Priority 1)',
+      whoColor: '#ef4444'
+    },
+    esbl: {
+      title: 'Extended-Spectrum Beta-Lactamase (ESBL)',
+      pathogen: 'E. coli & K. pneumoniae',
+      agents: 'Ceftriaxone, Cefotaxime, Ceftazidime',
+      whoStatus: 'Critical Priority (WHO Priority 1)',
+      whoColor: '#ef4444'
+    },
+    crab: {
+      title: 'Carbapenem-Resistant Acinetobacter baumannii (CRAB)',
+      pathogen: 'Acinetobacter baumannii',
+      agents: 'Meropenem, Imipenem',
+      whoStatus: 'Critical Priority (WHO Priority 1)',
+      whoColor: '#ef4444'
+    },
+    crpa: {
+      title: 'Carbapenem-Resistant Pseudomonas aeruginosa (CRPA)',
+      pathogen: 'Pseudomonas aeruginosa',
+      agents: 'Meropenem, Imipenem',
+      whoStatus: 'Critical Priority (WHO Priority 1)',
+      whoColor: '#ef4444'
+    },
+    vre: {
+      title: 'Vancomycin-Resistant Enterococcus (VRE)',
+      pathogen: 'Enterococcus faecalis & E. faecium',
+      agents: 'Vancomycin',
+      whoStatus: 'High Priority (WHO Priority 2)',
+      whoColor: '#f59e0b'
+    },
+    fq_gn: {
+      title: 'Fluoroquinolone Resistance in Gram-Negatives',
+      pathogen: 'Enterobacterales, A. baumannii, P. aeruginosa',
+      agents: 'Ciprofloxacin, Levofloxacin',
+      whoStatus: 'Medium Priority (WHO Priority 3)',
+      whoColor: '#3b82f6'
+    },
+    custom: {
+      title: 'Custom Organism & Antibiotic Longitudinal Trend',
+      pathogen: 'Custom',
+      agents: 'Custom',
+      whoStatus: 'Custom Monitored Pair',
+      whoColor: 'var(--accent)'
+    }
+  };
+
+  const meta = INDICATOR_META[currentTrendIndicator] || INDICATOR_META.mrsa;
+
+  const labels = [];
+  const rateData = [];
+  const volumeData = [];
+  const tableRows = [];
+
+  let sumR = 0;
+  let sumS = 0;
+  let sumI = 0;
+  let sumTotal = 0;
+
+  const customOrg = document.getElementById('trend-custom-org-select')?.value || 'eco';
+  const customAbx = document.getElementById('trend-custom-abx-select')?.value || 'CRO';
+
+  for (const m of monthlyList) {
+    const monthLabel = formatAmrMonthLabel(m.month);
+    labels.push(monthLabel);
+
+    let stat = null;
+    if (currentTrendIndicator === 'custom') {
+      const pair = m.pairs?.[`${customOrg.toLowerCase()}:${customAbx.toUpperCase()}`];
+      stat = pair ? {
+        total: pair.total,
+        R: pair.R,
+        S: pair.S,
+        I: pair.I,
+        pctR: pair.total > 0 ? Math.round((pair.R / pair.total) * 100) : null,
+        pctS: pair.total > 0 ? Math.round((pair.S / pair.total) * 100) : null
+      } : { total: 0, R: 0, S: 0, I: 0, pctR: null, pctS: null };
+    } else {
+      stat = m[currentTrendIndicator] || { total: 0, R: 0, S: 0, I: 0, pctR: null, pctS: null };
+    }
+
+    if (locFilter !== 'all' && m.locations && stat.total > 0) {
+      const locRate = m.locations[locFilter];
+      const locVol = m.locations[`${locFilter}Total`] || 0;
+      if (locVol > 0) {
+        stat = {
+          total: locVol,
+          R: Math.round((locRate / 100) * locVol),
+          S: locVol - Math.round((locRate / 100) * locVol),
+          I: 0,
+          pctR: locRate,
+          pctS: 100 - locRate
+        };
+      } else {
+        stat = { total: 0, R: 0, S: 0, I: 0, pctR: null, pctS: null };
+      }
+    }
+
+    const rate = currentTrendMetric === 'R' ? stat.pctR : stat.pctS;
+    rateData.push(rate);
+    volumeData.push(stat.total);
+
+    sumR += stat.R || 0;
+    sumS += stat.S || 0;
+    sumI += stat.I || 0;
+    sumTotal += stat.total || 0;
+
+    tableRows.push(`
+      <tr style="border-bottom: 1px solid var(--border);">
+        <td style="padding: 8px 12px; font-weight: 600; color: var(--text);">${monthLabel}</td>
+        <td style="padding: 8px 10px; text-align: center; color: var(--text2); font-family: 'JetBrains Mono', monospace;">${stat.total}</td>
+        <td style="padding: 8px 10px; text-align: center; color: var(--red); font-weight: 700; font-family: 'JetBrains Mono', monospace;">${stat.R || 0}</td>
+        <td style="padding: 8px 10px; text-align: center; color: var(--green); font-weight: 700; font-family: 'JetBrains Mono', monospace;">${stat.S || 0}</td>
+        <td style="padding: 8px 10px; text-align: center; color: var(--yellow); font-family: 'JetBrains Mono', monospace;">${stat.I || 0}</td>
+        <td style="padding: 8px 12px; text-align: right; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: ${rate !== null && rate > 40 ? 'var(--red)' : (rate !== null && rate < 20 ? 'var(--green)' : 'var(--text)')};">
+          ${rate !== null ? rate + '%' : '—'}
+        </td>
+      </tr>
+    `);
+  }
+
+  const metricName = currentTrendMetric === 'R' ? 'Resistance' : 'Susceptibility';
+  if (headingEl) {
+    headingEl.innerHTML = `<i class="fa-solid fa-chart-line" style="color: var(--accent);"></i> ${meta.title} — ${metricName} (%${currentTrendMetric})`;
+  }
+  if (subEl) {
+    subEl.textContent = `Pathogen: ${meta.pathogen} • Agents: ${meta.agents} • Location: ${locFilter.toUpperCase()}`;
+  }
+  if (dateBadge && monthlyList.length) {
+    dateBadge.textContent = `${monthlyList[0].month} through ${monthlyList[monthlyList.length - 1].month}`;
+  }
+
+  if (kpiTested) kpiTested.textContent = sumTotal.toLocaleString();
+  if (kpiTestedSub) kpiTestedSub.textContent = `Isolates evaluated in period`;
+
+  const weightedAvg = sumTotal > 0 ? Math.round((currentTrendMetric === 'R' ? sumR : sumS) / sumTotal * 100) : null;
+  if (kpiAvg) {
+    kpiAvg.textContent = weightedAvg !== null ? `${weightedAvg}%` : '—';
+    kpiAvg.style.color = currentTrendMetric === 'R' && weightedAvg > 40 ? 'var(--red)' : (currentTrendMetric === 'S' && weightedAvg > 75 ? 'var(--green)' : 'var(--accent)');
+  }
+  if (kpiAvgSub) kpiAvgSub.textContent = `Weighted mean %${currentTrendMetric} (${sumTotal} tested)`;
+
+  const validRates = rateData.filter(r => r !== null);
+  const latestRate = validRates.length ? validRates[validRates.length - 1] : null;
+  const priorRate = validRates.length > 1 ? validRates[validRates.length - 2] : null;
+
+  if (kpiLatest) {
+    kpiLatest.textContent = latestRate !== null ? `${latestRate}%` : '—';
+  }
+  if (kpiLatestSub) {
+    if (latestRate !== null && priorRate !== null) {
+      const diff = latestRate - priorRate;
+      const arrow = diff > 0 ? '↑' : (diff < 0 ? '↓' : '→');
+      const color = (currentTrendMetric === 'R' && diff > 0) || (currentTrendMetric === 'S' && diff < 0) ? 'var(--red)' : 'var(--green)';
+      kpiLatestSub.innerHTML = `<span style="color: ${color}; font-weight: 700;">${arrow} ${Math.abs(diff)}%</span> vs previous month`;
+    } else {
+      kpiLatestSub.textContent = 'Most recent surveillance month';
+    }
+  }
+
+  if (kpiStatus) {
+    kpiStatus.textContent = meta.whoStatus;
+    kpiStatus.style.color = meta.whoColor;
+  }
+  if (kpiStatusSub) {
+    kpiStatusSub.textContent = currentTrendIndicator === 'custom' ? 'User-defined AST query' : 'Clinical priority benchmark';
+  }
+
+  if (tableBody) {
+    tableBody.innerHTML = tableRows.length ? tableRows.join('') : '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">No records found for this indicator</td></tr>';
+  }
+
+  if (trendChartInstance) {
+    try { trendChartInstance.destroy(); } catch (_) {}
+    trendChartInstance = null;
+  }
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const textColor = isDark ? '#e2e8f0' : '#334155';
+  const mutedColor = isDark ? '#94a3b8' : '#64748b';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.8)';
+  const tooltipBg = isDark ? 'rgba(18, 24, 38, 0.96)' : 'rgba(15, 23, 42, 0.95)';
+
+  const primaryLineColor = currentTrendMetric === 'R' ? '#ef4444' : '#10b981';
+  const primaryAreaColor = currentTrendMetric === 'R' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)';
+  const barVolumeColor = isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(100, 116, 139, 0.15)';
+
+  const ctx = canvas.getContext('2d');
+
+  trendChartInstance = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'line',
+          label: `% ${metricName} (%${currentTrendMetric})`,
+          data: rateData,
+          borderColor: primaryLineColor,
+          backgroundColor: primaryAreaColor,
+          borderWidth: 2.5,
+          tension: 0.35,
+          fill: true,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: primaryLineColor,
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 1.5,
+          yAxisID: 'y'
+        },
+        {
+          type: 'bar',
+          label: 'Isolates Tested (Volume)',
+          data: volumeData,
+          backgroundColor: barVolumeColor,
+          borderRadius: 4,
+          maxBarThickness: 28,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: mutedColor,
+            font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' }
+          }
+        },
+        y: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          min: 0,
+          max: 100,
+          grid: { color: gridColor },
+          ticks: {
+            color: textColor,
+            font: { family: 'JetBrains Mono', size: 11, weight: '600' },
+            callback: v => `${v}%`
+          },
+          title: {
+            display: true,
+            text: `% ${metricName} (%${currentTrendMetric})`,
+            color: mutedColor,
+            font: { family: 'Plus Jakarta Sans', size: 11, weight: '700' }
+          }
+        },
+        y1: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+          beginAtZero: true,
+          grid: { drawOnChartArea: false },
+          ticks: {
+            color: mutedColor,
+            font: { family: 'JetBrains Mono', size: 10.5 },
+            precision: 0
+          },
+          title: {
+            display: true,
+            text: 'Tested Isolates (N)',
+            color: mutedColor,
+            font: { family: 'Plus Jakarta Sans', size: 11 }
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          align: 'end',
+          labels: {
+            color: textColor,
+            boxWidth: 12,
+            boxHeight: 12,
+            font: { family: 'Plus Jakarta Sans', size: 11.5, weight: '600' }
+          }
+        },
+        tooltip: {
+          backgroundColor: tooltipBg,
+          titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: 'bold' },
+          bodyFont: { family: 'Plus Jakarta Sans', size: 11.5 },
+          padding: 12,
+          cornerRadius: 8,
+          callbacks: {
+            label: ctx => {
+              if (ctx.datasetIndex === 0) {
+                const val = ctx.parsed.y;
+                return val !== null ? `Rate: ${val}% (${currentTrendMetric === 'R' ? 'Resistant' : 'Susceptible'})` : 'No data in month';
+              }
+              return `Volume Tested: ${ctx.parsed.y} isolates`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+export function downloadAmrTrendPng() {
+  if (!trendChartInstance) return toast('No AMR trend chart to download', 'error');
+  const canvas = document.getElementById('amr-trends-chart-canvas');
+  if (!canvas) return;
+
+  const url = canvas.toDataURL('image/png', 1.0);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `AMR_Trend_${currentTrendIndicator}_${new Date().toISOString().slice(0, 10)}.png`;
+  a.click();
+  toast('AMR trend chart downloaded as PNG image', 'success');
+}
+
+export function copyTrendTableTsv() {
+  const table = document.querySelector('#antibiogram-trends-view table');
+  if (!table) return toast('No trend table to copy', 'error');
+
+  const rows = [];
+  table.querySelectorAll('tr').forEach(tr => {
+    const cols = [];
+    tr.querySelectorAll('th, td').forEach(td => cols.push(td.textContent.trim()));
+    rows.push(cols.join('\t'));
+  });
+
+  navigator.clipboard.writeText(rows.join('\n'))
+    .then(() => toast('Monthly AMR breakdown copied to clipboard', 'success'))
+    .catch(() => toast('Could not copy to clipboard', 'error'));
+}
+
 
