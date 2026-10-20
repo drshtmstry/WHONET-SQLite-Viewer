@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -39,12 +39,7 @@
       (function () {
         try {
           const saved = localStorage.getItem("whonet-theme");
-          const theme =
-            saved === "dark" ||
-            (!saved &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches)
-              ? "dark"
-              : "light";
+          const theme = saved === "dark" ? "dark" : "light";
           document.documentElement.setAttribute("data-theme", theme);
           const metaTheme = document.querySelector('meta[name="theme-color"]');
           if (metaTheme)
@@ -1536,67 +1531,14 @@
                 gap: 10px;
                 align-items: center;
                 margin-left: auto;
-                flex-wrap: wrap;
               "
             >
-              <!-- Metric Toggle: %S vs %R -->
-              <div
-                class="seg-control"
-                id="abx-metric-toggle"
-                title="Switch between % Susceptible and % Resistant"
-              >
-                <button
-                  class="seg-btn active"
-                  id="btn-abx-metric-s"
-                  onclick="setAntibiogramMetric('S')"
-                  title="Display % Susceptible (%S)"
-                >
-                  <i class="fa-solid fa-shield-virus"></i> % Susceptible
-                </button>
-                <button
-                  class="seg-btn"
-                  id="btn-abx-metric-r"
-                  onclick="setAntibiogramMetric('R')"
-                  title="Display % Resistant (%R)"
-                >
-                  <i class="fa-solid fa-biohazard"></i> % Resistant
-                </button>
-              </div>
-
-              <!-- Grouping Toggle: Class vs Alphabetical -->
-              <div class="seg-control" id="abx-grouping-toggle">
-                <button
-                  class="seg-btn active"
-                  id="btn-abx-group-class"
-                  onclick="setAntibiogramGrouping(true)"
-                  title="Group antibiotics by drug class (CLSI Appendix E2)"
-                >
-                  <i class="fa-solid fa-layer-group"></i> By Class
-                </button>
-                <button
-                  class="seg-btn"
-                  id="btn-abx-group-alpha"
-                  onclick="setAntibiogramGrouping(false)"
-                  title="Alphabetical antibiotic listing (CLSI Appendix E1)"
-                >
-                  <i class="fa-solid fa-arrow-down-a-z"></i> Alphabetical
-                </button>
-              </div>
-
               <button
                 class="btn btn-outline btn-sm"
                 onclick="copyAntibiogramTsv()"
-                title="Copy Antibiogram Table to Clipboard (TSV format for Excel/Word)"
+                title="Copy Antibiogram Table to Clipboard (ready to paste into Excel, Word, or Google Sheets)"
               >
-                <i class="fa-solid fa-clipboard"></i> Copy TSV
-              </button>
-
-              <button
-                class="btn btn-primary btn-sm"
-                onclick="exportAntibiogramCsv()"
-                title="Download Antibiogram as CSV"
-              >
-                <i class="fa-solid fa-file-csv"></i> Export CSV
+                <i class="fa-solid fa-copy"></i> Copy Table
               </button>
             </div>
           </div>
@@ -1604,13 +1546,13 @@
           <!-- Meta and Control Bar -->
           <div
             class="chart-analytics-card"
-            style="margin-bottom: 20px; padding: 18px 22px"
+            style="margin-bottom: 18px; padding: 14px 18px;"
           >
             <div
               id="antibiogram-meta-banner"
               style="
-                margin-bottom: 16px;
-                padding-bottom: 14px;
+                margin-bottom: 12px;
+                padding-bottom: 12px;
                 border-bottom: 1px solid var(--border);
               "
             >
@@ -1620,244 +1562,104 @@
               </div>
             </div>
 
-            <!-- Interactive Filters -->
-            <div style="display: flex; flex-direction: column; gap: 14px;">
-              <!-- Row 1: Deduplication Method & Duration -->
-              <div
-                style="
-                  display: flex;
-                  flex-wrap: wrap;
-                  gap: 14px;
-                  align-items: flex-end;
-                  justify-content: space-between;
-                "
-              >
-                <div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;">
-                  <!-- Deduplication Method -->
-                  <div class="chart-control-group">
-                    <label
-                      for="abx-dedup-select"
-                      style="
-                        font-weight: 600;
-                        font-size: 11.5px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.04em;
-                        color: var(--text3);
-                      "
-                    >
-                      Deduplication Method
-                    </label>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                      <select
-                        id="abx-dedup-select"
-                        class="chart-filter-select"
-                        onchange="setAntibiogramDedupMode(this.value)"
-                        style="min-width: 220px;"
-                      >
-                        <option value="patient_first" selected>First isolate only (CLSI M39)</option>
-                        <option value="isolate">By isolate (All isolates)</option>
-                        <option value="patient_first_ast">First isolate with AST results</option>
-                        <option value="episode">By time interval (Episode window)</option>
-                        <option value="patient_most_resistant">Most resistant result per drug</option>
-                        <option value="patient_most_susceptible">Most susceptible result per drug</option>
-                      </select>
-                      <button
-                        type="button"
-                        class="btn btn-outline btn-sm"
-                        onclick="openAntibiogramOptionsModal()"
-                        title="Open WHONET Patient-wise Deduplication & Analysis Options"
-                        style="height: 34px; padding: 0 10px;"
-                      >
-                        <i class="fa-solid fa-sliders"></i>
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Surveillance Duration -->
-                  <div class="chart-control-group">
-                    <label
-                      for="abx-period-preset"
-                      style="
-                        font-weight: 600;
-                        font-size: 11.5px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.04em;
-                        color: var(--text3);
-                      "
-                    >
-                      Surveillance Duration
-                    </label>
-                    <select
-                      id="abx-period-preset"
-                      class="chart-filter-select"
-                      onchange="setAntibiogramPeriodPreset(this.value)"
-                      style="min-width: 170px;"
-                    >
-                      <option value="all" selected>All Surveillance Dates</option>
-                      <option value="1y">Last 1 Year (CLSI M39)</option>
-                      <option value="6m">Last 6 Months</option>
-                      <option value="90d">Last 90 Days</option>
-                      <option value="30d">Last 30 Days</option>
-                      <option value="custom">Custom Date Range</option>
-                    </select>
-                  </div>
-
-                  <!-- Date Range Inputs -->
-                  <div class="chart-control-group">
-                    <label
-                      for="abx-start-date"
-                      style="
-                        font-weight: 600;
-                        font-size: 11.5px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.04em;
-                        color: var(--text3);
-                      "
-                    >
-                      From Date
-                    </label>
-                    <input
-                      type="date"
-                      id="abx-start-date"
-                      class="chart-filter-select"
-                      onchange="handleDateInputChange()"
-                      style="height: 34px; padding: 0 8px; font-size: 12px;"
-                    />
-                  </div>
-
-                  <div class="chart-control-group">
-                    <label
-                      for="abx-end-date"
-                      style="
-                        font-weight: 600;
-                        font-size: 11.5px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.04em;
-                        color: var(--text3);
-                      "
-                    >
-                      To Date
-                    </label>
-                    <input
-                      type="date"
-                      id="abx-end-date"
-                      class="chart-filter-select"
-                      onchange="handleDateInputChange()"
-                      style="height: 34px; padding: 0 8px; font-size: 12px;"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <!-- Row 2: Secondary Stratifications & Cutoff -->
-              <div
-                style="
-                  display: flex;
-                  flex-wrap: wrap;
-                  gap: 14px;
-                  align-items: flex-end;
-                  justify-content: space-between;
-                  padding-top: 10px;
-                  border-top: 1px solid var(--border);
-                "
-              >
-                <div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;">
-                  <!-- Min. Isolates Threshold -->
-                  <div class="chart-control-group">
-                    <label
-                      for="abx-min-isolates-input"
-                      style="
-                        font-weight: 600;
-                        font-size: 11.5px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.04em;
-                        color: var(--text3);
-                      "
-                    >
-                      Min. Isolates Threshold
-                    </label>
-                    <select
-                      id="abx-min-isolates-input"
-                      class="chart-filter-select"
-                      onchange="setAntibiogramMinIsolates(this.value)"
-                      style="min-width: 170px;"
-                    >
-                      <option value="30" selected>CLSI Default (≥ 30)</option>
-                      <option value="20">≥ 20 Isolates</option>
-                      <option value="15">≥ 15 Isolates</option>
-                      <option value="10">≥ 10 Isolates</option>
-                      <option value="5">≥ 5 Isolates</option>
-                      <option value="1">All (≥ 1 Isolate)</option>
-                    </select>
-                  </div>
-
-                  <div class="chart-control-group">
-                    <label
-                      for="abx-ward-filter"
-                      style="
-                        font-weight: 600;
-                        font-size: 11.5px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.04em;
-                        color: var(--text3);
-                      "
-                    >
-                      Location / Ward
-                    </label>
-                    <select
-                      id="abx-ward-filter"
-                      class="chart-filter-select"
-                      onchange="loadAntibiogram()"
-                    >
-                      <option value="" selected>All Locations</option>
-                    </select>
-                  </div>
-
-                  <div class="chart-control-group">
-                    <label
-                      for="abx-spec-filter"
-                      style="
-                        font-weight: 600;
-                        font-size: 11.5px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.04em;
-                        color: var(--text3);
-                      "
-                    >
-                      Specimen Type
-                    </label>
-                    <select
-                      id="abx-spec-filter"
-                      class="chart-filter-select"
-                      onchange="loadAntibiogram()"
-                    >
-                      <option value="" selected>All Specimens</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                  <label
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 8px;
-                      cursor: pointer;
-                      font-size: 12.5px;
-                      color: var(--text2);
-                      user-select: none;
-                    "
+            <!-- Interactive Quick Controls & Filters -->
+            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <!-- Metric Toggle: %S vs %R -->
+                <div
+                  class="seg-control"
+                  id="abx-metric-toggle"
+                  title="Switch between % Susceptible and % Resistant"
+                >
+                  <button
+                    class="seg-btn active"
+                    id="btn-abx-metric-s"
+                    onclick="setAntibiogramMetric('S')"
+                    title="Display % Susceptible (%S)"
+                    style="padding: 5px 11px; font-size: 12px;"
                   >
-                    <input
-                      type="checkbox"
-                      id="abx-hide-under-min"
-                      onchange="toggleHideUnderMinIsolates(this)"
-                      checked
-                    />
-                    <span id="abx-hide-under-label">Hide species with &lt; 30 isolates</span>
-                  </label>
+                    <i class="fa-solid fa-shield-virus"></i> % Susceptible
+                  </button>
+                  <button
+                    class="seg-btn"
+                    id="btn-abx-metric-r"
+                    onclick="setAntibiogramMetric('R')"
+                    title="Display % Resistant (%R)"
+                    style="padding: 5px 11px; font-size: 12px;"
+                  >
+                    <i class="fa-solid fa-biohazard"></i> % Resistant
+                  </button>
+                </div>
+
+                <!-- Grouping Toggle: Class vs Alphabetical -->
+                <div class="seg-control" id="abx-grouping-toggle">
+                  <button
+                    class="seg-btn active"
+                    id="btn-abx-group-class"
+                    onclick="setAntibiogramGrouping(true)"
+                    title="Group antibiotics by drug class (CLSI Appendix E2)"
+                    style="padding: 5px 11px; font-size: 12px;"
+                  >
+                    <i class="fa-solid fa-layer-group"></i> By Class
+                  </button>
+                  <button
+                    class="seg-btn"
+                    id="btn-abx-group-alpha"
+                    onclick="setAntibiogramGrouping(false)"
+                    title="Alphabetical antibiotic listing (CLSI Appendix E1)"
+                    style="padding: 5px 11px; font-size: 12px;"
+                  >
+                    <i class="fa-solid fa-arrow-down-a-z"></i> Alphabetical
+                  </button>
+                </div>
+
+                <!-- Location / Ward Filter -->
+                <div class="chart-control-group" style="margin: 0;">
+                  <select
+                    id="abx-ward-filter"
+                    class="chart-filter-select"
+                    onchange="loadAntibiogram()"
+                    style="min-width: 130px; height: 32px; font-size: 12px; padding: 0 8px;"
+                    title="Filter by Location / Ward"
+                  >
+                    <option value="" selected>All Locations</option>
+                  </select>
+                </div>
+
+                <!-- Specimen Type Filter -->
+                <div class="chart-control-group" style="margin: 0;">
+                  <select
+                    id="abx-spec-filter"
+                    class="chart-filter-select"
+                    onchange="loadAntibiogram()"
+                    style="min-width: 130px; height: 32px; font-size: 12px; padding: 0 8px;"
+                    title="Filter by Specimen Type"
+                  >
+                    <option value="" selected>All Specimens</option>
+                  </select>
                 </div>
               </div>
+
+              <!-- Options Window Trigger Button -->
+              <div>
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  onclick="openAntibiogramOptionsModal()"
+                  title="Configure CLSI M39 deduplication rule, surveillance window, and minimum isolate threshold"
+                  style="display: inline-flex; align-items: center; gap: 7px; font-weight: 600; height: 32px; font-size: 12px; padding: 0 12px; white-space: nowrap;"
+                >
+                  <i class="fa-solid fa-sliders" style="color: var(--accent);"></i>
+                  <span>Options</span>
+                </button>
+              </div>
+
+              <!-- Hidden inputs to preserve compatibility with programmatic calls -->
+              <input type="hidden" id="abx-dedup-select" value="patient_first" />
+              <input type="hidden" id="abx-period-preset" value="all" />
+              <input type="hidden" id="abx-start-date" value="" />
+              <input type="hidden" id="abx-end-date" value="" />
+              <input type="hidden" id="abx-min-isolates-input" value="30" />
             </div>
           </div>
 
@@ -2413,19 +2215,32 @@
             </button>
           </div>
         </div>
+      </div>
     </div>
 
-    <!-- WHONET "One Isolate of Species by Patient" Customization Modal -->
+    <!-- WHONET Antibiogram Options & Deduplication Modal -->
     <div
       id="antibiogram-options-modal"
       class="modal-overlay"
-      style="display: none;"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="abx-modal-title"
     >
-      <div class="modal" style="max-width: 640px; border-radius: 12px; box-shadow: var(--shadow-lg);">
-        <div class="modal-header" style="padding: 16px 22px; border-bottom: 1px solid var(--border);">
-          <div class="modal-title" style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: var(--text);">
-            <i class="fa-solid fa-earth-americas" style="color: var(--accent);"></i>
-            <span>One Isolate of Species by Patient</span>
+      <div class="modal" style="max-width: 760px; width: 95vw; border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; display: flex; flex-direction: column; max-height: 90vh;">
+        <!-- Header -->
+        <div class="modal-header" style="padding: 16px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: var(--accent-light); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 15px;">
+              <i class="fa-solid fa-sliders"></i>
+            </div>
+            <div>
+              <div id="abx-modal-title" style="font-size: 15.5px; font-weight: 700; color: var(--text); line-height: 1.2;">
+                Antibiogram &amp; Deduplication Options
+              </div>
+              <div style="font-size: 12px; color: var(--text3); margin-top: 2px;">
+                CLSI M39-A4 cumulative parameters and isolate deduplication rules
+              </div>
+            </div>
           </div>
           <button
             type="button"
@@ -2437,192 +2252,282 @@
           </button>
         </div>
 
-        <div class="modal-body" style="padding: 20px 24px; max-height: 80vh; overflow-y: auto;">
-          <div style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px;">
-            Include which results in the analysis of each species?
+        <!-- Body -->
+        <div class="modal-body" style="padding: 20px 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px;">
+          <!-- Deduplication Strategy Section -->
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+              <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3);">
+                Isolate Resolution Strategy
+              </span>
+              <span style="font-size: 11px; color: var(--text3);">
+                <i class="fa-solid fa-circle-info" style="margin-right: 4px;"></i>Determines which isolate per species/patient is analyzed
+              </span>
+            </div>
+
+            <div class="abx-options-grid">
+              <!-- Card 1: CLSI M39 Standard (Patient First) -->
+              <label class="abx-dedup-card">
+                <div class="abx-card-header">
+                  <div class="abx-card-title-wrap">
+                    <div class="abx-card-icon">
+                      <i class="fa-solid fa-user-shield"></i>
+                    </div>
+                    <div>
+                      <div class="abx-card-title">First Isolate / Patient</div>
+                    </div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="abx-badge abx-badge-accent">CLSI M39</span>
+                    <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-first" value="patient_first" class="abx-card-radio" checked />
+                  </div>
+                </div>
+                <div class="abx-card-desc">
+                  Includes only the initial isolate of a given species per patient in the surveillance period. Standard for cumulative antibiograms.
+                </div>
+              </label>
+
+              <!-- Card 2: First with AST -->
+              <label class="abx-dedup-card">
+                <div class="abx-card-header">
+                  <div class="abx-card-title-wrap">
+                    <div class="abx-card-icon">
+                      <i class="fa-solid fa-vial-circle-check"></i>
+                    </div>
+                    <div class="abx-card-title">First with AST Results</div>
+                  </div>
+                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-ast" value="patient_first_ast" class="abx-card-radio" />
+                </div>
+                <div class="abx-card-desc">
+                  Skips screen or preliminary records without susceptibility testing and selects the first isolate with tested antibiotics.
+                </div>
+              </label>
+
+              <!-- Card 3: Episode Window / Time Interval -->
+              <label class="abx-dedup-card">
+                <div class="abx-card-header">
+                  <div class="abx-card-title-wrap">
+                    <div class="abx-card-icon">
+                      <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <div class="abx-card-title">Episode Window</div>
+                  </div>
+                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-episode" value="episode" class="abx-card-radio" />
+                </div>
+                <div class="abx-card-desc" style="margin-bottom: 8px;">
+                  Treat repeat isolates beyond the interval as independent infection episodes (CDC / NHSN surveillance model).
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 6px; border-top: 1px dashed var(--border);" onclick="event.stopPropagation();">
+                  <span style="font-size: 11px; font-weight: 600; color: var(--text2);">Repeat interval:</span>
+                  <input
+                    type="number"
+                    id="abx-opt-episode-days"
+                    class="chart-filter-select"
+                    value="30"
+                    min="1"
+                    max="730"
+                    style="width: 70px; height: 26px; padding: 0 6px; font-size: 12px; font-weight: 600; text-align: center;"
+                    onfocus="document.getElementById('abx-opt-by-episode').checked = true;"
+                  />
+                  <span style="font-size: 11px; color: var(--text3);">days</span>
+                </div>
+              </label>
+
+              <!-- Card 4: All Isolates / Raw -->
+              <label class="abx-dedup-card">
+                <div class="abx-card-header">
+                  <div class="abx-card-title-wrap">
+                    <div class="abx-card-icon">
+                      <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                    <div class="abx-card-title">All Isolates (Raw)</div>
+                  </div>
+                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-isolate" value="isolate" class="abx-card-radio" />
+                </div>
+                <div class="abx-card-desc">
+                  Includes all isolate records without deduplication. Reflects total laboratory workload and specimen burden.
+                </div>
+              </label>
+
+              <!-- Card 5: Most Resistant -->
+              <label class="abx-dedup-card">
+                <div class="abx-card-header">
+                  <div class="abx-card-title-wrap">
+                    <div class="abx-card-icon">
+                      <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <div class="abx-card-title">Most Resistant Isolate</div>
+                  </div>
+                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-res" value="patient_most_resistant" class="abx-card-radio" />
+                </div>
+                <div class="abx-card-desc">
+                  Prioritizes the isolate showing the highest resistance phenotype per antibiotic to monitor worst-case profiles.
+                </div>
+              </label>
+
+              <!-- Card 6: Most Susceptible -->
+              <label class="abx-dedup-card">
+                <div class="abx-card-header">
+                  <div class="abx-card-title-wrap">
+                    <div class="abx-card-icon">
+                      <i class="fa-solid fa-shield-virus"></i>
+                    </div>
+                    <div class="abx-card-title">Most Susceptible Isolate</div>
+                  </div>
+                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-susc" value="patient_most_susceptible" class="abx-card-radio" />
+                </div>
+                <div class="abx-card-desc">
+                  Selects the patient's most susceptible isolate for sensitive baseline analysis and therapeutic options review.
+                </div>
+              </label>
+            </div>
           </div>
 
-          <!-- Option 1: By isolate -->
-          <div style="background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
-            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
-              <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-isolate" value="isolate" style="margin-top: 3px;" />
-              <div>
-                <div style="font-weight: 600; font-size: 13.5px; color: var(--text);">By isolate</div>
-                <div style="font-size: 12px; color: var(--text3); margin-top: 2px;">
-                  Include all isolate records without deduplication. (Useful for raw positivity counts).
+          <!-- Surveillance Period & Cutoff Panel -->
+          <div class="abx-params-panel">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+              <!-- Left: Time Window -->
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3);">
+                  <i class="fa-regular fa-calendar-days" style="color: var(--accent);"></i>
+                  <span>Surveillance Time Window</span>
+                </div>
+                <div>
+                  <label for="abx-modal-period-preset" style="display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px;">Preset Range</label>
+                  <select
+                    id="abx-modal-period-preset"
+                    class="chart-filter-select"
+                    style="width: 100%; height: 32px;"
+                    onchange="handleModalPeriodPreset(this.value)"
+                  >
+                    <option value="all" selected>All Surveillance Dates</option>
+                    <option value="1y">Last 1 Year (CLSI M39)</option>
+                    <option value="6m">Last 6 Months</option>
+                    <option value="90d">Last 90 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                  </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div>
+                    <label for="abx-modal-start-date" style="display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px;">From</label>
+                    <input
+                      type="date"
+                      id="abx-modal-start-date"
+                      class="chart-filter-select"
+                      style="width: 100%; height: 32px; padding: 0 8px; font-size: 12px;"
+                    />
+                  </div>
+                  <div>
+                    <label for="abx-modal-end-date" style="display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px;">To</label>
+                    <input
+                      type="date"
+                      id="abx-modal-end-date"
+                      class="chart-filter-select"
+                      style="width: 100%; height: 32px; padding: 0 8px; font-size: 12px;"
+                    />
+                  </div>
                 </div>
               </div>
+
+              <!-- Right: Sample Size Cutoff Threshold -->
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div style="display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3);">
+                    <i class="fa-solid fa-chart-pie" style="color: var(--accent);"></i>
+                    <span>Statistical Cutoff (N Isolates)</span>
+                  </div>
+                  <span style="font-size: 11px; color: var(--text3);">Min: 1</span>
+                </div>
+                <div>
+                  <label for="abx-modal-min-isolates" style="display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px;">Minimum Isolates Required to Report</label>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <input
+                      type="number"
+                      id="abx-modal-min-isolates"
+                      class="chart-filter-select"
+                      value="30"
+                      min="1"
+                      max="1000"
+                      oninput="handleModalMinCutoffChange()"
+                      style="width: 100px; height: 32px; padding: 0 10px; font-weight: 700; font-size: 13px;"
+                    />
+                    <span style="font-size: 12px; color: var(--text3);">isolates per species</span>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 6px;">Quick Presets</div>
+                  <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <button type="button" class="abx-cutoff-pill active" data-cutoff="30" onclick="setModalMinCutoff(30)">
+                      ≥30 (CLSI M39)
+                    </button>
+                    <button type="button" class="abx-cutoff-pill" data-cutoff="20" onclick="setModalMinCutoff(20)">
+                      ≥20
+                    </button>
+                    <button type="button" class="abx-cutoff-pill" data-cutoff="15" onclick="setModalMinCutoff(15)">
+                      ≥15
+                    </button>
+                    <button type="button" class="abx-cutoff-pill" data-cutoff="10" onclick="setModalMinCutoff(10)">
+                      ≥10
+                    </button>
+                    <button type="button" class="abx-cutoff-pill" data-cutoff="1" onclick="setModalMinCutoff(1)">
+                      All (≥1)
+                    </button>
+                  </div>
+                </div>
+                <div style="font-size: 11.5px; color: var(--text3); line-height: 1.4; margin-top: auto;">
+                  <i class="fa-solid fa-circle-info" style="color: var(--accent); margin-right: 4px;"></i>CLSI M39 recommends a minimum of 30 isolates for statistical validity. Species below threshold are flagged or suppressed.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Presentation Options: Hide Empty Antibiotics -->
+          <div style="background: var(--bg3); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px 16px;">
+            <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; user-select: none;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="abx-card-icon" style="width: 28px; height: 28px; font-size: 11px;">
+                  <i class="fa-solid fa-eye-slash"></i>
+                </div>
+                <div>
+                  <div style="font-weight: 700; font-size: 12.5px; color: var(--text);">Hide antibiotics without any % (untested)</div>
+                  <div style="font-size: 11px; color: var(--text3); margin-top: 1px;">
+                    Suppresses empty antibiotic columns that have no susceptibility results across the displayed organisms
+                  </div>
+                </div>
+              </div>
+              <input type="checkbox" id="abx-modal-hide-empty-abx" checked style="width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer;" />
             </label>
-          </div>
-
-          <!-- Option 2: By patient -->
-          <div style="background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px;">
-            <div style="font-weight: 700; font-size: 13.5px; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-              <i class="fa-solid fa-user-check" style="color: var(--accent); font-size: 12px;"></i>
-              <span>By patient</span>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 10px; padding-left: 6px;">
-              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
-                <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-first" value="patient_first" checked style="margin-top: 3px;" />
-                <div>
-                  <div style="font-weight: 600; font-size: 13px; color: var(--text);">First isolate only (CLSI M39 Recommendation)</div>
-                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 1px;">
-                    Only includes the initial isolate of a given species recovered from a patient in the surveillance period.
-                  </div>
-                </div>
-              </label>
-
-              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
-                <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-ast" value="patient_first_ast" style="margin-top: 3px;" />
-                <div>
-                  <div style="font-weight: 600; font-size: 13px; color: var(--text);">First isolate with antibiotic results</div>
-                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 1px;">
-                    Skips isolates without AST results and takes the first isolate with antimicrobial testing.
-                  </div>
-                </div>
-              </label>
-
-              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
-                <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-res" value="patient_most_resistant" style="margin-top: 3px;" />
-                <div>
-                  <div style="font-weight: 600; font-size: 13px; color: var(--text);">Most resistant result for each antibiotic</div>
-                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 1px;">
-                    Selects the patient's most resistant isolate to track worst-case resistance phenotypes.
-                  </div>
-                </div>
-              </label>
-
-              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
-                <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-susc" value="patient_most_susceptible" style="margin-top: 3px;" />
-                <div>
-                  <div style="font-weight: 600; font-size: 13px; color: var(--text);">Most susceptible result for each antibiotic</div>
-                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 1px;">
-                    Selects the patient's most susceptible isolate.
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <!-- Option 3: By time interval -->
-          <div style="background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
-            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none; margin-bottom: 8px;">
-              <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-episode" value="episode" style="margin-top: 3px;" />
-              <div>
-                <div style="font-weight: 600; font-size: 13px; color: var(--text);">By time interval (Episode window)</div>
-                <div style="font-size: 11.5px; color: var(--text3); margin-top: 1px;">
-                  Treat repeat isolates beyond the interval window as independent infection episodes (CDC / NHSN surveillance rule).
-                </div>
-              </div>
-            </label>
-
-            <div style="display: flex; align-items: center; gap: 10px; padding-left: 26px; margin-top: 8px;">
-              <span style="font-size: 12.5px; color: var(--text2);">Number of days since previous isolation:</span>
-              <input
-                type="number"
-                id="abx-opt-episode-days"
-                class="chart-filter-select"
-                value="30"
-                min="1"
-                max="730"
-                style="width: 80px; height: 32px; padding: 0 8px; font-weight: 600; text-align: center;"
-              />
-              <span style="font-size: 12px; color: var(--text3);">days</span>
-            </div>
-          </div>
-
-          <!-- Section 4: Duration & Sample Size Options -->
-          <div style="background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px;">
-            <div style="font-weight: 700; font-size: 13px; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-              <i class="fa-regular fa-calendar-check" style="color: var(--accent); font-size: 12px;"></i>
-              <span>Surveillance Duration &amp; Sample Size Threshold</span>
-            </div>
-
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-              <div>
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text3); margin-bottom: 4px; text-transform: uppercase;">Duration Preset</label>
-                <select
-                  id="abx-modal-period-preset"
-                  class="chart-filter-select"
-                  style="width: 100%; height: 32px;"
-                  onchange="
-                    const p = this.value;
-                    if (p === 'all') {
-                      document.getElementById('abx-modal-start-date').value = '';
-                      document.getElementById('abx-modal-end-date').value = '';
-                    } else {
-                      const now = new Date();
-                      let days = 365;
-                      if (p === '30d') days = 30;
-                      else if (p === '90d') days = 90;
-                      else if (p === '6m') days = 180;
-                      document.getElementById('abx-modal-end-date').value = now.toISOString().slice(0, 10);
-                      document.getElementById('abx-modal-start-date').value = new Date(now.getTime() - days*86400000).toISOString().slice(0, 10);
-                    }
-                  "
-                >
-                  <option value="all" selected>All Surveillance Dates</option>
-                  <option value="1y">Last 1 Year (CLSI M39)</option>
-                  <option value="6m">Last 6 Months</option>
-                  <option value="90d">Last 90 Days</option>
-                  <option value="30d">Last 30 Days</option>
-                </select>
-              </div>
-
-              <div>
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text3); margin-bottom: 4px; text-transform: uppercase;">Min. Isolates Cutoff</label>
-                <input
-                  type="number"
-                  id="abx-modal-min-isolates"
-                  class="chart-filter-select"
-                  value="30"
-                  min="1"
-                  max="1000"
-                  style="width: 100%; height: 32px; padding: 0 8px; font-weight: 600;"
-                />
-              </div>
-
-              <div>
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text3); margin-bottom: 4px; text-transform: uppercase;">From Date</label>
-                <input
-                  type="date"
-                  id="abx-modal-start-date"
-                  class="chart-filter-select"
-                  style="width: 100%; height: 32px; padding: 0 8px; font-size: 12px;"
-                />
-              </div>
-
-              <div>
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text3); margin-bottom: 4px; text-transform: uppercase;">To Date</label>
-                <input
-                  type="date"
-                  id="abx-modal-end-date"
-                  class="chart-filter-select"
-                  style="width: 100%; height: 32px; padding: 0 8px; font-size: 12px;"
-                />
-              </div>
-            </div>
           </div>
         </div>
 
-        <div class="modal-footer" style="padding: 14px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px;">
+        <!-- Footer -->
+        <div class="modal-footer" style="padding: 14px 22px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg2);">
           <button
             type="button"
-            class="btn btn-secondary btn-sm"
-            onclick="closeAntibiogramOptionsModal()"
+            class="abx-modal-btn abx-modal-btn-ghost"
+            onclick="resetAntibiogramOptionsDefaults()"
+            title="Reset options to standard CLSI M39 defaults"
           >
-            Cancel
+            <i class="fa-solid fa-arrow-rotate-left"></i>
+            <span>Reset CLSI Defaults</span>
           </button>
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            onclick="applyAntibiogramOptions()"
-            style="font-weight: 700; display: inline-flex; align-items: center; gap: 6px;"
-          >
-            <i class="fa-solid fa-check"></i>
-            <span>Apply &amp; Recalculate</span>
-          </button>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button
+              type="button"
+              class="abx-modal-btn abx-modal-btn-secondary"
+              onclick="closeAntibiogramOptionsModal()"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="abx-modal-btn abx-modal-btn-primary"
+              onclick="applyAntibiogramOptions()"
+            >
+              <i class="fa-solid fa-check"></i>
+              <span>Apply &amp; Recalculate</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

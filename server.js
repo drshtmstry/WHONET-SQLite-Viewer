@@ -19,6 +19,81 @@ import {
   calculateCumulativeAntibiogram
 } from "./src/js/utils/antibiogram-engine.js";
 
+// Cached WHONET Resources Tables (CLSI 2026 Breakpoints & Intrinsic Resistance)
+let cachedBreakpoints = null;
+let cachedBreakpointKey = null;
+let cachedIntrinsic = null;
+
+function getWhonetResourceBreakpoints(guideline = "CLSI", year = "2026") {
+  const cacheKey = `${guideline}_${year}`;
+  if (cachedBreakpoints && cachedBreakpointKey === cacheKey) {
+    return cachedBreakpoints;
+  }
+  const bpFile = join(WHONET_ROOT, "Resources", "Breakpoints.txt");
+  if (!existsSync(bpFile)) return null;
+
+  try {
+    const content = readFileSync(bpFile, "utf8");
+    const lines = content.split("\n");
+    const bpByTest = {};
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split("\t");
+      if (parts.length < 18) continue;
+      const g = parts[0]?.trim();
+      const yr = parts[1]?.trim();
+      if (g !== guideline || yr !== year) continue;
+      const orgCode = (parts[4] || "").toLowerCase().trim();
+      const testCode = (parts[12] || "").trim();
+      const rVal = parseFloat(parts[13]);
+      const sVal = parseFloat(parts[16]);
+      if (!testCode || (isNaN(rVal) && isNaN(sVal))) continue;
+
+      if (!bpByTest[testCode]) bpByTest[testCode] = {};
+      bpByTest[testCode][orgCode] = {
+        r: isNaN(rVal) ? null : rVal,
+        s: isNaN(sVal) ? null : sVal,
+        year: yr
+      };
+    }
+    cachedBreakpoints = bpByTest;
+    cachedBreakpointKey = cacheKey;
+    console.log(`[WHONET-Resources] Loaded ${Object.keys(bpByTest).length} test breakpoints from ${bpFile} (${guideline} ${year})`);
+    return bpByTest;
+  } catch (err) {
+    console.warn("[WHONET-Resources] Could not load Breakpoints.txt:", err.message);
+    return null;
+  }
+}
+
+function getWhonetResourceIntrinsic(guideline = "CLSI") {
+  if (cachedIntrinsic) return cachedIntrinsic;
+  const intFile = join(WHONET_ROOT, "Resources", "ExpectedResistancePhenotypes.txt");
+  if (!existsSync(intFile)) return null;
+
+  try {
+    const content = readFileSync(intFile, "utf8");
+    const lines = content.split("\n");
+    const map = {};
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split("\t");
+      if (parts.length < 8) continue;
+      const g = parts[0]?.trim();
+      if (g !== guideline) continue;
+      const org = (parts[2] || "").toLowerCase().trim();
+      const abx = (parts[6] || "").toUpperCase().trim();
+      if (!org || !abx) continue;
+      if (!map[org]) map[org] = [];
+      if (!map[org].includes(abx)) map[org].push(abx);
+    }
+    cachedIntrinsic = map;
+    console.log(`[WHONET-Resources] Loaded ${Object.keys(map).length} intrinsic resistance organism rules from ${intFile}`);
+    return map;
+  } catch (err) {
+    console.warn("[WHONET-Resources] Could not load ExpectedResistancePhenotypes.txt:", err.message);
+    return null;
+  }
+}
+
 // Live-reload SSE clients
 const liveReloadClients = new Set();
 
@@ -665,6 +740,24 @@ async function handleApi(req, res) {
         console.warn("Could not load WHONET lab config:", e.message);
       }
 
+      // Load official WHONET Resources Breakpoints (CLSI 2026) and Expected Resistance Phenotypes
+      const guidelineYear = customLabConfig?.metadata?.["Guideline year"] ||
+                            customLabConfig?.metadata?.["Dynamic breakpoints notification year"] ||
+                            "2026";
+      const resourceBreakpoints = getWhonetResourceBreakpoints("CLSI", guidelineYear);
+      const resourceIntrinsicMap = getWhonetResourceIntrinsic("CLSI");
+
+      if (customLabConfig) {
+        customLabConfig.resourceBreakpoints = resourceBreakpoints;
+        customLabConfig.resourceIntrinsicMap = resourceIntrinsicMap;
+      } else if (resourceBreakpoints) {
+        customLabConfig = {
+          metadata: { "Guideline year": guidelineYear, "Laboratory Name": `CLSI ${guidelineYear} Official WHONET` },
+          resourceBreakpoints,
+          resourceIntrinsicMap
+        };
+      }
+
       withDb((db) => {
         const where = [];
         const params = [];
@@ -711,8 +804,10 @@ async function handleApi(req, res) {
           episodeDays
         });
 
-        report.labConfigFile = customLabConfig?.filename || null;
+        report.labConfigFile = customLabConfig?.filename || (resourceBreakpoints ? `WHONET CLSI ${guidelineYear}` : null);
         report.labName = customLabConfig?.metadata?.["Laboratory Name"] || null;
+        report.guideline = `CLSI ${guidelineYear}`;
+        report.usesWhonetResources = !!resourceBreakpoints;
         report.totalRawIsolates = rawIsolates.length;
         report.startDate = startDate || null;
         report.endDate = endDate || null;

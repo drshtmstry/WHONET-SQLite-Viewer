@@ -47,34 +47,55 @@ export async function getSavedWhonetFolderHandle() {
 
 export async function scanWhonetFolder(dirHandle, showToast = true) {
   state.dirHandle = dirHandle;
-  if (showToast) toast('Scanning selected folder for .sqlite files and lab configs…', 'info');
+  if (showToast) toast('Scanning selected folder for WHONET data files and lab configs…', 'info');
 
   const foundFiles = [];
   let foundLabFile = null;
+  let dataSubDirHandle = null;
 
-  // 1. Scan directory items (files and subdirectories like Data/)
+  // 1. Inspect the selected folder root:
+  // Look for any laboratory configuration file (LAB*.txt, LAB*.ini, etc.)
+  // and identify if there is a dedicated "Data" subfolder.
   for await (const entry of dirHandle.values()) {
     if (entry.kind === 'file') {
-      if (isSqliteDatabase(entry.name)) {
-        state.fileHandles[entry.name] = entry;
-        foundFiles.push(entry.name);
-      } else if (/^LAB/i.test(entry.name) && !foundLabFile) {
+      if (/^LAB/i.test(entry.name) && !foundLabFile) {
         foundLabFile = entry;
       }
-    } else if (entry.kind === 'directory') {
-      // Automatically recurse into subdirectories (e.g. Data/, 2024/, etc.)
-      try {
-        for await (const subEntry of entry.values()) {
-          if (subEntry.kind === 'file' && isSqliteDatabase(subEntry.name)) {
-            state.fileHandles[subEntry.name] = subEntry;
-            foundFiles.push(subEntry.name);
-          }
-        }
-      } catch (_) { }
+    } else if (entry.kind === 'directory' && entry.name.toLowerCase() === 'data') {
+      dataSubDirHandle = entry;
     }
   }
 
-  // 2. If a laboratory configuration file was discovered in the root folder, auto-parse it
+  // 2. WHONET main folder access is for lab configuration rules.
+  // Surveillance data files reside under the "Data" subfolder.
+  // If the selected folder has a "Data" subfolder, strictly scan under Data/
+  // and ignore non-data SQLite files (e.g. WHONET.sqlite, translations, backups) in the root.
+  // If the user picked the Data folder directly, scan dirHandle.
+  const targetDataDir = dataSubDirHandle || dirHandle;
+
+  async function scanDirectoryForDbs(handle) {
+    for await (const entry of handle.values()) {
+      if (entry.kind === 'file') {
+        if (isSqliteDatabase(entry.name)) {
+          state.fileHandles[entry.name] = entry;
+          if (!foundFiles.includes(entry.name)) foundFiles.push(entry.name);
+        } else if (/^LAB/i.test(entry.name) && !foundLabFile) {
+          foundLabFile = entry;
+        }
+      } else if (entry.kind === 'directory') {
+        // Recurse into subdirectories inside the Data folder (e.g. Data/2024/, Data/ICU/, etc.)
+        try {
+          await scanDirectoryForDbs(entry);
+        } catch (_) { }
+      }
+    }
+  }
+
+  // Reset fileHandles so databases from previous folders do not linger
+  state.fileHandles = {};
+  await scanDirectoryForDbs(targetDataDir);
+
+  // 3. If a laboratory configuration file was discovered in the root or data folder, auto-parse it
   if (foundLabFile) {
     try {
       const file = await foundLabFile.getFile();
@@ -92,19 +113,23 @@ export async function scanWhonetFolder(dirHandle, showToast = true) {
 
   foundFiles.sort();
   if (!foundFiles.length) {
-    if (showToast) toast('No .sqlite files found in the selected folder.', 'error');
+    if (showToast) {
+      const folderNote = dataSubDirHandle ? 'under Data subfolder' : 'in selected folder';
+      toast(`No data .sqlite files found ${folderNote}.`, 'error');
+    }
     return false;
   }
 
-  foundFiles.forEach(f => {
-    if (!state.databases.includes(f)) state.databases.push(f);
-  });
+  state.databases = [...foundFiles];
 
   renderLaunchDbSelect();
   if (typeof window.renderDbSelector === 'function') {
     window.renderDbSelector();
   }
-  if (showToast) toast(`Found ${foundFiles.length} WHONET database(s)! Select one to open.`, 'success');
+  if (showToast) {
+    const locText = dataSubDirHandle ? 'Data subfolder' : 'folder';
+    toast(`Found ${foundFiles.length} WHONET database(s) in ${locText}! Select one to open.`, 'success');
+  }
   return true;
 }
 
@@ -149,19 +174,57 @@ export async function chooseWhonetFolder() {
 export async function handleFolderSelected(files) {
   if (!files || !files.length) return;
   const foundFiles = [];
+  state.fileHandles = {};
+  let foundLabFile = null;
+
+  // Determine if files contain a "data" subfolder (e.g. WHONET/Data/...)
+  const hasDataFolder = Array.from(files).some(file => {
+    const rel = (file.webkitRelativePath || '').replace(/\\/g, '/');
+    const parts = rel.split('/');
+    return parts.slice(0, -1).some(p => p.toLowerCase() === 'data');
+  });
+
   for (const file of files) {
+    const rel = (file.webkitRelativePath || '').replace(/\\/g, '/');
+    const parts = rel.split('/');
+    const inDataFolder = parts.slice(0, -1).some(p => p.toLowerCase() === 'data');
+
+    // If a Data subfolder exists, only include .sqlite files that are under Data/
+    if (hasDataFolder && !inDataFolder) {
+      if (/^LAB/i.test(file.name) && !foundLabFile) {
+        foundLabFile = file;
+      }
+      continue;
+    }
+
     if (isSqliteDatabase(file.name)) {
       state.fileHandles[file.name] = file;
-      foundFiles.push(file.name);
-      if (!state.databases.includes(file.name)) {
-        state.databases.push(file.name);
-      }
+      if (!foundFiles.includes(file.name)) foundFiles.push(file.name);
+    } else if (/^LAB/i.test(file.name) && !foundLabFile) {
+      foundLabFile = file;
     }
   }
+
+  if (foundLabFile) {
+    try {
+      const text = await foundLabFile.text();
+      const config = parseLabConfig(text);
+      if (config) {
+        config.filename = foundLabFile.name;
+        state.customLabConfig = config;
+        console.info(`[WASM Lab Config] Loaded ${foundLabFile.name} (${config.metadata?.['Laboratory Name'] || 'Custom'})`);
+      }
+    } catch (err) {
+      console.warn('Could not load WHONET lab config:', err.message);
+    }
+  }
+
   foundFiles.sort();
   if (!foundFiles.length) {
-    return toast('No .sqlite files found in the selected folder.', 'error');
+    return toast('No data .sqlite files found in the Data folder.', 'error');
   }
+
+  state.databases = [...foundFiles];
   renderLaunchDbSelect();
   if (typeof window.renderDbSelector === 'function') {
     window.renderDbSelector();

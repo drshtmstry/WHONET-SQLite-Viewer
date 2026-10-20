@@ -54,7 +54,9 @@ import {
   loadAntibiogram, setAntibiogramGrouping, setAntibiogramMetric, toggleHideUnder30,
   toggleHideUnderMinIsolates, setAntibiogramMinIsolates, setAntibiogramDedupMode,
   setAntibiogramPeriodPreset, handleDateInputChange, openAntibiogramOptionsModal,
-  closeAntibiogramOptionsModal, applyAntibiogramOptions, exportAntibiogramCsv, copyAntibiogramTsv
+  closeAntibiogramOptionsModal, applyAntibiogramOptions, exportAntibiogramCsv, copyAntibiogramTsv,
+  setModalMinCutoff, handleModalMinCutoffChange, handleModalPeriodPreset, resetAntibiogramOptionsDefaults,
+  toggleHideEmptyAbx
 } from './pages/antibiogram.js';
 import {
   refreshSqlSchema, initSqlAutocomplete, insertSQL, clearSQL,
@@ -73,7 +75,7 @@ export function initTheme() {
 
   const effectiveTheme = (saved === 'dark' || saved === 'light')
     ? saved
-    : (document.documentElement.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+    : 'light';
 
   document.documentElement.setAttribute('data-theme', effectiveTheme);
   const metaTheme = document.querySelector('meta[name="theme-color"]');
@@ -317,6 +319,7 @@ document.addEventListener('keydown', e => {
       if (topModal.id === 'detail-modal') closeModal();
       else if (topModal.id === 'confirm-modal') closeConfirm();
       else if (topModal.id === 'edit-modal') closeEditModal();
+      else if (topModal.id === 'antibiogram-options-modal') closeAntibiogramOptionsModal();
     }
   }
   if (e.key === 'F5' || (e.ctrlKey && e.key === 'Enter')) {
@@ -329,7 +332,7 @@ document.addEventListener('keydown', e => {
 });
 
 // Close modals when clicking the dimmed backdrop
-['detail-modal', 'confirm-modal', 'edit-modal', 'disclaimer-modal'].forEach(id => {
+['detail-modal', 'confirm-modal', 'edit-modal', 'disclaimer-modal', 'antibiogram-options-modal'].forEach(id => {
   const modalEl = document.getElementById(id);
   if (modalEl) {
     modalEl.addEventListener('click', e => {
@@ -339,6 +342,7 @@ document.addEventListener('keydown', e => {
         else if (id === 'confirm-modal') closeConfirm();
         else if (id === 'edit-modal') closeEditModal();
         else if (id === 'disclaimer-modal') closeDisclaimerModal();
+        else if (id === 'antibiogram-options-modal') closeAntibiogramOptionsModal();
       }
     });
   }
@@ -439,6 +443,11 @@ Object.assign(window, {
   openAntibiogramOptionsModal,
   closeAntibiogramOptionsModal,
   applyAntibiogramOptions,
+  setModalMinCutoff,
+  handleModalMinCutoffChange,
+  handleModalPeriodPreset,
+  resetAntibiogramOptionsDefaults,
+  toggleHideEmptyAbx,
   exportAntibiogramCsv,
   copyAntibiogramTsv,
   refreshSqlSchema,

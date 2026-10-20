@@ -8,6 +8,12 @@ let currentReportData = null;
 let currentGroupByClass = true; // default CLSI Appendix E2 (By Drug Class)
 let currentMetric = 'S'; // 'S' = % Susceptible, 'R' = % Resistant
 let hideUnderMinIsolates = true; // default CLSI M39 threshold filter (hide organisms < threshold)
+let hideEmptyAbx = true; // default: hide antibiotics without any data / % for displayed organisms
+
+export function toggleHideEmptyAbx(checked) {
+  hideEmptyAbx = checked !== undefined ? checked : !hideEmptyAbx;
+  renderAntibiogramTable();
+}
 
 // WHONET Deduplication & Surveillance Configuration State
 let currentDedupMode = 'patient_first'; // 'patient_first' | 'isolate' | 'patient_first_ast' | 'episode' | 'patient_most_resistant' | 'patient_most_susceptible'
@@ -46,12 +52,10 @@ export function setAntibiogramMinIsolates(val) {
   if (modalInput && parseInt(modalInput.value, 10) !== currentMinIsolates) {
     modalInput.value = currentMinIsolates;
   }
-  updateHideThresholdLabel();
   loadAntibiogram();
 }
 
 export function toggleHideUnderMinIsolates(checkbox) {
-  hideUnderMinIsolates = checkbox.checked;
   if (currentReportData) updateAntibiogramMetaHeader(currentReportData);
   renderAntibiogramTable();
 }
@@ -208,39 +212,34 @@ function updateAntibiogramMetaHeader(data) {
     </div>
   `;
 
-  const orgAnalysisLabel = hideUnderMinIsolates
-    ? `Showing <strong style="color:var(--text);">${qualifiedCount}</strong> with ≥ ${threshold} isolates (${orgCount} total)`
-    : `Showing all <strong style="color:var(--text);">${orgCount}</strong> (<strong style="color:var(--text);">${qualifiedCount}</strong> with ≥ ${threshold} isolates)`;
+  const cutoffBadge = `
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <span style="font-weight: 700; color: var(--text);"><i class="fa-solid fa-chart-pie" style="color: var(--accent);"></i> Cutoff:</span>
+      <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;">&ge; ${threshold} isolates</span>
+    </div>
+  `;
+
+  const orgAnalysisLabel = `Showing <strong style="color:var(--text);">${qualifiedCount}</strong> with ≥ ${threshold} isolates (${orgCount} total)`;
 
   metaEl.innerHTML = `
-    <div style="display: flex; flex-direction: column; gap: 10px; font-size: 12.5px;">
-      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
-        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-weight: 700; color: var(--text);"><i class="fa-solid fa-microscope" style="color: var(--accent);"></i> Lab Rules:</span>
-            <span class="badge" style="background: var(--accent-light); color: var(--accent); padding: 3px 8px; border-radius: 4px; font-weight: 600;">${labLabel}</span>
-          </div>
-          ${dedupBadge}
-          ${dateBadge}
-          ${specBadge}
+    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px;">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="font-weight: 700; color: var(--text);"><i class="fa-solid fa-microscope" style="color: var(--accent);"></i> Lab Rules:</span>
+          <span class="badge" style="background: var(--accent-light); color: var(--accent); padding: 3px 8px; border-radius: 4px; font-weight: 600;">${labLabel}</span>
         </div>
-        <button
-          type="button"
-          class="btn btn-outline btn-xs"
-          onclick="openAntibiogramOptionsModal()"
-          title="Open WHONET Patient-wise Deduplication & Analysis Options"
-          style="display: inline-flex; align-items: center; gap: 5px; font-weight: 600;"
-        >
-          <i class="fa-solid fa-sliders"></i> Deduplication Settings
-        </button>
+        ${dedupBadge}
+        ${cutoffBadge}
+        ${dateBadge}
+        ${specBadge}
       </div>
 
-      <div style="display: flex; flex-wrap: wrap; gap: 14px; color: var(--text3); align-items: center; justify-content: flex-end; padding-top: 6px; border-top: 1px dashed var(--border);">
-        <span>Total Analyzed Isolates: <strong style="color:var(--text);">${data.totalFirstIsolates || 0}</strong></span>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; color: var(--text3); align-items: center; font-size: 12px; margin-left: auto;">
+        <span>Analyzed: <strong style="color:var(--text);">${data.totalFirstIsolates || 0}</strong></span>
         <span>•</span>
-        <span>Total Raw Isolates: <strong style="color:var(--text);">${data.totalRawIsolates || data.totalFirstIsolates || 0}</strong></span>
+        <span>Raw: <strong style="color:var(--text);">${data.totalRawIsolates || data.totalFirstIsolates || 0}</strong></span>
         <span>•</span>
-        <span>Organisms: ${orgAnalysisLabel}</span>
+        <span>${orgAnalysisLabel}</span>
       </div>
     </div>
   `;
@@ -261,13 +260,13 @@ export function renderAntibiogramTable() {
     return;
   }
 
-  // Filter organisms if hideUnderMinIsolates is checked
-  const filteredOrgs = hideUnderMinIsolates ? organisms.filter(o => o.meetsThreshold) : organisms;
+  // Filter organisms by configured threshold (CLSI M39)
+  const filteredOrgs = organisms.filter(o => o.meetsThreshold);
 
   if (!filteredOrgs.length) {
     container.innerHTML = `
       <div style="padding: 40px; text-align: center; color: var(--text3);">
-        <div>No organisms meet the threshold of ≥ ${currentReportData.minIsolatesThreshold} isolates. Uncheck "Hide species with < ${currentReportData.minIsolatesThreshold} isolates" or lower the threshold to view all.</div>
+        <div>No organisms meet the threshold of ≥ ${currentReportData.minIsolatesThreshold} isolates. Adjust the Minimum Isolates Cutoff in Deduplication Settings or choose a lower threshold.</div>
       </div>
     `;
     return;
@@ -275,6 +274,15 @@ export function renderAntibiogramTable() {
 
   // Prepare antibiotic columns (grouped by class or alphabetical)
   let abxList = [...antibiotics];
+  if (hideEmptyAbx) {
+    abxList = abxList.filter(drug => {
+      return filteredOrgs.some(org => {
+        const stats = org.drugStats[drug.code];
+        return stats && (stats.testedCount > 0 || stats.isIntrinsic);
+      });
+    });
+  }
+
   if (currentGroupByClass) {
     abxList.sort((a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name));
   } else {
@@ -410,6 +418,66 @@ export function renderAntibiogramTable() {
 
 // ── WHONET "One Isolate of Species by Patient" Modal Dialog ──
 
+export function setModalMinCutoff(cutoff) {
+  const input = document.getElementById('abx-modal-min-isolates');
+  if (input) {
+    input.value = cutoff;
+  }
+  document.querySelectorAll('.abx-cutoff-pill').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.cutoff, 10) === cutoff);
+  });
+}
+
+export function handleModalMinCutoffChange() {
+  const input = document.getElementById('abx-modal-min-isolates');
+  const val = input ? parseInt(input.value, 10) : 30;
+  document.querySelectorAll('.abx-cutoff-pill').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.cutoff, 10) === val);
+  });
+}
+
+export function handleModalPeriodPreset(preset) {
+  const startEl = document.getElementById('abx-modal-start-date');
+  const endEl = document.getElementById('abx-modal-end-date');
+  if (!startEl || !endEl) return;
+  if (preset === 'all') {
+    startEl.value = '';
+    endEl.value = '';
+  } else {
+    const now = new Date();
+    let days = 365;
+    if (preset === '30d') days = 30;
+    else if (preset === '90d') days = 90;
+    else if (preset === '6m') days = 180;
+    endEl.value = now.toISOString().slice(0, 10);
+    startEl.value = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
+  }
+}
+
+export function resetAntibiogramOptionsDefaults() {
+  const radioByPatientFirst = document.getElementById('abx-opt-by-patient-first');
+  if (radioByPatientFirst) radioByPatientFirst.checked = true;
+
+  const episodeDaysInput = document.getElementById('abx-opt-episode-days');
+  if (episodeDaysInput) episodeDaysInput.value = 30;
+
+  const modalPeriodPreset = document.getElementById('abx-modal-period-preset');
+  if (modalPeriodPreset) modalPeriodPreset.value = 'all';
+
+  const modalStartDate = document.getElementById('abx-modal-start-date');
+  if (modalStartDate) modalStartDate.value = '';
+
+  const modalEndDate = document.getElementById('abx-modal-end-date');
+  if (modalEndDate) modalEndDate.value = '';
+
+  const hideEmptyInput = document.getElementById('abx-modal-hide-empty-abx');
+  if (hideEmptyInput) hideEmptyInput.checked = true;
+  hideEmptyAbx = true;
+
+  setModalMinCutoff(30);
+  toast('Antibiogram options reset to CLSI M39 defaults', 'info');
+}
+
 export function openAntibiogramOptionsModal() {
   const modal = document.getElementById('antibiogram-options-modal');
   if (!modal) return;
@@ -426,6 +494,7 @@ export function openAntibiogramOptionsModal() {
   const modalPeriodPreset = document.getElementById('abx-modal-period-preset');
   const modalStartDate = document.getElementById('abx-modal-start-date');
   const modalEndDate = document.getElementById('abx-modal-end-date');
+  const hideEmptyInput = document.getElementById('abx-modal-hide-empty-abx');
 
   if (currentDedupMode === 'isolate' && radioByIsolate) radioByIsolate.checked = true;
   else if (currentDedupMode === 'patient_first_ast' && radioByPatientAst) radioByPatientAst.checked = true;
@@ -439,16 +508,21 @@ export function openAntibiogramOptionsModal() {
   if (modalPeriodPreset) modalPeriodPreset.value = currentPeriodPreset;
   if (modalStartDate) modalStartDate.value = currentStartDate;
   if (modalEndDate) modalEndDate.value = currentEndDate;
+  if (hideEmptyInput) hideEmptyInput.checked = hideEmptyAbx;
 
-  modal.style.display = 'flex';
-  setTimeout(() => modal.classList.add('open'), 10);
+  // Sync cutoff pills highlight
+  const curCutoff = parseInt(modalMinIsolatesInput ? modalMinIsolatesInput.value : currentMinIsolates, 10);
+  document.querySelectorAll('.abx-cutoff-pill').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.cutoff, 10) === curCutoff);
+  });
+
+  modal.classList.add('open');
 }
 
 export function closeAntibiogramOptionsModal() {
   const modal = document.getElementById('antibiogram-options-modal');
   if (modal) {
     modal.classList.remove('open');
-    setTimeout(() => { modal.style.display = 'none'; }, 200);
   }
 }
 
@@ -472,7 +546,6 @@ export function applyAntibiogramOptions() {
     currentMinIsolates = isNaN(minIso) || minIso < 1 ? 1 : minIso;
     const barInput = document.getElementById('abx-min-isolates-input');
     if (barInput) barInput.value = currentMinIsolates;
-    updateHideThresholdLabel();
   }
 
   const modalPeriodPreset = document.getElementById('abx-modal-period-preset');
@@ -492,8 +565,13 @@ export function applyAntibiogramOptions() {
     if (barEnd) barEnd.value = currentEndDate;
   }
 
+  const hideEmptyInput = document.getElementById('abx-modal-hide-empty-abx');
+  if (hideEmptyInput) {
+    hideEmptyAbx = hideEmptyInput.checked;
+  }
+
   closeAntibiogramOptionsModal();
-  toast('Antibiogram deduplication options updated', 'info');
+  toast('Antibiogram options updated', 'info');
   loadAntibiogram();
 }
 
@@ -503,10 +581,20 @@ export function exportAntibiogramCsv() {
   if (!currentReportData || !currentReportData.organisms) return toast('No antibiogram data to export', 'error');
 
   const { organisms, antibiotics } = currentReportData;
-  const activeOrgs = hideUnderMinIsolates ? organisms.filter(o => o.meetsThreshold) : organisms;
+  const activeOrgs = organisms.filter(o => o.meetsThreshold);
+
+  let activeAbxList = [...antibiotics];
+  if (hideEmptyAbx) {
+    activeAbxList = activeAbxList.filter(drug => {
+      return activeOrgs.some(org => {
+        const stats = org.drugStats[drug.code];
+        return stats && (stats.testedCount > 0 || stats.isIntrinsic);
+      });
+    });
+  }
 
   const metricLabel = currentMetric === 'R' ? '% Resistant' : '% Susceptible';
-  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...antibiotics.map(a => `${a.name} (${a.code}${a.isUrineOnly ? ' - Urine Only' : ''}) [${metricLabel}]`)];
+  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...activeAbxList.map(a => `${a.name} (${a.code}${a.isUrineOnly ? ' - Urine Only' : ''}) [${metricLabel}]`)];
   const rows = [headers.join(',')];
 
   for (const org of activeOrgs) {
@@ -515,7 +603,7 @@ export function exportAntibiogramCsv() {
       `"${org.orgName.replace(/"/g, '""')}"`,
       org.totalCount
     ];
-    for (const drug of antibiotics) {
+    for (const drug of activeAbxList) {
       const stats = org.drugStats[drug.code];
       if (!stats) row.push('""');
       else if (stats.isIntrinsic) row.push(currentMetric === 'R' ? '"100% (R)"' : '"R"');
@@ -538,15 +626,25 @@ export function copyAntibiogramTsv() {
   if (!currentReportData || !currentReportData.organisms) return toast('No antibiogram data to copy', 'error');
 
   const { organisms, antibiotics } = currentReportData;
-  const activeOrgs = hideUnderMinIsolates ? organisms.filter(o => o.meetsThreshold) : organisms;
+  const activeOrgs = organisms.filter(o => o.meetsThreshold);
+
+  let activeAbxList = [...antibiotics];
+  if (hideEmptyAbx) {
+    activeAbxList = activeAbxList.filter(drug => {
+      return activeOrgs.some(org => {
+        const stats = org.drugStats[drug.code];
+        return stats && (stats.testedCount > 0 || stats.isIntrinsic);
+      });
+    });
+  }
 
   const metricLabel = currentMetric === 'R' ? '%R' : '%S';
-  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...antibiotics.map(a => `${a.name} (${a.code}${a.isUrineOnly ? ' - Urine' : ''}) ${metricLabel}`)];
+  const headers = ['Organism Code', 'Organism Name', 'Total Isolates (N)', ...activeAbxList.map(a => `${a.name} (${a.code}${a.isUrineOnly ? ' - Urine' : ''}) ${metricLabel}`)];
   const rows = [headers.join('\t')];
 
   for (const org of activeOrgs) {
     const row = [org.orgCode, org.orgName, org.totalCount];
-    for (const drug of antibiotics) {
+    for (const drug of activeAbxList) {
       const stats = org.drugStats[drug.code];
       if (!stats) row.push('');
       else if (stats.isIntrinsic) row.push(currentMetric === 'R' ? '100% (R)' : 'R');
@@ -556,6 +654,6 @@ export function copyAntibiogramTsv() {
   }
 
   navigator.clipboard.writeText(rows.join('\n'))
-    .then(() => toast('Antibiogram copied to clipboard (TSV formatted for Excel)', 'success'))
+    .then(() => toast('Antibiogram table copied to clipboard (ready to paste into Excel or Word)', 'success'))
     .catch(() => toast('Could not copy to clipboard', 'error'));
 }

@@ -146,6 +146,10 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
   const orgLower = (orgCode || '').toLowerCase().trim();
 
   // 1. AMRIE Rule: Check Intrinsic Resistance first (ExpectedResistancePhenotypes)
+  const resourceIntrinsic = customLabConfig?.resourceIntrinsicMap;
+  if (resourceIntrinsic && resourceIntrinsic[orgLower]?.includes(abxCode)) {
+    return 'R';
+  }
   if (orgLower && intrinsicMap[orgLower] && intrinsicMap[orgLower].includes(abxCode)) {
     return 'R';
   }
@@ -162,13 +166,15 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
   // Determine if MIC or Disk Diffusion
   const isMic = testCol.endsWith('_NM') || testCol.endsWith('_NE') || testCol.endsWith('_EM') || testCol.endsWith('_EE');
 
-  // 2. Resolve Breakpoint: Custom Lab Config Species-Specific -> Custom Lab General -> Bundled Matrix
+  // 2. Resolve Breakpoint: Custom Lab Config Species-Specific -> Custom Lab General -> WHONET Resources (CLSI 2026) -> Bundled Matrix
   let bp = null;
 
   if (customLabConfig?.speciesBreakpoints?.[testCol]?.[orgLower]) {
     bp = customLabConfig.speciesBreakpoints[testCol][orgLower];
   } else if (customLabConfig?.generalBreakpoints?.[testCol]) {
     bp = customLabConfig.generalBreakpoints[testCol];
+  } else if (customLabConfig?.resourceBreakpoints?.[testCol]?.[orgLower]) {
+    bp = customLabConfig.resourceBreakpoints[testCol][orgLower];
   } else if (bpMatrix[testCol]?.species?.[orgLower]) {
     bp = bpMatrix[testCol].species[orgLower];
   } else {
@@ -180,11 +186,18 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
           bp = customLabConfig.speciesBreakpoints[testCol][groupCode];
           break;
         }
+        if (customLabConfig?.resourceBreakpoints?.[testCol]?.[groupCode]) {
+          bp = customLabConfig.resourceBreakpoints[testCol][groupCode];
+          break;
+        }
         if (bpMatrix[testCol]?.species?.[groupCode]) {
           bp = bpMatrix[testCol].species[groupCode];
           break;
         }
       }
+    }
+    if (!bp && customLabConfig?.resourceBreakpoints?.[testCol]?.general) {
+      bp = customLabConfig.resourceBreakpoints[testCol].general;
     }
     if (!bp && bpMatrix[testCol]?.general) {
       bp = bpMatrix[testCol].general;
@@ -518,9 +531,10 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
 
   // Annotate intrinsic resistance ONLY for drugs that were actually tested (total > 0).
   // Untested drugs (blank value) must never be counted or marked as resistant.
+  const combinedIntrinsic = { ...intrinsicMap, ...(customLabConfig?.resourceIntrinsicMap || {}) };
   for (const orgCode of Object.keys(orgMap)) {
-    if (intrinsicMap[orgCode]) {
-      for (const drug of intrinsicMap[orgCode]) {
+    if (combinedIntrinsic[orgCode]) {
+      for (const drug of combinedIntrinsic[orgCode]) {
         if (orgMap[orgCode].tested[drug] && orgMap[orgCode].tested[drug].total > 0) {
           orgMap[orgCode].tested[drug].intrinsic = true;
         }
