@@ -3239,6 +3239,30 @@ textarea.sql-input {
   border: 1px solid var(--accent-glow);
 }
 
+.abx-chart-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 11.5px;
+  flex-shrink: 0;
+}
+
+.abx-chart-btn:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
 @media (max-width: 680px) {
   .abx-options-grid {
     grid-template-columns: 1fr;

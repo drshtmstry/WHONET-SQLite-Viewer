@@ -2529,6 +2529,130 @@
             </button>
           </div>
         </div>
+    </div>
+
+    <!-- Organism Susceptibility Spectrum Modal (%S / %I / %R Stacked Bar Chart) -->
+    <div
+      id="organism-spectrum-modal"
+      class="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="spectrum-modal-title"
+    >
+      <div class="modal" style="max-width: 900px; width: 95vw; border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; display: flex; flex-direction: column; max-height: 92vh;">
+        <!-- Header -->
+        <div class="modal-header" style="padding: 16px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg2);">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(16, 185, 129, 0.12); color: var(--green); display: flex; align-items: center; justify-content: center; font-size: 16px;">
+              <i class="fa-solid fa-chart-column"></i>
+            </div>
+            <div>
+              <div id="spectrum-modal-title" style="font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.2;">
+                Antimicrobial Susceptibility Spectrum
+              </div>
+              <div id="spectrum-modal-subtitle" style="font-size: 12px; color: var(--text3); margin-top: 2px;">
+                Cumulative AST Profile (%S / %I / %R)
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="modal-close"
+            onclick="closeOrganismSpectrumModal()"
+            aria-label="Close Spectrum Modal"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Controls Bar -->
+        <div style="padding: 10px 22px; background: var(--bg3); border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+            <!-- Sort Order Selector -->
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Sort:</span>
+              <select
+                id="spectrum-sort-select"
+                class="chart-filter-select"
+                onchange="renderOrganismSpectrumChart()"
+                style="height: 30px; font-size: 12px; padding: 0 8px; min-width: 145px;"
+              >
+                <option value="susc_desc" selected>% Susceptible (Highest)</option>
+                <option value="susc_asc">% Susceptible (Lowest)</option>
+                <option value="class">By Drug Class</option>
+                <option value="alpha">Alphabetical</option>
+              </select>
+            </div>
+
+            <!-- Hide Untested Checkbox -->
+            <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); cursor: pointer; user-select: none;">
+              <input
+                type="checkbox"
+                id="spectrum-hide-untested"
+                checked
+                onchange="renderOrganismSpectrumChart()"
+                style="width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer;"
+              />
+              <span>Hide untested drugs</span>
+            </label>
+          </div>
+
+          <!-- Download PNG Button -->
+          <div>
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              onclick="downloadSpectrumChartPng()"
+              title="Download spectrum chart as high-resolution PNG image"
+              style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+            >
+              <i class="fa-solid fa-download"></i>
+              <span>Download PNG</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Body -->
+        <div class="modal-body" style="padding: 16px 22px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px;">
+          <!-- Custom Legend Badges -->
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; padding: 8px 12px; background: var(--bg2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
+              <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #10b981;"></span>
+              <span style="font-weight: 600;">% Susceptible (%S)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
+              <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #f59e0b;"></span>
+              <span style="font-weight: 600;">% Intermediate / SDD (%I)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
+              <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #ef4444;"></span>
+              <span style="font-weight: 600;">% Resistant (%R)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
+              <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #991b1b;"></span>
+              <span style="font-weight: 600;">Intrinsic Resistance (R)</span>
+            </div>
+          </div>
+
+          <!-- Canvas Container -->
+          <div id="spectrum-canvas-container" style="position: relative; width: 100%; min-height: 420px;">
+            <canvas id="spectrum-chart-canvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer" style="padding: 12px 22px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg2);">
+          <div id="spectrum-modal-stats" style="font-size: 12px; color: var(--text3);">
+            <!-- Populated dynamically -->
+          </div>
+          <button
+            type="button"
+            class="abx-modal-btn abx-modal-btn-secondary"
+            onclick="closeOrganismSpectrumModal()"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
 

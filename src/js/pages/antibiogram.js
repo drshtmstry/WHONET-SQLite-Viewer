@@ -334,12 +334,24 @@ export function renderAntibiogramTable() {
 
     html += `
       <tr class="${rowClass}" style="border-bottom: 1px solid var(--border);">
-        <td style="padding: 10px 16px; font-weight: 600; color: var(--text); position: sticky; left: 0; background: var(--bg2); z-index: 2; border-right: 1px solid var(--border);">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span>${escapeHtml(org.orgName)}</span>
-            ${isUnderThreshold ? `<span title="Fewer than ${currentReportData.minIsolatesThreshold} isolates: CLSI suggests cautious interpretation" style="color: var(--yellow); font-size: 12px; font-weight: bold;">*</span>` : ''}
+        <td style="padding: 10px 14px; font-weight: 600; color: var(--text); position: sticky; left: 0; background: var(--bg2); z-index: 2; border-right: 1px solid var(--border);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>${escapeHtml(org.orgName)}</span>
+                ${isUnderThreshold ? `<span title="Fewer than ${currentReportData.minIsolatesThreshold} isolates: CLSI suggests cautious interpretation" style="color: var(--yellow); font-size: 12px; font-weight: bold;">*</span>` : ''}
+              </div>
+              <div style="font-size: 10.5px; color: var(--text3); font-family: monospace;">${escapeHtml(org.orgCode)}</div>
+            </div>
+            <button
+              class="abx-chart-btn"
+              onclick="openOrganismSpectrumModal('${escapeHtml(org.orgCode)}')"
+              title="View %S / %I / %R Susceptibility Spectrum Chart for ${escapeHtml(org.orgName)}"
+              aria-label="Spectrum Chart for ${escapeHtml(org.orgName)}"
+            >
+              <i class="fa-solid fa-chart-column"></i>
+            </button>
           </div>
-          <div style="font-size: 10.5px; color: var(--text3); font-family: monospace;">${escapeHtml(org.orgCode)}</div>
         </td>
         <td style="text-align: center; font-weight: 700; padding: 10px 8px; color: var(--text2); background: var(--bg3); border-right: 1px solid var(--border);">
           ${org.totalCount}
@@ -657,3 +669,263 @@ export function copyAntibiogramTsv() {
     .then(() => toast('Antibiogram table copied to clipboard (ready to paste into Excel or Word)', 'success'))
     .catch(() => toast('Could not copy to clipboard', 'error'));
 }
+
+// ── Organism Susceptibility Spectrum Chart (%S / %I / %R) ──
+
+let spectrumChartInstance = null;
+let activeSpectrumOrgCode = null;
+
+export function openOrganismSpectrumModal(orgCode) {
+  if (!currentReportData || !currentReportData.organisms) return;
+  const org = currentReportData.organisms.find(o => o.orgCode.toLowerCase() === (orgCode || '').toLowerCase());
+  if (!org) return toast('Organism data not found', 'error');
+
+  activeSpectrumOrgCode = orgCode;
+
+  const modal = document.getElementById('organism-spectrum-modal');
+  if (!modal) return;
+
+  const titleEl = document.getElementById('spectrum-modal-title');
+  const subtitleEl = document.getElementById('spectrum-modal-subtitle');
+  if (titleEl) {
+    titleEl.textContent = `${org.orgName} (${org.orgCode.toUpperCase()})`;
+  }
+  if (subtitleEl) {
+    subtitleEl.textContent = `Analyzed: ${org.totalCount} isolates • Guideline: ${currentReportData.guideline || 'CLSI'} • AMRIE Interpretation`;
+  }
+
+  modal.classList.add('open');
+  renderOrganismSpectrumChart();
+}
+
+export function closeOrganismSpectrumModal() {
+  const modal = document.getElementById('organism-spectrum-modal');
+  if (modal) {
+    modal.classList.remove('open');
+  }
+  if (spectrumChartInstance) {
+    try { spectrumChartInstance.destroy(); } catch (_) {}
+    spectrumChartInstance = null;
+  }
+  activeSpectrumOrgCode = null;
+}
+
+export function renderOrganismSpectrumChart() {
+  if (!activeSpectrumOrgCode || !currentReportData || !currentReportData.organisms) return;
+  const org = currentReportData.organisms.find(o => o.orgCode.toLowerCase() === activeSpectrumOrgCode.toLowerCase());
+  if (!org) return;
+
+  const sortSelect = document.getElementById('spectrum-sort-select');
+  const sortMode = sortSelect ? sortSelect.value : 'susc_desc';
+  const hideUntested = document.getElementById('spectrum-hide-untested')?.checked ?? true;
+
+  const allAntibiotics = currentReportData.antibiotics || [];
+
+  // Build drug list for this organism
+  let items = [];
+  for (const drug of allAntibiotics) {
+    const stats = org.drugStats[drug.code];
+    const isTested = stats && (stats.testedCount > 0 || stats.isIntrinsic);
+
+    if (hideUntested && !isTested) continue;
+
+    let pctS = 0;
+    let pctI = 0;
+    let pctR = 0;
+    let isIntrinsic = false;
+    let testedCount = 0;
+    let sCount = 0;
+    let iCount = 0;
+    let rCount = 0;
+
+    if (stats) {
+      pctS = stats.pctS || 0;
+      pctI = stats.pctI || 0;
+      pctR = stats.pctR || 0;
+      isIntrinsic = !!stats.isIntrinsic;
+      testedCount = stats.testedCount || 0;
+      sCount = stats.sCount || 0;
+      iCount = stats.iCount || 0;
+      rCount = stats.rCount || 0;
+    }
+
+    items.push({
+      code: drug.code,
+      name: drug.name,
+      drugClass: drug.class || 'Other',
+      isUrineOnly: !!drug.isUrineOnly,
+      pctS,
+      pctI,
+      pctR,
+      isIntrinsic,
+      testedCount,
+      sCount,
+      iCount,
+      rCount,
+      isTested
+    });
+  }
+
+  // Sort items
+  if (sortMode === 'susc_desc') {
+    items.sort((a, b) => b.pctS - a.pctS || a.name.localeCompare(b.name));
+  } else if (sortMode === 'susc_asc') {
+    items.sort((a, b) => a.pctS - b.pctS || a.name.localeCompare(b.name));
+  } else if (sortMode === 'class') {
+    items.sort((a, b) => a.drugClass.localeCompare(b.drugClass) || b.pctS - a.pctS || a.name.localeCompare(b.name));
+  } else if (sortMode === 'alpha') {
+    items.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const statsEl = document.getElementById('spectrum-modal-stats');
+  if (statsEl) {
+    const testedDrugsCount = items.filter(i => i.isTested).length;
+    statsEl.textContent = `Displaying ${items.length} antimicrobial agents (${testedDrugsCount} tested on this species, N = ${org.totalCount} isolates)`;
+  }
+
+  const canvas = document.getElementById('spectrum-chart-canvas');
+  const container = document.getElementById('spectrum-canvas-container');
+  if (!canvas || !container) return;
+
+  // Dynamically size container height so bars are legible
+  const dynamicHeight = Math.max(380, items.length * 30 + 50);
+  container.style.height = `${dynamicHeight}px`;
+
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js is not loaded');
+    return;
+  }
+
+  if (spectrumChartInstance) {
+    try { spectrumChartInstance.destroy(); } catch (_) {}
+    spectrumChartInstance = null;
+  }
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const textColor = isDark ? '#e2e8f0' : '#334155';
+  const mutedColor = isDark ? '#94a3b8' : '#64748b';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.8)';
+  const tooltipBg = isDark ? 'rgba(18, 24, 38, 0.96)' : 'rgba(15, 23, 42, 0.95)';
+
+  const labels = items.map(d => {
+    let lbl = d.name;
+    if (d.isUrineOnly) lbl += ' [Urine]';
+    return lbl;
+  });
+
+  const ctx = canvas.getContext('2d');
+
+  const rBgColors = items.map(d => d.isIntrinsic ? '#991b1b' : '#ef4444');
+  const rBorderColors = items.map(d => d.isIntrinsic ? '#7f1d1d' : '#dc2626');
+
+  spectrumChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '% Susceptible (%S)',
+          data: items.map(d => d.pctS),
+          backgroundColor: '#10b981',
+          borderColor: '#059669',
+          borderWidth: 1,
+          hoverBackgroundColor: '#059669',
+          borderRadius: { topLeft: 4, bottomLeft: 4, topRight: 0, bottomRight: 0 }
+        },
+        {
+          label: '% Intermediate / SDD (%I)',
+          data: items.map(d => d.pctI),
+          backgroundColor: '#f59e0b',
+          borderColor: '#d97706',
+          borderWidth: 1,
+          hoverBackgroundColor: '#d97706',
+          borderRadius: 0
+        },
+        {
+          label: '% Resistant (%R)',
+          data: items.map(d => d.pctR),
+          backgroundColor: rBgColors,
+          borderColor: rBorderColors,
+          borderWidth: 1,
+          hoverBackgroundColor: '#dc2626',
+          borderRadius: { topRight: 4, bottomRight: 4, topLeft: 0, bottomLeft: 0 }
+        }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 250 },
+      scales: {
+        x: {
+          stacked: true,
+          min: 0,
+          max: 100,
+          grid: { color: gridColor },
+          ticks: {
+            color: mutedColor,
+            font: { family: 'JetBrains Mono', size: 11, weight: '500' },
+            callback: v => `${v}%`
+          }
+        },
+        y: {
+          stacked: true,
+          grid: { display: false },
+          ticks: {
+            color: textColor,
+            font: { family: 'Plus Jakarta Sans', size: 11.5, weight: '600' }
+          }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: tooltipBg,
+          titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: 'bold' },
+          bodyFont: { family: 'Plus Jakarta Sans', size: 11.5 },
+          padding: 12,
+          cornerRadius: 8,
+          callbacks: {
+            title: tooltipItems => {
+              const idx = tooltipItems[0].dataIndex;
+              const d = items[idx];
+              return `${d.name} (${d.code}) • ${d.drugClass}${d.isUrineOnly ? ' [Urine only]' : ''}`;
+            },
+            label: ctx => {
+              const idx = ctx.dataIndex;
+              const d = items[idx];
+              if (!d.isTested) return 'Untested on this species';
+              if (d.isIntrinsic) return 'CLSI Intrinsic Resistance: Inherently resistant (100% R)';
+              if (ctx.datasetIndex === 0) return `Susceptible (%S): ${d.pctS}% (${d.sCount} / ${d.testedCount} isolates)`;
+              if (ctx.datasetIndex === 1) return `Intermediate / SDD (%I): ${d.pctI}% (${d.iCount} / ${d.testedCount} isolates)`;
+              if (ctx.datasetIndex === 2) return `Resistant (%R): ${d.pctR}% (${d.rCount} / ${d.testedCount} isolates)`;
+              return '';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+export function downloadSpectrumChartPng() {
+  if (!spectrumChartInstance) return toast('No spectrum chart to download', 'error');
+  const canvas = document.getElementById('spectrum-chart-canvas');
+  if (!canvas) return;
+
+  const url = canvas.toDataURL('image/png', 1.0);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Spectrum_${activeSpectrumOrgCode || 'Organism'}_${new Date().toISOString().slice(0, 10)}.png`;
+  a.click();
+  toast('Spectrum chart downloaded as PNG image', 'success');
+}
+
+// Close spectrum modal on backdrop click
+document.getElementById('organism-spectrum-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'organism-spectrum-modal') {
+    closeOrganismSpectrumModal();
+  }
+});
+

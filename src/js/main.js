@@ -56,7 +56,8 @@ import {
   setAntibiogramPeriodPreset, handleDateInputChange, openAntibiogramOptionsModal,
   closeAntibiogramOptionsModal, applyAntibiogramOptions, exportAntibiogramCsv, copyAntibiogramTsv,
   setModalMinCutoff, handleModalMinCutoffChange, handleModalPeriodPreset, resetAntibiogramOptionsDefaults,
-  toggleHideEmptyAbx
+  toggleHideEmptyAbx, openOrganismSpectrumModal, closeOrganismSpectrumModal, renderOrganismSpectrumChart,
+  downloadSpectrumChartPng
 } from './pages/antibiogram.js';
 import {
   refreshSqlSchema, initSqlAutocomplete, insertSQL, clearSQL,
@@ -448,6 +449,10 @@ Object.assign(window, {
   handleModalPeriodPreset,
   resetAntibiogramOptionsDefaults,
   toggleHideEmptyAbx,
+  openOrganismSpectrumModal,
+  closeOrganismSpectrumModal,
+  renderOrganismSpectrumChart,
+  downloadSpectrumChartPng,
   exportAntibiogramCsv,
   copyAntibiogramTsv,
   refreshSqlSchema,
