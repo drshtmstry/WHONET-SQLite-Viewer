@@ -1736,11 +1736,20 @@
                   <button
                     type="button"
                     class="btn btn-outline btn-sm"
+                    onclick="copyAmrTrendImage()"
+                    title="Copy chart image to clipboard (paste directly into Word, Excel, or PowerPoint with Ctrl+V)"
+                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+                  >
+                    <i class="fa-solid fa-copy"></i> Copy Image
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-sm"
                     onclick="downloadAmrTrendPng()"
                     title="Download AMR trend chart as PNG"
-                    style="height: 30px; font-size: 12px; padding: 0 10px;"
+                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
                   >
-                    <i class="fa-solid fa-download"></i> Download Chart
+                    <i class="fa-solid fa-download"></i> Download PNG
                   </button>
                 </div>
               </div>
@@ -2792,8 +2801,18 @@
             </label>
           </div>
 
-          <!-- Download PNG Button -->
-          <div>
+          <!-- Actions: Copy Image & Download PNG -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              onclick="copySpectrumChartImage()"
+              title="Copy chart image to clipboard (paste directly into Word, Excel, or PowerPoint with Ctrl+V)"
+              style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+            >
+              <i class="fa-solid fa-copy"></i>
+              <span>Copy Image</span>
+            </button>
             <button
               type="button"
               class="btn btn-outline btn-sm"

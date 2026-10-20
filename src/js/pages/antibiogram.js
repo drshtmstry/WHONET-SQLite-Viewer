@@ -919,6 +919,44 @@ export function renderOrganismSpectrumChart() {
   });
 }
 
+async function copyCanvasToClipboard(canvas, chartTitle = 'Chart') {
+  if (!canvas) return toast('No chart canvas found', 'error');
+
+  try {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const bgColor = isDark ? '#121826' : '#ffffff';
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = canvas.width;
+    offscreen.height = canvas.height;
+    const ctx = offscreen.getContext('2d');
+
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+    ctx.drawImage(canvas, 0, 0);
+
+    const blob = await new Promise((resolve) => offscreen.toBlob(resolve, 'image/png', 1.0));
+    if (!blob) throw new Error('Could not generate image blob');
+
+    if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+      const item = new ClipboardItem({ 'image/png': blob });
+      await navigator.clipboard.write([item]);
+      toast(`${chartTitle} copied to clipboard! Paste directly into Word or Excel (Ctrl + V)`, 'success');
+    } else {
+      throw new Error('ClipboardItem API not supported in this browser');
+    }
+  } catch (err) {
+    console.warn('Could not copy image to clipboard directly:', err);
+    toast('Direct clipboard image copy not supported by your browser. Please use Download PNG.', 'info');
+  }
+}
+
+export function copySpectrumChartImage() {
+  if (!spectrumChartInstance) return toast('No spectrum chart to copy', 'error');
+  const canvas = document.getElementById('spectrum-chart-canvas');
+  copyCanvasToClipboard(canvas, 'Antimicrobial Spectrum chart');
+}
+
 export function downloadSpectrumChartPng() {
   if (!spectrumChartInstance) return toast('No spectrum chart to download', 'error');
   const canvas = document.getElementById('spectrum-chart-canvas');
@@ -1353,6 +1391,12 @@ export function renderAmrTrendChart() {
       }
     }
   });
+}
+
+export function copyAmrTrendImage() {
+  if (!trendChartInstance) return toast('No AMR trend chart to copy', 'error');
+  const canvas = document.getElementById('amr-trends-chart-canvas');
+  copyCanvasToClipboard(canvas, 'AMR Trend chart');
 }
 
 export function downloadAmrTrendPng() {

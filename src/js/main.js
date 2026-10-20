@@ -57,8 +57,8 @@ import {
   closeAntibiogramOptionsModal, applyAntibiogramOptions, exportAntibiogramCsv, copyAntibiogramTsv,
   setModalMinCutoff, handleModalMinCutoffChange, handleModalPeriodPreset, resetAntibiogramOptionsDefaults,
   toggleHideEmptyAbx, openOrganismSpectrumModal, closeOrganismSpectrumModal, renderOrganismSpectrumChart,
-  downloadSpectrumChartPng, setAntibiogramViewMode, setAmrTrendIndicator, setTrendMetric,
-  renderAmrTrendChart, downloadAmrTrendPng, copyTrendTableTsv
+  downloadSpectrumChartPng, copySpectrumChartImage, setAntibiogramViewMode, setAmrTrendIndicator, setTrendMetric,
+  renderAmrTrendChart, downloadAmrTrendPng, copyAmrTrendImage, copyTrendTableTsv
 } from './pages/antibiogram.js';
 import {
   refreshSqlSchema, initSqlAutocomplete, insertSQL, clearSQL,
@@ -454,11 +454,13 @@ Object.assign(window, {
   closeOrganismSpectrumModal,
   renderOrganismSpectrumChart,
   downloadSpectrumChartPng,
+  copySpectrumChartImage,
   setAntibiogramViewMode,
   setAmrTrendIndicator,
   setTrendMetric,
   renderAmrTrendChart,
   downloadAmrTrendPng,
+  copyAmrTrendImage,
   copyTrendTableTsv,
   exportAntibiogramCsv,
   copyAntibiogramTsv,
