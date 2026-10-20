@@ -4,7 +4,7 @@
 
 # WHONET SQLite Viewer
 
-<p>High-performance, open-source utility for inspecting, deduplicating, sorting, and analyzing WHONET SQLite databases.</p>
+<p>High-performance, open-source utility for inspecting, deduplicating, sorting, and analyzing WHONET SQLite databases, featuring full <strong>CLSI M39-A4 Cumulative Antibiograms</strong>, <strong>Cross-Setting Care Location Stratification</strong>, and <strong>Longitudinal AMR Surveillance Analytics</strong>.</p>
 <p><a href="https://whonet-sqlite-viewer.vercel.app/"><strong>whonet-sqlite-viewer.vercel.app</strong></a></p>
 
 ---
@@ -15,13 +15,27 @@
 
 ## Features
 
-- **CLSI M39 Cumulative Antibiogram** — Clinical Laboratory Standards Institute (CLSI M39-A4) compliant cumulative antibiogram engine:
-  - **1st-Isolate Deduplication**: Automatically includes only the initial isolate of a given species per patient in the surveillance period, eliminating diagnostic bias.
-  - **Statistical Cutoff Alert (<30 isolates)**: Flags small sample sizes per CLSI recommendations with an intuitive toggle to show/hide organisms with insufficient isolates.
-  - **Drug Class Grouping & Alphabetical Sorting**: Switch instantly between hierarchical grouping by drug classes (Penicillins, Cephalosporins, Carbapenems, Fluoroquinolones, Aminoglycosides, Glycopeptides, Polymyxins, etc. per CLSI Appendix E2) and standard alphabetical listing (CLSI Appendix E1).
+- **CLSI M39 Cumulative Antibiogram Engine** — Full Clinical and Laboratory Standards Institute (CLSI M39-A4) compliance:
+  - **Deduplication Strategy Options**: Includes patient first-isolate per species (CLSI standard), first isolate with AST, episode-based window (e.g. 30 days), most resistant/susceptible isolate, or all isolates.
+  - **Statistical Cutoff Alert (< 30 isolates)**: Automated flagging of sample sizes under 30 isolates with configurable threshold cutoff and hide/show options per CLSI M39 guidelines.
+  - **Drug Class Grouping & Alphabetical Sorting**: Instant switching between hierarchical grouping by drug classes (Penicillins, Cephalosporins, Carbapenems, Fluoroquinolones, Aminoglycosides, Glycopeptides, Polymyxins, etc. per CLSI Appendix E2) and alphabetical listing (CLSI Appendix E1).
   - **% Susceptible (%S) vs % Resistant (%R) Views**: Toggle between susceptibility rates for empiric therapy guidance and resistance rates for infection control.
-  - **Specimen Type Filtering**: Filter by specific specimen categories (Urine, Blood, Respiratory, Pus/Wounds, Sterile Fluids, Stool, etc.) with automatic translation of WHONET specimen codes.
-  - **Export & Clipboard Integration**: One-click Copy TSV for immediate pasting into Excel/Word, and instant CSV download for clinical audits.
+  - **Urinary Tract Specific Restriction (CLSI M39 §5.3)**: Urinary tract agents (Nitrofurantoin, Norfloxacin, etc.) are strictly calculated from urine specimens only.
+  - **Intrinsic Resistance Annotations**: Automatically displays intrinsic resistance markers (e.g., Ampicillin in *Klebsiella*, Vancomycin in Gram-negatives) based on CLSI M100 / EUCAST / WHONET rules.
+  - **Export & Clipboard Integration**: One-click **Copy Table** (formatted TSV + HTML) for instant pasting into Excel, Word, or Google Sheets.
+- **Organism Susceptibility Spectrum Visualizer** — Interactive modal chart visualizer for any organism:
+  - **Horizontal Bar & Vertical Column Layouts**: Toggle between bar and column views.
+  - **Custom Metric Filters**: View full spectrum (%S, %I, %R), **%S Only**, or **%R Only** with auto-adjusting legends and intrinsic resistance flags.
+  - **Native Excel Chart Integration**: One-click **Copy Data** places formatted tabular series into the clipboard; paste into Excel (`Ctrl + V`) and hit `Alt + F1` for an instant 100% native, fully editable Excel chart.
+  - **Direct Image Clipboard Copy**: Copy high-resolution chart PNG directly to the OS clipboard (paste into Word/PowerPoint with `Ctrl + V`), or download as PNG.
+- **Care Location Stratification View (CLSI M39-A4 §6.4)** — Cross-setting antimicrobial susceptibility analysis:
+  - **ICU vs Inpatient Non-ICU vs Outpatient**: Automatic patient classification based on `WARD` and `WARD_TYPE`.
+  - **4 Executive KPI Stat Cards**: ICU isolate count, Inpatient count, Outpatient count, and Maximum Setting Disparity ($\Delta$).
+  - **Grouped Multi-Series Bar Chart**: Visual comparison across ICU (Indigo), Inpatient (Emerald), and Outpatient (Amber) settings.
+  - **Comparative Stratification Matrix Table**: Setting-specific isolate sample sizes ($N$), rates, and color-coded $\Delta$ disparity badges with sample size notices ($N < 30$).
+- **Longitudinal AMR Trend Surveillance (CLSI Appendix F)** — Monthly and quarterly surveillance trajectories:
+  - Tracks priority epidemiological phenotypes: MRSA, CRE, ESBL, CRAB, CRPA, VRE, and Fluoroquinolone-resistant Gram-negatives, plus custom bug-drug combinations.
+  - Dual-axis trend lines with isolate volume bars and WHO priority pathogen classification benchmarks.
 - **Specimen & Organism Dictionary Translation** — Resolves cryptic WHONET 2-to-4 letter specimen codes (e.g. `ur`, `bl`, `sp`, `csf`) into standard clinical descriptions across 180+ specimen mappings, and provides full scientific binomial names from WHONET organism taxonomies.
 - **Deduplication** — Identify and resolve duplicate isolates clustered by `SPEC_NUM` (Specimen #) or `PATIENT_ID` with batch selection and deletion.
 - **Natural Column Sorting** — Interactive click-to-sort headers with intelligent alphanumeric ordering for specimen numbers (e.g. `CSR-1`, `CSR-2`, `CSR-10`, `CSR-151`, `-1/-2`, `-A/-B` suffixes) across Isolates, Duplicates, Antibiograms, and SQL Workspace.

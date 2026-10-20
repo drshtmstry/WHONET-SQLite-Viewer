@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="WHONET Laboratory Database Management, CLSI M39 Cumulative Antibiogram, Care Location Stratification, Deduplication & AMR Surveillance Tool" />
     <title>WHONET SQLite Viewer</title>
 
     <!-- Favicon: WHONET Official Icon -->
@@ -1534,7 +1535,7 @@
                 flex-wrap: wrap;
               "
             >
-              <!-- View Switcher: Antibiogram Table vs AMR Trends -->
+              <!-- View Switcher: Antibiogram Table vs AMR Trends vs Location Comparison -->
               <div class="seg-control" id="abx-view-mode-toggle">
                 <button
                   class="seg-btn active"
@@ -1553,6 +1554,15 @@
                   style="padding: 5px 12px; font-size: 12px;"
                 >
                   <i class="fa-solid fa-chart-line"></i> AMR Longitudinal Trends
+                </button>
+                <button
+                  class="seg-btn"
+                  id="btn-abx-view-locations"
+                  onclick="setAntibiogramViewMode('locations')"
+                  title="Care Location Susceptibility Stratification: ICU vs Inpatient vs Outpatient (CLSI M39 Section 6.4)"
+                  style="padding: 5px 12px; font-size: 12px;"
+                >
+                  <i class="fa-solid fa-hospital-user"></i> Location Comparison
                 </button>
               </div>
 
@@ -1888,6 +1898,196 @@
                   </thead>
                   <tbody id="trend-table-body">
                     <tr><td colspan="6" style="padding: 24px; text-align: center; color: var(--text3);">Load an active database to display trend records</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Care Location Stratification View (CLSI M39 Section 6.4) -->
+          <div id="antibiogram-locations-view" style="display: none;">
+            <!-- Control & Selector Bar -->
+            <div class="chart-analytics-card" style="margin-bottom: 16px; padding: 14px 18px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+                <div>
+                  <div style="font-size: 13.5px; font-weight: 700; color: var(--text);">
+                    <i class="fa-solid fa-hospital-user" style="color: var(--accent);"></i> Care Location Stratification (CLSI M39 Section 6.4)
+                  </div>
+                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 2px;">
+                    Comparative antimicrobial susceptibility and resistance profiles across ICU, Inpatient (Non-ICU), and Outpatient cohorts
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-sm"
+                    onclick="copyLocationChartData()"
+                    title="Copy formatted tabular data to clipboard (paste into Excel with Ctrl+V and press Alt+F1 for an instant 100% native editable Excel chart)"
+                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+                  >
+                    <i class="fa-solid fa-table"></i> Copy Data (for Excel)
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-sm"
+                    onclick="copyLocationChartImage()"
+                    title="Copy location comparison chart image to clipboard (paste directly into Word, Excel, or PowerPoint with Ctrl+V)"
+                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+                  >
+                    <i class="fa-solid fa-copy"></i> Copy Image
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-sm"
+                    onclick="downloadLocationChartPng()"
+                    title="Download location comparison chart as PNG"
+                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+                  >
+                    <i class="fa-solid fa-download"></i> Download PNG
+                  </button>
+                </div>
+              </div>
+
+              <!-- Interactive Controls Row -->
+              <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+                <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+                  <!-- Target Organism Selector -->
+                  <div style="display: flex; align-items: center; gap: 7px;">
+                    <label for="loc-org-select" style="font-size: 12px; font-weight: 700; color: var(--text);">
+                      <i class="fa-solid fa-bacterium" style="color: var(--accent);"></i> Organism:
+                    </label>
+                    <select
+                      id="loc-org-select"
+                      class="chart-filter-select"
+                      onchange="renderLocationStratificationChart()"
+                      style="min-width: 240px; height: 32px; font-size: 12px; padding: 0 10px;"
+                      title="Select organism to stratify by care location"
+                    >
+                      <option value="">Select an organism…</option>
+                    </select>
+                  </div>
+
+                  <!-- Metric Toggle: %S vs %R -->
+                  <div class="seg-control" id="loc-metric-toggle">
+                    <button class="seg-btn active" id="btn-loc-metric-s" onclick="setLocationMetric('S')" style="padding: 4px 10px; font-size: 11.5px;">
+                      <i class="fa-solid fa-shield-virus"></i> % Susceptible (%S)
+                    </button>
+                    <button class="seg-btn" id="btn-loc-metric-r" onclick="setLocationMetric('R')" style="padding: 4px 10px; font-size: 11.5px;">
+                      <i class="fa-solid fa-biohazard"></i> % Resistant (%R)
+                    </button>
+                  </div>
+
+                  <!-- Hide Untested Checkbox -->
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="loc-hide-empty" checked onchange="renderLocationStratificationChart()" />
+                    <span>Hide unexamined drugs</span>
+                  </label>
+                </div>
+
+                <div id="loc-org-meta-badge" style="font-size: 11.5px; color: var(--text3);">
+                </div>
+              </div>
+            </div>
+
+            <!-- KPI Metric Cards Grid -->
+            <div class="abx-kpi-grid">
+              <div class="abx-kpi-card" style="border-left: 3px solid #6366f1;">
+                <div class="abx-kpi-title" style="color: #6366f1;">
+                  <i class="fa-solid fa-bed-pulse"></i> ICU Isolates (N)
+                </div>
+                <div class="abx-kpi-value" id="loc-kpi-icu">—</div>
+                <div class="abx-kpi-sub" id="loc-kpi-icu-sub">Intensive Care Units</div>
+              </div>
+
+              <div class="abx-kpi-card" style="border-left: 3px solid #10b981;">
+                <div class="abx-kpi-title" style="color: #10b981;">
+                  <i class="fa-solid fa-hospital"></i> Inpatient (Non-ICU) (N)
+                </div>
+                <div class="abx-kpi-value" id="loc-kpi-inpatient">—</div>
+                <div class="abx-kpi-sub" id="loc-kpi-inpatient-sub">General Medical/Surgical Wards</div>
+              </div>
+
+              <div class="abx-kpi-card" style="border-left: 3px solid #f59e0b;">
+                <div class="abx-kpi-title" style="color: #f59e0b;">
+                  <i class="fa-solid fa-person-walking"></i> Outpatient / OPD (N)
+                </div>
+                <div class="abx-kpi-value" id="loc-kpi-outpatient">—</div>
+                <div class="abx-kpi-sub" id="loc-kpi-outpatient-sub">Ambulatory &amp; Clinic Patients</div>
+              </div>
+
+              <div class="abx-kpi-card" style="border-left: 3px solid var(--accent);">
+                <div class="abx-kpi-title" style="color: var(--accent);">
+                  <i class="fa-solid fa-arrows-split-up-and-left"></i> Max Setting Disparity (Δ)
+                </div>
+                <div class="abx-kpi-value" id="loc-kpi-disparity">—</div>
+                <div class="abx-kpi-sub" id="loc-kpi-disparity-sub">Highest ICU vs Outpatient gap</div>
+              </div>
+            </div>
+
+            <!-- Grouped Bar Chart Box -->
+            <div class="chart-analytics-card" style="margin-bottom: 16px; padding: 18px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div>
+                  <div style="font-weight: 700; font-size: 14px; color: var(--text);" id="loc-chart-heading">
+                    Care Location Susceptibility Disparity Comparison
+                  </div>
+                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 2px;" id="loc-chart-sub">
+                    Grouped comparison across ICU, Inpatient, and Outpatient settings
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 14px; font-size: 11.5px; font-weight: 600;">
+                  <span style="display: flex; align-items: center; gap: 5px; color: #6366f1;">
+                    <span style="display: inline-block; width: 10px; height: 10px; background: #6366f1; border-radius: 2px;"></span> ICU
+                  </span>
+                  <span style="display: flex; align-items: center; gap: 5px; color: #10b981;">
+                    <span style="display: inline-block; width: 10px; height: 10px; background: #10b981; border-radius: 2px;"></span> Inpatient
+                  </span>
+                  <span style="display: flex; align-items: center; gap: 5px; color: #f59e0b;">
+                    <span style="display: inline-block; width: 10px; height: 10px; background: #f59e0b; border-radius: 2px;"></span> Outpatient
+                  </span>
+                </div>
+              </div>
+
+              <div id="loc-chart-wrapper" style="position: relative; width: 100%; min-height: 380px;">
+                <canvas id="loc-comparison-canvas"></canvas>
+              </div>
+            </div>
+
+            <!-- Comparative Matrix Breakdown Table Card -->
+            <div class="chart-analytics-card" style="padding: 18px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div>
+                  <div style="font-weight: 700; font-size: 13.5px; color: var(--text);">
+                    <i class="fa-solid fa-table-cells-large"></i> Location Stratification Matrix
+                  </div>
+                  <div style="font-size: 11px; color: var(--text3); margin-top: 2px;">
+                    CLSI M39 Section 6.4: Setting-specific sample sizes (N), susceptibility rates, and disparity (Δ)
+                  </div>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" onclick="copyLocationTableTsv()" style="font-size: 11.5px; padding: 3px 9px;">
+                  <i class="fa-solid fa-copy"></i> Copy Matrix Table
+                </button>
+              </div>
+
+              <div style="overflow-x: auto; width: 100%;">
+                <table class="data-table" id="loc-matrix-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px;">
+                  <thead>
+                    <tr style="background: var(--bg3);">
+                      <th style="padding: 8px 12px; text-align: left;">Antimicrobial Agent</th>
+                      <th style="padding: 8px 10px; text-align: left;">Class</th>
+                      <th style="padding: 8px 10px; text-align: center; border-left: 2px solid #6366f1;">ICU (N)</th>
+                      <th style="padding: 8px 10px; text-align: center; color: #6366f1;">ICU Rate</th>
+                      <th style="padding: 8px 10px; text-align: center; border-left: 2px solid #10b981;">Inpatient (N)</th>
+                      <th style="padding: 8px 10px; text-align: center; color: #10b981;">Inpatient Rate</th>
+                      <th style="padding: 8px 10px; text-align: center; border-left: 2px solid #f59e0b;">Outpatient (N)</th>
+                      <th style="padding: 8px 10px; text-align: center; color: #f59e0b;">Outpatient Rate</th>
+                      <th style="padding: 8px 12px; text-align: right; border-left: 1px solid var(--border);">Disparity (Δ)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="loc-table-body">
+                    <tr><td colspan="9" style="padding: 24px; text-align: center; color: var(--text3);">Select an organism to view location stratification matrix</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -2771,7 +2971,36 @@
 
         <!-- Controls Bar -->
         <div style="padding: 10px 22px; background: var(--bg3); border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
-          <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <!-- Metric Mode: Full Spectrum vs %S Only vs %R Only -->
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Metric:</span>
+              <select
+                id="spectrum-metric-select"
+                class="chart-filter-select"
+                onchange="renderOrganismSpectrumChart()"
+                style="height: 30px; font-size: 12px; padding: 0 8px; min-width: 142px;"
+              >
+                <option value="all" selected>%S / %I / %R (Full)</option>
+                <option value="S">%S Only (Susceptible)</option>
+                <option value="R">%R Only (Resistant)</option>
+              </select>
+            </div>
+
+            <!-- Orientation: Horizontal vs Vertical -->
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Orientation:</span>
+              <select
+                id="spectrum-orientation-select"
+                class="chart-filter-select"
+                onchange="renderOrganismSpectrumChart()"
+                style="height: 30px; font-size: 12px; padding: 0 8px; min-width: 110px;"
+              >
+                <option value="horizontal" selected>Horizontal</option>
+                <option value="vertical">Vertical</option>
+              </select>
+            </div>
+
             <!-- Sort Order Selector -->
             <div style="display: flex; align-items: center; gap: 6px;">
               <span style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Sort:</span>
@@ -2783,6 +3012,8 @@
               >
                 <option value="susc_desc" selected>% Susceptible (Highest)</option>
                 <option value="susc_asc">% Susceptible (Lowest)</option>
+                <option value="res_desc">% Resistant (Highest)</option>
+                <option value="res_asc">% Resistant (Lowest)</option>
                 <option value="class">By Drug Class</option>
                 <option value="alpha">Alphabetical</option>
               </select>
@@ -2797,12 +3028,22 @@
                 onchange="renderOrganismSpectrumChart()"
                 style="width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer;"
               />
-              <span>Hide untested drugs</span>
+              <span>Hide untested</span>
             </label>
           </div>
 
-          <!-- Actions: Copy Image & Download PNG -->
+          <!-- Actions: Copy Data, Copy Image & Download PNG -->
           <div style="display: flex; align-items: center; gap: 8px;">
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              onclick="copySpectrumChartData()"
+              title="Copy chart data table to clipboard (paste into Excel with Ctrl+V and press Alt+F1 for native editable chart)"
+              style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+            >
+              <i class="fa-solid fa-table"></i>
+              <span>Copy Data</span>
+            </button>
             <button
               type="button"
               class="btn btn-outline btn-sm"
@@ -2827,22 +3068,22 @@
         </div>
 
         <!-- Body -->
-        <div class="modal-body" style="padding: 16px 22px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px;">
+        <div class="modal-body" style="padding: 16px 22px; overflow: auto; flex: 1; display: flex; flex-direction: column; gap: 12px;">
           <!-- Custom Legend Badges -->
-          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; padding: 8px 12px; background: var(--bg2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
+          <div id="spectrum-legend-badges" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; padding: 8px 12px; background: var(--bg2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <div id="spectrum-badge-s" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
               <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #10b981;"></span>
               <span style="font-weight: 600;">% Susceptible (%S)</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
+            <div id="spectrum-badge-i" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
               <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #f59e0b;"></span>
               <span style="font-weight: 600;">% Intermediate / SDD (%I)</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
+            <div id="spectrum-badge-r" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
               <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #ef4444;"></span>
               <span style="font-weight: 600;">% Resistant (%R)</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
+            <div id="spectrum-badge-intrinsic" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
               <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #991b1b;"></span>
               <span style="font-weight: 600;">Intrinsic Resistance (R)</span>
             </div>

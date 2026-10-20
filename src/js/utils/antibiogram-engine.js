@@ -615,11 +615,13 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
   })).sort((a, b) => a.name.localeCompare(b.name));
 
   const trends = calculateAmrTrends(isolates, options);
+  const locations = calculateLocationStratification(isolates, options);
 
   return {
     organisms,
     antibiotics,
     trends,
+    locations,
     totalFirstIsolates: isolates.length,
     minIsolatesThreshold: minIsolates,
     dedupMode: options.mode || 'patient_first',
@@ -846,5 +848,205 @@ export function calculateAmrTrends(isolates, options = {}) {
   return {
     months: sortedMonths,
     monthly: monthlyList
+  };
+}
+
+/**
+ * Calculate Care Location Susceptibility Stratification (CLSI M39-A4 Section 6.4)
+ * Stratifies antimicrobial susceptibility and resistance profiles by care environment:
+ * - ICU (Intensive Care Units)
+ * - Inpatient (Non-ICU inpatient wards)
+ * - Outpatient (Ambulatory care / OPD)
+ *
+ * @param {Array<object>} isolates Deduplicated first-isolates
+ * @param {object} [options]
+ * @returns {object} Location stratification breakdown by organism and antibiotic
+ */
+export function calculateLocationStratification(isolates, options = {}) {
+  const customLabConfig = options.customLabConfig || null;
+  const combinedIntrinsic = { ...intrinsicMap, ...(customLabConfig?.resourceIntrinsicMap || {}) };
+
+  const byOrg = {};
+  let icuTotal = 0;
+  let inpatientTotal = 0;
+  let outpatientTotal = 0;
+
+  for (const row of isolates) {
+    const orgCode = (row.ORGANISM || '').trim().toLowerCase();
+    if (!orgCode || isNegativeOrganismResult(orgCode)) continue;
+    if (!hasAstResults(row)) continue;
+
+    const wardLower = (row.WARD || '').toLowerCase();
+    const wardTypeLower = (row.WARD_TYPE || '').toLowerCase();
+    const isIcu = wardTypeLower === 'icu' || wardLower.includes('icu') || wardLower.includes('intensive') || wardLower.includes('ccu');
+    const isOutpatient = wardTypeLower === 'out' || wardLower.includes('opd') || wardLower.includes('out') || wardLower.includes('clinic');
+    const locKey = isIcu ? 'icu' : (isOutpatient ? 'outpatient' : 'inpatient');
+
+    if (locKey === 'icu') icuTotal++;
+    else if (locKey === 'outpatient') outpatientTotal++;
+    else inpatientTotal++;
+
+    if (!byOrg[orgCode]) {
+      const resolvedName = orgNames[orgCode] ||
+        (typeof window !== 'undefined' && window.whonetOrganisms && window.whonetOrganisms[orgCode]) ||
+        orgCode.toUpperCase();
+
+      byOrg[orgCode] = {
+        orgCode,
+        orgName: resolvedName,
+        totalCount: 0,
+        icuCount: 0,
+        inpatientCount: 0,
+        outpatientCount: 0,
+        tested: {
+          icu: {},
+          inpatient: {},
+          outpatient: {}
+        }
+      };
+    }
+
+    const orgEntry = byOrg[orgCode];
+    orgEntry.totalCount++;
+    if (locKey === 'icu') orgEntry.icuCount++;
+    else if (locKey === 'outpatient') orgEntry.outpatientCount++;
+    else orgEntry.inpatientCount++;
+
+    const rowIsUrine = isUrineSpecimen(row.SPEC_TYPE);
+    const abxEntriesThisRow = {};
+
+    for (const [col, val] of Object.entries(row)) {
+      if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && !isBlankAstValue(val)) {
+        const abxCode = col.split('_')[0].toUpperCase();
+        if (URINE_SPECIFIC_ANTIBIOTICS.has(abxCode) && !rowIsUrine) continue;
+
+        const interp = interpretAstValue(orgCode, col, val, customLabConfig);
+        if (interp) {
+          const isMic = col.endsWith('_NM') || col.endsWith('_NE') || col.endsWith('_EM') || col.endsWith('_EE');
+          if (!abxEntriesThisRow[abxCode] || isMic) {
+            abxEntriesThisRow[abxCode] = interp;
+          }
+        }
+      }
+    }
+
+    const locTested = orgEntry.tested[locKey];
+    for (const [abxCode, interp] of Object.entries(abxEntriesThisRow)) {
+      if (!locTested[abxCode]) {
+        locTested[abxCode] = { total: 0, S: 0, I: 0, R: 0, intrinsic: false };
+      }
+      locTested[abxCode].total++;
+      locTested[abxCode][interp]++;
+    }
+  }
+
+  // Annotate intrinsic resistance
+  for (const [orgCode, orgEntry] of Object.entries(byOrg)) {
+    if (combinedIntrinsic[orgCode]) {
+      for (const drug of combinedIntrinsic[orgCode]) {
+        for (const locKey of ['icu', 'inpatient', 'outpatient']) {
+          if (orgEntry.tested[locKey][drug] && orgEntry.tested[locKey][drug].total > 0) {
+            orgEntry.tested[locKey][drug].intrinsic = true;
+          }
+        }
+      }
+    }
+  }
+
+  // Build processed organism objects
+  const orgList = Object.values(byOrg).map(org => {
+    const allAbx = new Set([
+      ...Object.keys(org.tested.icu),
+      ...Object.keys(org.tested.inpatient),
+      ...Object.keys(org.tested.outpatient)
+    ]);
+
+    const drugs = {};
+
+    for (const abxCode of allAbx) {
+      const getLocStats = (locKey) => {
+        const st = org.tested[locKey][abxCode];
+        if (!st || st.total === 0) {
+          return { total: 0, S: 0, I: 0, R: 0, pctS: null, pctR: null, pctI: null, isIntrinsic: false };
+        }
+        if (st.intrinsic) {
+          return {
+            total: st.total,
+            S: 0,
+            I: 0,
+            R: st.total,
+            pctS: 0,
+            pctR: 100,
+            pctI: 0,
+            isIntrinsic: true
+          };
+        }
+        return {
+          total: st.total,
+          S: st.S,
+          I: st.I,
+          R: st.R,
+          pctS: Math.round((st.S / st.total) * 100),
+          pctR: Math.round((st.R / st.total) * 100),
+          pctI: Math.round((st.I / st.total) * 100),
+          isIntrinsic: false
+        };
+      };
+
+      const icuStats = getLocStats('icu');
+      const inpatStats = getLocStats('inpatient');
+      const outpatStats = getLocStats('outpatient');
+
+      // Calculate disparity (Delta)
+      // Comparison priority: ICU vs Outpatient; if no outpatient, ICU vs Inpatient
+      let deltaR = null;
+      let deltaS = null;
+      if (icuStats.pctR !== null && outpatStats.pctR !== null) {
+        deltaR = icuStats.pctR - outpatStats.pctR;
+      } else if (icuStats.pctR !== null && inpatStats.pctR !== null) {
+        deltaR = icuStats.pctR - inpatStats.pctR;
+      }
+
+      if (icuStats.pctS !== null && outpatStats.pctS !== null) {
+        deltaS = outpatStats.pctS - icuStats.pctS;
+      } else if (icuStats.pctS !== null && inpatStats.pctS !== null) {
+        deltaS = inpatStats.pctS - icuStats.pctS;
+      }
+
+      drugs[abxCode] = {
+        code: abxCode,
+        name: abx[abxCode]?.name || abxCode,
+        class: abx[abxCode]?.class || 'Other',
+        isUrineOnly: URINE_SPECIFIC_ANTIBIOTICS.has(abxCode),
+        icu: icuStats,
+        inpatient: inpatStats,
+        outpatient: outpatStats,
+        deltaR,
+        deltaS
+      };
+    }
+
+    return {
+      orgCode: org.orgCode,
+      orgName: org.orgName,
+      totalCount: org.totalCount,
+      icuCount: org.icuCount,
+      inpatientCount: org.inpatientCount,
+      outpatientCount: org.outpatientCount,
+      drugs
+    };
+  });
+
+  orgList.sort((a, b) => b.totalCount - a.totalCount || a.orgName.localeCompare(b.orgName));
+
+  return {
+    summary: {
+      icuTotal,
+      inpatientTotal,
+      outpatientTotal,
+      totalIsolates: isolates.length
+    },
+    byOrg: Object.fromEntries(orgList.map(o => [o.orgCode, o])),
+    orgList
   };
 }

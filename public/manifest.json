@@ -1,7 +1,7 @@
 {
   "name": "WHONET SQLite Viewer",
   "short_name": "WHONET Viewer",
-  "description": "Laboratory Database Management, Deduplication & AMR Surveillance Tool",
+  "description": "WHONET Laboratory Database Management, CLSI M39 Cumulative Antibiogram, Deduplication & AMR Surveillance Tool",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

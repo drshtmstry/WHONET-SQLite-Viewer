@@ -57,8 +57,10 @@ import {
   closeAntibiogramOptionsModal, applyAntibiogramOptions, exportAntibiogramCsv, copyAntibiogramTsv,
   setModalMinCutoff, handleModalMinCutoffChange, handleModalPeriodPreset, resetAntibiogramOptionsDefaults,
   toggleHideEmptyAbx, openOrganismSpectrumModal, closeOrganismSpectrumModal, renderOrganismSpectrumChart,
-  downloadSpectrumChartPng, copySpectrumChartImage, setAntibiogramViewMode, setAmrTrendIndicator, setTrendMetric,
-  renderAmrTrendChart, downloadAmrTrendPng, copyAmrTrendImage, copyTrendTableTsv
+  downloadSpectrumChartPng, copySpectrumChartImage, copySpectrumChartData, setAntibiogramViewMode, currentAntibiogramViewMode, setAmrTrendIndicator, setTrendMetric,
+  renderAmrTrendChart, downloadAmrTrendPng, copyAmrTrendImage, copyTrendTableTsv,
+  setLocationMetric, populateLocationOrgDropdown, renderLocationStratificationChart,
+  copyLocationChartData, copyLocationChartImage, downloadLocationChartPng, copyLocationTableTsv
 } from './pages/antibiogram.js';
 import {
   refreshSqlSchema, initSqlAutocomplete, insertSQL, clearSQL,
@@ -104,6 +106,13 @@ export function toggleTheme() {
   }
   if (state.currentDb) {
     updateDashboardCharts();
+    if (state.currentPage === 'antibiogram') {
+      if (currentAntibiogramViewMode === 'trends') renderAmrTrendChart();
+      else if (currentAntibiogramViewMode === 'locations') renderLocationStratificationChart();
+      if (document.getElementById('organism-spectrum-modal')?.classList.contains('open')) {
+        renderOrganismSpectrumChart();
+      }
+    }
   }
 }
 
@@ -455,6 +464,7 @@ Object.assign(window, {
   renderOrganismSpectrumChart,
   downloadSpectrumChartPng,
   copySpectrumChartImage,
+  copySpectrumChartData,
   setAntibiogramViewMode,
   setAmrTrendIndicator,
   setTrendMetric,
@@ -462,6 +472,13 @@ Object.assign(window, {
   downloadAmrTrendPng,
   copyAmrTrendImage,
   copyTrendTableTsv,
+  setLocationMetric,
+  populateLocationOrgDropdown,
+  renderLocationStratificationChart,
+  copyLocationChartData,
+  copyLocationChartImage,
+  downloadLocationChartPng,
+  copyLocationTableTsv,
   exportAntibiogramCsv,
   copyAntibiogramTsv,
   refreshSqlSchema,
