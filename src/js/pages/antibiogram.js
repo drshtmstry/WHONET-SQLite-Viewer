@@ -348,11 +348,11 @@ export function renderAntibiogramTable() {
             </div>
             <button
               class="abx-chart-btn"
-              onclick="openOrganismSpectrumModal('${escapeHtml(org.orgCode)}')"
+              onclick="event.stopPropagation(); openOrganismSpectrumModal('${escapeHtml(org.orgCode)}')"
               title="View %S / %I / %R Susceptibility Spectrum Chart for ${escapeHtml(org.orgName)}"
               aria-label="Spectrum Chart for ${escapeHtml(org.orgName)}"
             >
-              <i class="fa-solid fa-chart-column"></i>
+              <i class="fa-solid fa-chart-column" style="pointer-events: none;"></i>
             </button>
           </div>
         </td>
@@ -679,14 +679,19 @@ let spectrumChartInstance = null;
 let activeSpectrumOrgCode = null;
 
 export function openOrganismSpectrumModal(orgCode) {
-  if (!currentReportData || !currentReportData.organisms) return;
+  if (!currentReportData || !currentReportData.organisms) {
+    return toast('Please generate or load an antibiogram first', 'warning');
+  }
   const org = currentReportData.organisms.find(o => o.orgCode.toLowerCase() === (orgCode || '').toLowerCase());
-  if (!org) return toast('Organism data not found', 'error');
+  if (!org) return toast(`Organism data for '${orgCode}' not found`, 'error');
 
   activeSpectrumOrgCode = orgCode;
 
   const modal = document.getElementById('organism-spectrum-modal');
-  if (!modal) return;
+  if (!modal) {
+    console.error('Modal #organism-spectrum-modal not found');
+    return;
+  }
 
   const titleEl = document.getElementById('spectrum-modal-title');
   const subtitleEl = document.getElementById('spectrum-modal-subtitle');
@@ -698,7 +703,9 @@ export function openOrganismSpectrumModal(orgCode) {
   }
 
   modal.classList.add('open');
-  renderOrganismSpectrumChart();
+  requestAnimationFrame(() => {
+    renderOrganismSpectrumChart();
+  });
 }
 
 export function closeOrganismSpectrumModal() {
