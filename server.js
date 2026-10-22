@@ -1675,11 +1675,6 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log("\n\u{1F9EC} WHONET SQLite Viewer");
   console.log(`   Open: http://localhost:${PORT}`);
   console.log("   Press Ctrl+C to stop\n");
-  try {
-    setTargetDb(DB_FILES[0]);
-    console.log(`   Auto-selected: ${DB_FILES[0]} (on-demand connection mode)`);
-  } catch (e) {
-    console.error("Could not auto-select DB:", e.message);
-  }
+  console.log(`   Discovered ${DB_FILES.length} SQLite database(s) in WHONET/Data directory`);
   openBrowser(`http://localhost:${PORT}`);
 });

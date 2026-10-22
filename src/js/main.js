@@ -293,13 +293,15 @@ export async function init() {
       if (data && Array.isArray(data.databases)) {
         state.isWasmMode = false;
         state.databases = data.databases;
-        state.currentDb = data.current;
+        state.currentDb = data.current || null;
         setRuntimeBadge('Local SQLite Server (Node.js)', true);
         renderDbSelector();
         renderLaunchDbSelect();
         if (state.currentDb) {
           await loadStats();
           refreshSqlSchema();
+        } else {
+          updateCurrentFileDisplay('');
         }
         return;
       }

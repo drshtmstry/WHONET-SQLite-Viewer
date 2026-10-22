@@ -452,12 +452,13 @@
                       class="filter-select launch-db-select"
                       aria-label="Select WHONET database"
                     >
-                      <option value="">Scanning folder…</option>
+                      <option value="" selected disabled>Select file</option>
                     </select>
                     <button
                       id="btn-open-launch-file"
                       class="btn btn-primary btn-sm launch-open-btn"
                       onclick="selectFromLaunchList()"
+                      disabled
                     >
                       <i class="fa-solid fa-arrow-right-to-bracket"></i> Open
                       File
