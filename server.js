@@ -152,7 +152,7 @@ if (!process.env.WHONET_NO_WATCH && existsSync(srcDir)) {
   });
 }
 
-// Auto-discover all .sqlite files in the data directory and bundled sample folders
+// Auto-discover all .sqlite files in the WHONET folder (Data/ subfolder or root) and bundled sample folders
 function getDbFiles() {
   const found = new Set();
   try {
@@ -164,6 +164,16 @@ function getDbFiles() {
   } catch (e) {
     console.error(`Could not read ${WHONET_DIR}:`, e.message);
   }
+
+  try {
+    if (existsSync(WHONET_ROOT)) {
+      for (const f of readdirSync(WHONET_ROOT)) {
+        if (f.toLowerCase().endsWith(".sqlite") && f.toLowerCase() !== "whonet.sqlite") {
+          found.add(f);
+        }
+      }
+    }
+  } catch (_) { }
 
   const sampleDirs = [
     join(__dirname, "public", "sample-data"),
@@ -255,6 +265,12 @@ function setTargetDb(filename, customPath = null) {
   const defaultPath = join(WHONET_DIR, filename);
   if (existsSync(defaultPath)) {
     currentDbFullPath = defaultPath;
+    watchActiveDb();
+    return;
+  }
+  const rootPath = join(WHONET_ROOT, filename);
+  if (existsSync(rootPath)) {
+    currentDbFullPath = rootPath;
     watchActiveDb();
     return;
   }
@@ -1675,6 +1691,6 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log("\n\u{1F9EC} WHONET SQLite Viewer");
   console.log(`   Open: http://localhost:${PORT}`);
   console.log("   Press Ctrl+C to stop\n");
-  console.log(`   Discovered ${DB_FILES.length} SQLite database(s) in WHONET/Data directory`);
+  console.log(`   Discovered ${DB_FILES.length} SQLite database(s) in WHONET folder`);
   openBrowser(`http://localhost:${PORT}`);
 });

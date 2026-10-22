@@ -66,7 +66,7 @@
 
 Open **[whonet-sqlite-viewer.vercel.app](https://whonet-sqlite-viewer.vercel.app/)** in Chrome or Edge (or click the browser address bar icon to install as a desktop/mobile app):
 
-- **Direct Folder Access**: Connect your local data folder once (`C:\WHONET\Data`) → the browser remembers the link and saves changes straight to disk.
+- **Direct Folder Access**: Connect your local data folder once (`C:\WHONET`) → the browser remembers the link and saves changes straight to disk.
 - **Preloaded Sample Data**: Test immediately with bundled sample databases (`WHO-TST-2020-01.sqlite`, etc.).
 - **100% Private On-Device Processing**: The database engine runs directly inside your browser; zero patient data is uploaded to any cloud server.
 
@@ -78,7 +78,7 @@ Open **[whonet-sqlite-viewer.vercel.app](https://whonet-sqlite-viewer.vercel.app
    npm start              # run local Node server on http://localhost:7890 (with auto-restart)
    ```
 3. Browser automatically opens at `http://localhost:7890`.
-4. Reads `.sqlite` files directly from `C:\WHONET\Data`. Mutations save straight to disk with on-demand connection locking.
+4. Reads `.sqlite` files directly from `C:\WHONET` (and `Data/` subfolder). Mutations save straight to disk with on-demand connection locking.
 
 ### Web / PWA Mode (Vercel)
 

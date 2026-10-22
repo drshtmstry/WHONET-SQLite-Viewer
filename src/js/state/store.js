@@ -103,7 +103,7 @@ export function updateCurrentFileDisplay(filename) {
         </div>
       `;
     } else {
-      dropSub.innerHTML = 'Works directly with standard WHONET files from <code>C:\\WHONET\\Data</code> or custom folders/downloads.';
+      dropSub.innerHTML = 'Works directly with standard WHONET files from <code>C:\\WHONET</code> or custom folders/downloads.';
     }
   }
 

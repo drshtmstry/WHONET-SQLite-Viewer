@@ -2,7 +2,7 @@ import { state } from "../state/store.js";
 import { api } from "../api/client.js";
 import { toast } from "../ui/toast.js";
 import { getSpecimenName } from "../utils/specimens.js";
-import { escapeHtml, formatWardTypeLabel } from "../utils/formatters.js";
+import { escapeHtml, formatWardTypeLabel, formatAmrMonthLabel } from "../utils/formatters.js";
 import { getAwareCategory } from "../utils/antibiogram-engine.js";
 
 const AWARE_ORDER = { Access: 1, Watch: 2, Reserve: 3, Other: 4 };
@@ -1882,6 +1882,12 @@ export function setAntibiogramViewMode(mode) {
   if (btnCopyTable)
     btnCopyTable.style.display = mode === "table" ? "inline-flex" : "none";
 
+  // If report data has not been loaded yet, initiate generation
+  if (!currentReportData && state.currentDb) {
+    loadAntibiogram();
+    return;
+  }
+
   if (mode === "trends") {
     renderAmrTrendChart();
   } else if (mode === "locations") {
@@ -2441,7 +2447,12 @@ export function renderLocationStratificationChart() {
   ).toLowerCase();
   currentLocationOrgCode = orgCode;
 
-  const org = locData.byOrg[orgCode];
+  let org = locData.byOrg[orgCode];
+  if (!org && locData.orgList.length > 0) {
+    org = locData.orgList[0];
+    currentLocationOrgCode = org.orgCode;
+    if (select) select.value = org.orgCode;
+  }
   if (!org) return;
 
   const hideEmpty = document.getElementById("loc-hide-empty")?.checked ?? true;

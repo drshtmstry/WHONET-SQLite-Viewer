@@ -282,7 +282,7 @@ export function renderLaunchDbSelect() {
       const descEl = document.getElementById("launch-local-desc");
       if (descEl) {
         descEl.innerHTML =
-          '<span style="color:var(--text2)">Click below to select your <code>C:\\WHONET</code> folder once. Browser will automatically list and load all <code>.sqlite</code> files!</span>';
+          '<span style="color:var(--text2)">Click below to select your <code>C:\\WHONET</code> folder once. Browser will automatically list and load all <code>.sqlite</code> files from <code>Data/</code>!</span>';
       }
       sel.innerHTML =
         '<option value="">(No folder selected yet — Click "Select WHONET Folder")</option>';
@@ -317,12 +317,21 @@ export function renderLaunchDbSelect() {
 
   // Local Server mode
   if (btnPickFolder) btnPickFolder.style.display = "none";
+  const descEl = document.getElementById("launch-local-desc");
   const localDbs = state.databases || [];
   if (!localDbs.length) {
+    if (descEl) {
+      descEl.innerHTML =
+        'Connected to local Node.js server. No <code>.sqlite</code> files found in <code>C:\\WHONET</code>.';
+    }
     sel.innerHTML =
-      '<option value="">No laboratory .sqlite files found in C:\\WHONET\\Data</option>';
+      '<option value="">No laboratory .sqlite files found in C:\\WHONET</option>';
     if (btnOpenLaunch) btnOpenLaunch.disabled = true;
     return;
+  }
+  if (descEl) {
+    descEl.innerHTML =
+      `Auto-connected to <code>C:\\WHONET</code>. Found <strong>${localDbs.length} database file(s)</strong> in <code>Data/</code>:`;
   }
   const localOptions = [
     `<option value="" ${!state.currentDb ? "selected disabled" : ""}>Select file</option>`,
