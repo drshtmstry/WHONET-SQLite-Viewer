@@ -3,6 +3,12 @@
  * Orchestrates state, views, WASM SQLite engine, and UI interactions.
  */
 
+// ── Vercel Web Analytics ──
+import { inject, pageview, track } from '@vercel/analytics';
+
+// Initialize Vercel Analytics tracking
+inject();
+
 // ── State & API ──
 import { state, isLocalHost, setRuntimeBadge, updateCurrentFileDisplay } from './state/store.js';
 import { api, API_BASE } from './api/client.js';
@@ -150,6 +156,9 @@ export function toggleMobileSidebar(force) {
 export function showPage(name) {
   toggleMobileSidebar(false);
   state.currentPage = name;
+  try {
+    pageview({ route: '/' + name, path: '/' + name });
+  } catch (_) {}
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
@@ -499,7 +508,9 @@ Object.assign(window, {
   proceedToDataSourceModal,
   closeDisclaimerModal,
   handleExternalDbUpdate,
-  toast
+  toast,
+  track,
+  pageview
 });
 
 // Auto-run startup: checkNoticeModal runs after init() so mode detection is
