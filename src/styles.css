@@ -1762,6 +1762,26 @@ select.filter-select:focus {
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
+.filter-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  padding: 0 4px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast);
+}
+
+.filter-checkbox-label:hover {
+  color: var(--text);
+}
+
 /* ==========================================================================
    Column Visibility Dropdown (Phenotypes: ESBL, Carbapenem, MRSA)
    ========================================================================== */

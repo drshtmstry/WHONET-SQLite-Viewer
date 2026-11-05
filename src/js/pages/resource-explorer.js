@@ -19,6 +19,7 @@ export const resState = {
   selectedBreakpointType: 'All Types',
   selectedYear: '2026',
   selectedOrganism: 'ALL', // 'ALL' or specific code e.g. 'eco', 'EBC', 'sau', 'STA'
+  hideEmptyBreakpoints: false,
 
   page: 1,
   pageSize: 50,
@@ -269,17 +270,19 @@ export function setResourceExplorerSection(tabName) {
     btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
 
-  // Toggle filter visibility (Method, Type, Year, Organism are specific to Breakpoints)
+  // Toggle filter visibility (Method, Type, Year, Organism, Hide Empty are specific to Breakpoints)
   const isBp = tabName === 'breakpoints';
   const methodSel = document.getElementById('res-method-filter');
   const typeSel = document.getElementById('res-type-filter');
   const yearSel = document.getElementById('res-year-filter');
   const orgSel = document.getElementById('res-organism-filter');
+  const hideEmptyWrap = document.getElementById('res-hide-empty-bp-wrap');
 
   if (methodSel) methodSel.style.display = isBp ? '' : 'none';
   if (typeSel) typeSel.style.display = isBp ? '' : 'none';
   if (yearSel) yearSel.style.display = isBp ? '' : 'none';
   if (orgSel) orgSel.style.display = isBp ? '' : 'none';
+  if (hideEmptyWrap) hideEmptyWrap.style.display = isBp ? 'inline-flex' : 'none';
 
   // Default sorting
   if (tabName === 'breakpoints') {
@@ -295,33 +298,58 @@ export function setResourceExplorerSection(tabName) {
 }
 
 /**
- * Helper to determine if a breakpoint matches a queried organism or panel
- * using AMRIE's taxonomic hierarchy.
+ * Resolves an organism or panel query against metadata lookups and taxonomic mappings.
  */
-function matchesOrganismWithPanels(b, targetCode, memberToPanels, panelToMembers) {
-  const tUpper = targetCode.toUpperCase();
-  const tLower = targetCode.toLowerCase();
-  const bpOrgUpper = b.organismCode.toUpperCase();
-  const bpOrgLower = b.organismCode.toLowerCase();
+export function resolveOrganismOrPanel(query) {
+  if (!query) return null;
+  const q = query.trim().toLowerCase();
+  const qUpper = query.trim().toUpperCase();
 
-  // 1. Direct match on organism or panel code
-  if (bpOrgUpper === tUpper || bpOrgLower === tLower) return true;
+  const orgs = resState.metadata?.organisms || {};
+  const panelDesc = resState.metadata?.panelDescriptions || {};
+  const memberToPanels = resState.metadata?.memberToPanels || {};
 
-  // 2. If target is a member organism (e.g. 'eco', 'sau', 'kpn'):
-  // Check if breakpoint is a parent panel of target (e.g. 'EBC', 'STA', 'ENT')
-  const parentPanels = memberToPanels[tLower];
-  if (parentPanels && parentPanels.includes(bpOrgUpper)) {
-    return true;
+  // 1. Direct match on organism code (e.g. 'pmi', 'eco', 'sau')
+  if (memberToPanels[q] || orgs[q]) {
+    const code = q;
+    const name = orgs[code] || orgs[qUpper] || code;
+    const parentPanels = memberToPanels[code] || [];
+    return { code, name, isPanel: false, parentPanels, memberSpecies: [] };
   }
 
-  // 3. If target is a panel (e.g. 'EBC', 'STA', 'ENT'):
-  // Check if breakpoint is a member species of this panel
-  const members = panelToMembers[tUpper];
-  if (members && members.includes(bpOrgLower)) {
-    return true;
+  // 2. Direct match on panel code (e.g. 'EBC', 'STA', 'PR-')
+  const panelToMembers = {};
+  for (const [m, panels] of Object.entries(memberToPanels)) {
+    panels.forEach(p => {
+      if (!panelToMembers[p]) panelToMembers[p] = [];
+      panelToMembers[p].push(m);
+    });
   }
 
-  return false;
+  if (panelToMembers[qUpper] || panelDesc[qUpper]) {
+    const code = qUpper;
+    const name = panelDesc[code] || code;
+    const memberSpecies = panelToMembers[code] || [];
+    return { code, name, isPanel: true, parentPanels: [], memberSpecies };
+  }
+
+  // 3. Exact match on organism name
+  for (const [code, name] of Object.entries(orgs)) {
+    if (name.toLowerCase() === q) {
+      const parentPanels = memberToPanels[code.toLowerCase()] || [];
+      return { code: code.toLowerCase(), name, isPanel: false, parentPanels, memberSpecies: [] };
+    }
+  }
+
+  // 4. Panel description match (e.g. 'Enterobacterales')
+  for (const [code, desc] of Object.entries(panelDesc)) {
+    if (desc.toLowerCase() === q) {
+      const memberSpecies = panelToMembers[code.toUpperCase()] || [];
+      return { code: code.toUpperCase(), name: desc, isPanel: true, parentPanels: [], memberSpecies };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -332,14 +360,11 @@ export function applyResourceFilters() {
 
   const q = resState.searchQuery.trim().toLowerCase();
   const guideline = resState.selectedGuideline;
-  const memberToPanels = resState.metadata?.memberToPanels || {};
-  const panelToMembers = {};
-  for (const [m, panels] of Object.entries(memberToPanels)) {
-    panels.forEach(p => {
-      if (!panelToMembers[p]) panelToMembers[p] = [];
-      panelToMembers[p].push(m);
-    });
-  }
+
+  const selectedOrgCtx = resState.selectedOrganism !== 'ALL' ? resolveOrganismOrPanel(resState.selectedOrganism) : null;
+  const searchOrgCtx = q ? resolveOrganismOrPanel(q) : null;
+  const effectiveOrg = selectedOrgCtx || searchOrgCtx;
+  resState.effectiveOrganism = effectiveOrg;
 
   let list = [];
 
@@ -348,24 +373,6 @@ export function applyResourceFilters() {
     const type = resState.selectedBreakpointType;
     const yearStr = resState.selectedYear;
     const targetYear = yearStr !== 'All Years' ? parseInt(yearStr, 10) : null;
-    const targetOrg = resState.selectedOrganism;
-
-    // Check if query corresponds to a specific organism code or organism name with parent panels
-    const queryPanels = new Set();
-    if (q) {
-      if (memberToPanels[q]) {
-        memberToPanels[q].forEach(p => queryPanels.add(p.toUpperCase()));
-      }
-      const orgLookup = resState.metadata?.organisms || {};
-      for (const [code, name] of Object.entries(orgLookup)) {
-        if (code.toLowerCase() === q || name.toLowerCase().includes(q)) {
-          const panels = memberToPanels[code.toLowerCase()];
-          if (panels) {
-            panels.forEach(p => queryPanels.add(p.toUpperCase()));
-          }
-        }
-      }
-    }
 
     list = resState.allBreakpoints.filter(b => {
       if (guideline !== 'All Guidelines' && b.guidelines.toLowerCase() !== guideline.toLowerCase()) return false;
@@ -373,24 +380,46 @@ export function applyResourceFilters() {
       if (type !== 'All Types' && b.breakpointType.toLowerCase() !== type.toLowerCase()) return false;
       if (targetYear !== null && b.year !== targetYear) return false;
 
-      // Filter by selected Organism / Panel dropdown
-      if (targetOrg !== 'ALL') {
-        if (!matchesOrganismWithPanels(b, targetOrg, memberToPanels, panelToMembers)) {
+      // Filter out rows where all S/I/R/SDD breakpoints are not available (-)
+      if (resState.hideEmptyBreakpoints) {
+        const hasR = b.r > 0;
+        const hasS = b.s > 0;
+        const hasI = b.i && String(b.i).trim() !== '' && String(b.i).trim() !== '-';
+        const hasSdd = b.sdd && String(b.sdd).trim() !== '' && String(b.sdd).trim() !== '-';
+        if (!hasR && !hasS && !hasI && !hasSdd) {
           return false;
         }
       }
 
-      // Filter by Search Query
-      if (q) {
-        // Direct string match
-        if (b.searchKey.includes(q)) return true;
+      // Filter by active Organism / Panel (Taxonomic resolution)
+      if (effectiveOrg) {
+        const bpOrgUpper = b.organismCode.toUpperCase();
+        const bpOrgLower = b.organismCode.toLowerCase();
+        let matchesOrg = false;
 
-        // AMRIE Taxonomic Search: If query matches an organism, include parent panel breakpoints
-        if (queryPanels.size > 0 && queryPanels.has(b.organismCode.toUpperCase())) {
-          return true;
+        if (effectiveOrg.isPanel) {
+          if (bpOrgUpper === effectiveOrg.code.toUpperCase()) {
+            matchesOrg = true;
+          } else if (effectiveOrg.memberSpecies.includes(bpOrgLower)) {
+            matchesOrg = true;
+          }
+        } else {
+          if (bpOrgLower === effectiveOrg.code.toLowerCase()) {
+            matchesOrg = true;
+          } else if (effectiveOrg.parentPanels.includes(bpOrgUpper)) {
+            matchesOrg = true;
+          }
         }
 
-        return false;
+        if (!matchesOrg) return false;
+      }
+
+      // Filter by Search Query
+      if (q) {
+        const isSearchExactOrg = searchOrgCtx && effectiveOrg && searchOrgCtx.code.toLowerCase() === effectiveOrg.code.toLowerCase();
+        if (!isSearchExactOrg) {
+          if (!b.searchKey.includes(q)) return false;
+        }
       }
 
       return true;
@@ -399,13 +428,10 @@ export function applyResourceFilters() {
     // Update count message with panel & species breakdown
     const countEl = document.getElementById('res-count-msg');
     if (countEl) {
-      if (targetOrg !== 'ALL') {
+      if (effectiveOrg) {
         const panelsCount = list.filter(item => item.isPanel).length;
         const speciesCount = list.length - panelsCount;
-        const orgs = resState.metadata?.organisms || {};
-        const panelDesc = resState.metadata?.panelDescriptions || {};
-        const orgLabel = orgs[targetOrg] || orgs[targetOrg.toLowerCase()] || panelDesc[targetOrg.toUpperCase()] || targetOrg;
-        countEl.textContent = `Showing ${list.length.toLocaleString()} breakpoints (${panelsCount} panel, ${speciesCount} species-specific) for ${targetOrg} (${orgLabel})`;
+        countEl.textContent = `Showing ${list.length.toLocaleString()} breakpoints (${panelsCount} panel, ${speciesCount} species-specific) for ${effectiveOrg.name} (${effectiveOrg.code})`;
       } else {
         countEl.textContent = yearStr !== 'All Years'
           ? `Showing ${list.length.toLocaleString()} breakpoints for year ${yearStr}`
@@ -418,7 +444,36 @@ export function applyResourceFilters() {
         const matchesGuide = (r.ruleCode + ' ' + r.description).toLowerCase().includes(guideline.toLowerCase());
         if (!matchesGuide) return false;
       }
-      if (q && !r.searchKey.includes(q)) return false;
+
+      if (effectiveOrg) {
+        const rOrgUpper = (r.organismCode || '').toUpperCase();
+        const rOrgLower = (r.organismCode || '').toLowerCase();
+        let matchesOrg = false;
+
+        if (effectiveOrg.isPanel) {
+          if (rOrgUpper === effectiveOrg.code.toUpperCase()) {
+            matchesOrg = true;
+          } else if (effectiveOrg.memberSpecies.includes(rOrgLower)) {
+            matchesOrg = true;
+          }
+        } else {
+          if (rOrgLower === effectiveOrg.code.toLowerCase()) {
+            matchesOrg = true;
+          } else if (effectiveOrg.parentPanels.includes(rOrgUpper)) {
+            matchesOrg = true;
+          }
+        }
+
+        if (!matchesOrg) return false;
+      }
+
+      if (q) {
+        const isSearchExactOrg = searchOrgCtx && effectiveOrg && searchOrgCtx.code.toLowerCase() === effectiveOrg.code.toLowerCase();
+        if (!isSearchExactOrg) {
+          if (!r.searchKey.includes(q)) return false;
+        }
+      }
+
       return true;
     });
 
@@ -429,7 +484,36 @@ export function applyResourceFilters() {
   } else if (resState.activeTab === 'intrinsic') {
     list = resState.allIntrinsicRules.filter(r => {
       if (guideline !== 'All Guidelines' && r.guideline.toLowerCase() !== guideline.toLowerCase()) return false;
-      if (q && !r.searchKey.includes(q)) return false;
+
+      if (effectiveOrg) {
+        const rOrgUpper = (r.organismCode || '').toUpperCase();
+        const rOrgLower = (r.organismCode || '').toLowerCase();
+        let matchesOrg = false;
+
+        if (effectiveOrg.isPanel) {
+          if (rOrgUpper === effectiveOrg.code.toUpperCase()) {
+            matchesOrg = true;
+          } else if (effectiveOrg.memberSpecies.includes(rOrgLower)) {
+            matchesOrg = true;
+          }
+        } else {
+          if (rOrgLower === effectiveOrg.code.toLowerCase()) {
+            matchesOrg = true;
+          } else if (effectiveOrg.parentPanels.includes(rOrgUpper)) {
+            matchesOrg = true;
+          }
+        }
+
+        if (!matchesOrg) return false;
+      }
+
+      if (q) {
+        const isSearchExactOrg = searchOrgCtx && effectiveOrg && searchOrgCtx.code.toLowerCase() === effectiveOrg.code.toLowerCase();
+        if (!isSearchExactOrg) {
+          if (!r.searchKey.includes(q)) return false;
+        }
+      }
+
       return true;
     });
 
@@ -591,9 +675,9 @@ function renderResourceTable() {
                 <div class="res-item-cell">
                   <span class="res-code">${escapeHtml(b.organismCode)}</span>
                   <span class="res-name" title="${escapeHtml(b.organismName)}">${escapeHtml(b.organismName)}</span>
-                  ${b.isPanel && resState.selectedOrganism !== 'ALL' && resState.selectedOrganism.toUpperCase() !== b.organismCode.toUpperCase() ? `
+                  ${b.isPanel && resState.effectiveOrganism && !resState.effectiveOrganism.isPanel && resState.effectiveOrganism.code.toUpperCase() !== b.organismCode.toUpperCase() ? `
                     <span class="res-panel-note" style="font-size: 11px; color: var(--accent); margin-top: 2px; font-weight: 500;">
-                      ↳ Applies to ${escapeHtml(resState.selectedOrganism)} via ${escapeHtml(b.organismCode)} panel
+                      ↳ Applies to ${escapeHtml(resState.effectiveOrganism.code)} via ${escapeHtml(b.organismCode)} panel
                     </span>
                   ` : ''}
                 </div>
@@ -746,6 +830,11 @@ export function onResourceYearChange() {
     resState.page = 1;
     applyResourceFilters();
   }
+}
+
+export function onResourceHideEmptyBpChange(checked) {
+  resState.hideEmptyBreakpoints = !!checked;
+  applyResourceFilters();
 }
 
 // ── Export & Copy Utilities ──

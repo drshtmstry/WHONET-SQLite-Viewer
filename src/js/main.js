@@ -179,6 +179,7 @@ import {
   onResourceMethodChange,
   onResourceTypeChange,
   onResourceYearChange,
+  onResourceHideEmptyBpChange,
   copyResourceTableTsv,
 } from "./pages/resource-explorer.js";
 
@@ -667,6 +668,7 @@ Object.assign(window, {
   onResourceMethodChange,
   onResourceTypeChange,
   onResourceYearChange,
+  onResourceHideEmptyBpChange,
   copyResourceTableTsv,
   chooseWhonetFolder,
   handleFolderSelected,

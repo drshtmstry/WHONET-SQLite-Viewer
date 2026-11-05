@@ -2933,6 +2933,20 @@
                 <option value="All Years">All Years</option>
               </select>
 
+              <!-- Hide Empty Breakpoints Checkbox -->
+              <label
+                class="filter-checkbox-label"
+                id="res-hide-empty-bp-wrap"
+                title="Hide rows where all breakpoints (S, I, R, and SDD) are empty (-)"
+              >
+                <input
+                  type="checkbox"
+                  id="res-hide-empty-bp"
+                  onchange="onResourceHideEmptyBpChange(this.checked)"
+                />
+                <span>Hide without breakpoints</span>
+              </label>
+
               <!-- Result Count Message -->
               <div
                 id="res-count-msg"
