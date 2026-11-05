@@ -567,7 +567,7 @@ function handleRequest(req, res) {
       try {
         const ext = extname(candidate).toLowerCase();
         const contentType = MIME_TYPES[ext] || "application/octet-stream";
-        const isDynamicDev = ext === ".html" || ext === ".js" || ext === ".css";
+        const isDynamicDev = ext === ".html" || ext === ".js" || ext === ".css" || ext === ".json";
         const data = readFileSync(candidate);
         res.writeHead(200, {
           "Content-Type": contentType,
@@ -1670,7 +1670,7 @@ function openBrowser(url) {
   }
 }
 
-const PORT = 7890;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 7890;
 const server = createServer(handleRequest);
 
 server.on("error", (err) => {

@@ -46,6 +46,13 @@
   - Tracks priority epidemiological phenotypes: MRSA, CRE, ESBL, CRAB, CRPA, VRE, and Fluoroquinolone-resistant Gram-negatives, plus custom bug-drug combinations.
   - Dual-axis trend lines with isolate volume bars and WHO priority pathogen classification benchmarks.
   - **Direct Chart Copy & PNG Export**: Instant **Copy Image** to OS clipboard and **Download PNG** for reports.
+- **Resource Explorer (AMRIE Reference Library)** — Recreated from the open-source AMRIE reference system:
+  - **Breakpoints**: Inspect over 51,000 published clinical breakpoints across CLSI, EUCAST, and SFM guidelines spanning 20+ revision years (2026 to 1998).
+  - **Expert Interpretation Rules**: Clinical expert rules for ESBL confirmation, AmpC phenotypes, Methicillin resistance (MRS/MRSA), Macrolide-Lincosamide inducible resistance (ICR / MLS-DTest), and BLNAR *H. influenzae*.
+  - **Intrinsic Resistance Phenotypes**: Over 1,020 intrinsic resistance profiles for CLSI and EUCAST.
+  - **Real-Time Multi-Parameter Filtering**: Instant search across organism codes and scientific names, generic antibiotic names and 3-letter codes; filter by Guideline (CLSI, EUCAST, SFM), Test Method (Disk, MIC), Type (Human, Animal, ECOFF), and Revision Year.
+  - **Standardized $R$ / $S$ Display Formatting**: Method-aware boundary operators ($\le$ for Disk mm, $\ge$ for MIC mg/L for $R$; $\ge$ for Disk, $\le$ for MIC for $S$) with clinical color highlights.
+  - **Data Exports**: One-click **Copy TSV** for Excel/Google Sheets and **Export CSV** download.
 - **Specimen & Organism Dictionary Translation** — Resolves cryptic WHONET 2-to-4 letter specimen codes (e.g. `ur`, `bl`, `sp`, `csf`) into standard clinical descriptions across 180+ specimen mappings, and provides full scientific binomial names from WHONET organism taxonomies.
 - **Deduplication** — Identify and resolve duplicate isolates clustered by `SPEC_NUM` (Specimen #) or `PATIENT_ID` with batch selection and deletion.
 - **Natural Column Sorting** — Interactive click-to-sort headers with intelligent alphanumeric ordering for specimen numbers (e.g. `CSR-1`, `CSR-2`, `CSR-10`, `CSR-151`, `-1/-2`, `-A/-B` suffixes) across Isolates, Duplicates, Antibiograms, and SQL Workspace.
@@ -100,10 +107,13 @@ The codebase is organized into a dual-runtime architecture supporting both local
 ├── docs/
 │   └── modular-schema.md   # Architectural specification & schema guide
 ├── public/                 # Static assets & PWA files
+│   ├── resources/          # AMRIE breakpoint, expert rule & intrinsic JSON resources
 │   ├── manifest.json       # Web App Manifest for PWA installation
 │   ├── sw.js               # Zero-cache Service Worker for instant updates
 │   ├── favicon.ico / .png  # Official WHONET icons & touch assets
 │   └── vendor/             # sql.js WebAssembly engine & binaries
+├── scripts/
+│   └── build-resources.js  # AMRIE resource compiler (Breakpoints, Expert & Intrinsic rules)
 ├── src/                    # Application source code
 │   ├── index.html          # Application UI layout & modals
 │   ├── styles.css          # Design system, themes & responsive layouts
@@ -115,19 +125,21 @@ The codebase is organized into a dual-runtime architecture supporting both local
 │       ├── api/            # Local Node REST dispatcher & live-reload client
 │       ├── db/             # WebAssembly database & File System Access API
 │       ├── ui/             # Table rendering, modals, and toasts
-│       ├── utils/          # Antibiogram engine, natural sort, specimens & formatters
+│       ├── utils/          # Antibiogram engine, natural sort, specimens, analytics & formatters
 │       │   ├── antibiogram-engine.js  # CLSI M39 deduplication & %S/%R matrix calculation
 │       │   ├── antibiogram-rules.json # CLSI Appendix E antibiotic class groupings
+│       │   ├── analytics.js           # Safe client-side telemetry wrapper
 │       │   ├── specimens.js           # 180+ specimen code to clinical name mappings
 │       │   ├── natural-sort.js        # Alphanumeric specimen # sorting algorithm
 │       │   ├── formatters.js          # Locale dates, Age/Sex merged formatting & escaping
 │       │   └── organisms.js           # Taxonomical badge rendering & scientific names
-│       └── pages/          # Dashboard, Isolates, Antibiogram, Duplicates, AMR, SQL, Fixes
+│       └── pages/          # Dashboard, Isolates, Antibiogram, Duplicates, AMR, SQL, Fixes, Resource Explorer
 │           ├── dashboard.js   # Summary KPIs & Chart.js visual analytics
 │           ├── isolates.js    # All Isolates table & column configurations
 │           ├── antibiogram.js # CLSI M39 cumulative antibiogram view & exports
 │           ├── duplicates.js  # Isolate clustering & batch deduplication
 │           ├── monthly-amr.js # Gujarat SAPCAR-G monthly surveillance matrix
+│           ├── resource-explorer.js # AMRIE Breakpoint, Expert & Intrinsic rule explorer
 │           ├── sql-workspace.js # Interactive SQL query runner with autocomplete
 │           └── fixes.js       # Bulk specimen normalization & whitespace trim
 ├── server.js               # Local Node.js server (native node:sqlite & auto-sync)

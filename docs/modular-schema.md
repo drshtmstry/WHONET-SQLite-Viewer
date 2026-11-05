@@ -87,6 +87,7 @@ The codebase separates static public assets, frontend modules, and backend execu
 │           ├── antibiogram.js  # Cumulative antibiogram matrix, grouping, and filters
 │           ├── duplicates.js   # Cluster grouping, duplicate modes & batch delete
 │           ├── monthly-amr.js  # Surveillance reporting matrix & CSV/TSV exports
+│           ├── resource-explorer.js # AMRIE Breakpoint, Expert & Intrinsic rule explorer
 │           ├── sql-workspace.js# SQL query console & contextual autocomplete
 │           └── fixes.js        # Bulk data cleansing operations
 │
@@ -101,26 +102,27 @@ The codebase separates static public assets, frontend modules, and backend execu
 
 ## 3. Module Responsibilities & Contracts
 
-| Module                   | Core Exports                                                    | Primary Responsibility                                                                                          |
-| ------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `state/store.js`         | `state`, `subscribe`, `markModified`, `setRuntimeBadge`         | Single source of truth for active database, pagination, filters, and modified flags.                            |
-| `api/client.js`          | `api(path, options)`, `API_BASE`                                | Dispatches requests to `wasm-emulator.js` if in browser WASM mode, or `fetch()` if connected to Node server.    |
-| `api/wasm-emulator.js`   | `handleWasmApi(path, options)`                                  | Emulates backend endpoints (`/api/stats`, `/api/isolates`, `/api/duplicates`, etc.) inside browser WASM memory. |
-| `db/wasm.js`             | `getSqlJs`, `wasmSelect`, `wasmRun`, `saveToFileHandle`         | Direct execution interface to the WebAssembly SQLite instance; registers custom SQLite functions.               |
-| `db/filesystem.js`       | `chooseWhonetFolder`, `restoreWhonetFolder`, `scanWhonetFolder` | Handles directory picker permissions and preserves access handles across browser sessions via IndexedDB.        |
-| `ui/table.js`            | `renderSortHeader`, `renderPagination`                          | Generates accessible, sortable `<th>` headers with dynamic arrow icons and unified pagination controls.         |
-| `ui/modal.js`            | `viewDetail`, `openEditModal`, `confirmDeleteRow`               | Modal dialog controllers, inline cell editor, and deletion confirmation guards.                                 |
-| `utils/antibiogram-engine.js` | `deduplicateFirstIsolates`, `calculateCumulativeAntibiogram` | Core CLSI M39 1st-isolate deduplication, statistical validity counts, and %S/%R matrix computation.             |
-| `utils/specimens.js`     | `SPECIMEN_DICTIONARY`, `formatSpecimen`                         | Translates WHONET shorthand specimen codes (e.g. `ur`, `bl`, `csf`) into human-readable clinical names.        |
-| `utils/natural-sort.js`  | `naturalKey`, `naturalCompare`                                  | Natural alphanumeric ordering engine that pads numeric segments to 12 digits.                                   |
-| `utils/formatters.js`    | `fmtDate`, `formatAgeSex`, `escapeHtml`, `debounce`             | Formats dates per user locale, formats merged `Age/Sex` (`19/f`), sanitizes HTML, and debounces calls.          |
-| `pages/dashboard.js`     | `loadStats`, `updateDashboardCharts`, `switchDb`                | Renders executive summary counters and responsive Chart.js visual distribution graphs.                          |
-| `pages/isolates.js`      | `loadIsolates`, `sortIsolates`, `renderIsolatesTable`           | All Isolates table controller with natural column sorting and live search filters.                              |
-| `pages/antibiogram.js`   | `loadAntibiogram`, `renderAntibiogramTable`, `exportAntibiogram`| CLSI M39 cumulative antibiogram view with drug class grouping, threshold filtering, and TSV/CSV export.        |
-| `pages/duplicates.js`    | `loadDuplicates`, `sortDuplicates`, `setDupMode`                | Deduplication interface supporting Specimen # vs Patient ID clustering and multi-row selection.                 |
-| `pages/monthly-amr.js`   | `loadMonthlyAmrData`, `renderAmrTable`, `exportAmrCsv`          | Gujarat SAPCAR-G AMR Surveillance data (OPD/IPD/ICU vs Specimen Types) with TSV/CSV export.                     |
-| `pages/sql-workspace.js` | `runSQL`, `sortSqlTable`, `initSqlAutocomplete`                 | Arbitrary SQL query execution engine with intelligent caret-based keyword/column autocomplete.                  |
-| `pages/fixes.js`         | `bulkFix`, `fixCasingAndRefresh`                                | Sanitizes data (e.g. UPPERCASE specimen normalization, whitespace cleanup).                                     |
+| Module                        | Core Exports                                                             | Primary Responsibility                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `state/store.js`              | `state`, `subscribe`, `markModified`, `setRuntimeBadge`                  | Single source of truth for active database, pagination, filters, and modified flags.                                   |
+| `api/client.js`               | `api(path, options)`, `API_BASE`                                         | Dispatches requests to `wasm-emulator.js` if in browser WASM mode, or `fetch()` if connected to Node server.           |
+| `api/wasm-emulator.js`        | `handleWasmApi(path, options)`                                           | Emulates backend endpoints (`/api/stats`, `/api/isolates`, `/api/duplicates`, etc.) inside browser WASM memory.        |
+| `db/wasm.js`                  | `getSqlJs`, `wasmSelect`, `wasmRun`, `saveToFileHandle`                  | Direct execution interface to the WebAssembly SQLite instance; registers custom SQLite functions.                      |
+| `db/filesystem.js`            | `chooseWhonetFolder`, `restoreWhonetFolder`, `scanWhonetFolder`          | Handles directory picker permissions and preserves access handles across browser sessions via IndexedDB.               |
+| `ui/table.js`                 | `renderSortHeader`, `renderPagination`                                   | Generates accessible, sortable `<th>` headers with dynamic arrow icons and unified pagination controls.                |
+| `ui/modal.js`                 | `viewDetail`, `openEditModal`, `confirmDeleteRow`                        | Modal dialog controllers, inline cell editor, and deletion confirmation guards.                                        |
+| `utils/antibiogram-engine.js` | `deduplicateFirstIsolates`, `calculateCumulativeAntibiogram`             | Core CLSI M39 1st-isolate deduplication, statistical validity counts, and %S/%R matrix computation.                    |
+| `utils/specimens.js`          | `SPECIMEN_DICTIONARY`, `formatSpecimen`                                  | Translates WHONET shorthand specimen codes (e.g. `ur`, `bl`, `csf`) into human-readable clinical names.                |
+| `utils/natural-sort.js`       | `naturalKey`, `naturalCompare`                                           | Natural alphanumeric ordering engine that pads numeric segments to 12 digits.                                          |
+| `utils/formatters.js`         | `fmtDate`, `formatAgeSex`, `escapeHtml`, `debounce`                      | Formats dates per user locale, formats merged `Age/Sex` (`19/f`), sanitizes HTML, and debounces calls.                 |
+| `pages/dashboard.js`          | `loadStats`, `updateDashboardCharts`, `switchDb`                         | Renders executive summary counters and responsive Chart.js visual distribution graphs.                                 |
+| `pages/isolates.js`           | `loadIsolates`, `sortIsolates`, `renderIsolatesTable`                    | All Isolates table controller with natural column sorting and live search filters.                                     |
+| `pages/antibiogram.js`        | `loadAntibiogram`, `renderAntibiogramTable`, `exportAntibiogram`         | CLSI M39 cumulative antibiogram view with drug class grouping, threshold filtering, and TSV/CSV export.                |
+| `pages/duplicates.js`         | `loadDuplicates`, `sortDuplicates`, `setDupMode`                         | Deduplication interface supporting Specimen # vs Patient ID clustering and multi-row selection.                        |
+| `pages/monthly-amr.js`        | `loadMonthlyAmrData`, `renderAmrTable`,                                  | Gujarat SAPCAR-G AMR Surveillance data (OPD/IPD/ICU vs Specimen Types) with TSV/CSV export.                            |
+| `pages/resource-explorer.js`  | `initResourceExplorer`, `applyResourceFilters`, `exportResourceTableCsv` | AMRIE reference browser for CLSI/EUCAST breakpoints, expert interpretation rules, and intrinsic resistance phenotypes. |
+| `pages/sql-workspace.js`      | `runSQL`, `sortSqlTable`, `initSqlAutocomplete`                          | Arbitrary SQL query execution engine with intelligent caret-based keyword/column autocomplete.                         |
+| `pages/fixes.js`              | `bulkFix`, `fixCasingAndRefresh`                                         | Sanitizes data (e.g. UPPERCASE specimen normalization, whitespace cleanup).                                            |
 
 ---
 

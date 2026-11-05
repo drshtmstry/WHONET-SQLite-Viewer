@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="WHONET SQLite Viewer — Inspect, Deduplicate &amp; Generate Cumulative Antibiograms (CLSI M39)" />
+    <meta
+      name="description"
+      content="WHONET SQLite Viewer — Inspect, Deduplicate &amp; Generate Cumulative Antibiograms (CLSI M39)"
+    />
     <title>WHONET SQLite Viewer</title>
 
     <!-- Favicon: WHONET Official Icon -->
@@ -171,6 +174,18 @@
           style="display: none"
           onchange="handleFileUpload(this.files[0])"
         />
+
+        <!-- Theme Toggle Button (Icon Only) -->
+        <button
+          type="button"
+          class="theme-toggle-btn"
+          id="theme-toggle-btn"
+          onclick="toggleTheme()"
+          title="Switch to Dark Mode"
+          aria-label="Switch to Dark Mode"
+        >
+          <i class="fa-solid fa-moon" aria-hidden="true"></i>
+        </button>
       </div>
     </header>
 
@@ -305,6 +320,31 @@
           Antibiogram
         </button>
 
+        <div class="nav-section">Reference &amp; Guidelines</div>
+        <button
+          type="button"
+          class="nav-item"
+          onclick="showPage('resource-explorer')"
+          id="nav-resource-explorer"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path
+              d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+            ></path>
+          </svg>
+          Resource Explorer
+        </button>
+
         <div class="nav-section">Data Quality</div>
         <button
           type="button"
@@ -349,19 +389,6 @@
             <line x1="12" y1="19" x2="20" y2="19"></line>
           </svg>
           SQL Console
-        </button>
-
-        <div class="nav-section">Theme</div>
-        <button
-          type="button"
-          class="nav-item theme-sidebar-entry"
-          id="theme-toggle-btn"
-          onclick="toggleTheme()"
-          title="Switch to Dark Mode"
-          aria-label="Switch to Dark Mode"
-        >
-          <i class="fa-solid fa-moon" aria-hidden="true"></i>
-          <span id="theme-toggle-label">Dark Mode</span>
         </button>
 
         <div class="sidebar-footer">
@@ -416,9 +443,6 @@
           <!-- Premium Guided Data Source Hub (Displayed when no database is loaded) -->
           <div class="guided-source-hub" id="guided-source-hub">
             <div class="guided-hub-header">
-              <div class="guided-hub-badge">
-                <i class="fa-solid fa-database"></i> WHONET Workspace
-              </div>
               <h1 class="guided-hub-title">Select WHONET Database to Open</h1>
               <p class="guided-hub-sub">
                 Choose how you would like to load your WHONET laboratory
@@ -436,13 +460,13 @@
                   </div>
                   <div>
                     <div class="guided-card-tag">Option 1</div>
-                    <div class="guided-card-title">
-                      Select WHONET Folder
-                    </div>
+                    <div class="guided-card-title">Select WHONET Folder</div>
                   </div>
                 </div>
                 <p class="guided-card-desc" id="launch-local-desc">
-                  Select <code>C:\WHONET</code> folder. Automatically grants permission to discover all SQLite databases in <code>Data/</code> and parses lab configuration rules.
+                  Select <code>C:\WHONET</code> folder. Automatically grants
+                  permission to discover all SQLite databases in
+                  <code>Data/</code> and parses lab configuration rules.
                 </p>
 
                 <div class="guided-card-body">
@@ -1334,11 +1358,8 @@
                 flex-wrap: wrap;
               "
             >
-              <button class="btn btn-primary btn-sm" onclick="exportAmrCsv()">
-                <i class="fa-solid fa-file-arrow-down"></i> Export All (CSV)
-              </button>
               <button class="btn btn-ghost btn-sm" onclick="copyAmrTableTsv()">
-                <i class="fa-solid fa-copy"></i> Copy Table
+                <i class="fa-regular fa-copy"></i> Copy
               </button>
             </div>
           </div>
@@ -1543,7 +1564,7 @@
                   id="btn-abx-view-table"
                   onclick="setAntibiogramViewMode('table')"
                   title="CLSI M39 Cumulative Antibiogram Table"
-                  style="padding: 5px 12px; font-size: 12px;"
+                  style="padding: 5px 12px; font-size: 12px"
                 >
                   <i class="fa-solid fa-table-cells"></i> Antibiogram Table
                 </button>
@@ -1552,7 +1573,7 @@
                   id="btn-abx-view-trends"
                   onclick="setAntibiogramViewMode('trends')"
                   title="Longitudinal Antimicrobial Resistance (AMR) Trend Analytics (CLSI Appendix F)"
-                  style="padding: 5px 12px; font-size: 12px;"
+                  style="padding: 5px 12px; font-size: 12px"
                 >
                   <i class="fa-solid fa-chart-line"></i> AMR Longitudinal Trends
                 </button>
@@ -1561,7 +1582,7 @@
                   id="btn-abx-view-locations"
                   onclick="setAntibiogramViewMode('locations')"
                   title="Care Location Susceptibility Stratification: ICU vs Inpatient vs Outpatient (CLSI M39 Section 6.4)"
-                  style="padding: 5px 12px; font-size: 12px;"
+                  style="padding: 5px 12px; font-size: 12px"
                 >
                   <i class="fa-solid fa-hospital-user"></i> Location Comparison
                 </button>
@@ -1573,7 +1594,7 @@
                 onclick="copyAntibiogramTsv()"
                 title="Copy Antibiogram Table to Clipboard (ready to paste into Excel, Word, or Google Sheets)"
               >
-                <i class="fa-solid fa-copy"></i> Copy Table
+                <i class="fa-regular fa-copy"></i> Copy
               </button>
             </div>
           </div>
@@ -1583,192 +1604,278 @@
             <!-- Meta and Control Bar -->
             <div
               class="chart-analytics-card"
-              style="margin-bottom: 18px; padding: 14px 18px;"
+              style="margin-bottom: 18px; padding: 14px 18px"
             >
-            <div
-              id="antibiogram-meta-banner"
-              style="
-                margin-bottom: 12px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid var(--border);
-              "
-            >
-              <div style="color: var(--text3); font-size: 13px">
-                Load an active database to generate the cumulative antibiogram
-                report.
+              <div
+                id="antibiogram-meta-banner"
+                style="
+                  margin-bottom: 12px;
+                  padding-bottom: 12px;
+                  border-bottom: 1px solid var(--border);
+                "
+              >
+                <div style="color: var(--text3); font-size: 13px">
+                  Load an active database to generate the cumulative antibiogram
+                  report.
+                </div>
+              </div>
+
+              <!-- Interactive Quick Controls & Filters -->
+              <div
+                style="
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  justify-content: space-between;
+                  gap: 10px;
+                "
+              >
+                <div
+                  style="
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    align-items: center;
+                  "
+                >
+                  <!-- Metric Toggle: %S vs %R -->
+                  <div
+                    class="seg-control"
+                    id="abx-metric-toggle"
+                    title="Switch between % Susceptible and % Resistant"
+                  >
+                    <button
+                      class="seg-btn active"
+                      id="btn-abx-metric-s"
+                      onclick="setAntibiogramMetric('S')"
+                      title="Display % Susceptible (%S)"
+                      style="padding: 5px 11px; font-size: 12px"
+                    >
+                      <i class="fa-solid fa-shield-virus"></i> % Susceptible
+                    </button>
+                    <button
+                      class="seg-btn"
+                      id="btn-abx-metric-r"
+                      onclick="setAntibiogramMetric('R')"
+                      title="Display % Resistant (%R)"
+                      style="padding: 5px 11px; font-size: 12px"
+                    >
+                      <i class="fa-solid fa-biohazard"></i> % Resistant
+                    </button>
+                  </div>
+
+                  <!-- Grouping Toggle: Class vs AWaRe vs Alphabetical -->
+                  <div class="seg-control" id="abx-grouping-toggle">
+                    <button
+                      class="seg-btn active"
+                      id="btn-abx-group-class"
+                      onclick="setAntibiogramGrouping('class')"
+                      title="Group antibiotics by drug class (CLSI Appendix E2)"
+                      style="padding: 5px 11px; font-size: 12px"
+                    >
+                      <i class="fa-solid fa-layer-group"></i> By Class
+                    </button>
+                    <button
+                      class="seg-btn"
+                      id="btn-abx-group-aware"
+                      onclick="setAntibiogramGrouping('aware')"
+                      title="Group antibiotics by WHO AWaRe classification (Access, Watch, Reserve)"
+                      style="padding: 5px 11px; font-size: 12px"
+                    >
+                      <i class="fa-solid fa-shield-virus"></i> By AWaRe
+                    </button>
+                    <button
+                      class="seg-btn"
+                      id="btn-abx-group-alpha"
+                      onclick="setAntibiogramGrouping('alpha')"
+                      title="Alphabetical antibiotic listing (CLSI Appendix E1)"
+                      style="padding: 5px 11px; font-size: 12px"
+                    >
+                      <i class="fa-solid fa-arrow-down-a-z"></i> Alphabetical
+                    </button>
+                  </div>
+
+                  <!-- Location Type Filter: Dynamically populated from data file (WARD_TYPE) -->
+                  <div class="chart-control-group" style="margin: 0">
+                    <select
+                      id="abx-loctype-filter"
+                      class="chart-filter-select"
+                      onchange="loadAntibiogram()"
+                      style="
+                        min-width: 140px;
+                        height: 32px;
+                        font-size: 12px;
+                        padding: 0 28px 0 10px;
+                      "
+                      title="Filter antibiogram by Location Type from data file"
+                    >
+                      <option value="" selected>All Location Types</option>
+                    </select>
+                  </div>
+
+                  <!-- Specimen Type Filter -->
+                  <div class="chart-control-group" style="margin: 0">
+                    <select
+                      id="abx-spec-filter"
+                      class="chart-filter-select"
+                      onchange="loadAntibiogram()"
+                      style="
+                        min-width: 135px;
+                        height: 32px;
+                        font-size: 12px;
+                        padding: 0 28px 0 10px;
+                      "
+                      title="Filter by Specimen Type"
+                    >
+                      <option value="" selected>All Specimens</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Options Window Trigger Button -->
+                <div>
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-sm"
+                    onclick="openAntibiogramOptionsModal()"
+                    title="Configure CLSI M39 deduplication rule, surveillance window, and minimum isolate threshold"
+                    style="
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 7px;
+                      font-weight: 600;
+                      height: 32px;
+                      font-size: 12px;
+                      padding: 0 12px;
+                      white-space: nowrap;
+                    "
+                  >
+                    <i
+                      class="fa-solid fa-sliders"
+                      style="color: var(--accent)"
+                    ></i>
+                    <span>Options</span>
+                  </button>
+                </div>
+
+                <!-- Hidden inputs to preserve compatibility with programmatic calls -->
+                <input
+                  type="hidden"
+                  id="abx-dedup-select"
+                  value="patient_first"
+                />
+                <input type="hidden" id="abx-period-preset" value="all" />
+                <input type="hidden" id="abx-start-date" value="" />
+                <input type="hidden" id="abx-end-date" value="" />
+                <input type="hidden" id="abx-min-isolates-input" value="30" />
               </div>
             </div>
 
-            <!-- Interactive Quick Controls & Filters -->
-            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
-              <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                <!-- Metric Toggle: %S vs %R -->
-                <div
-                  class="seg-control"
-                  id="abx-metric-toggle"
-                  title="Switch between % Susceptible and % Resistant"
-                >
-                  <button
-                    class="seg-btn active"
-                    id="btn-abx-metric-s"
-                    onclick="setAntibiogramMetric('S')"
-                    title="Display % Susceptible (%S)"
-                    style="padding: 5px 11px; font-size: 12px;"
-                  >
-                    <i class="fa-solid fa-shield-virus"></i> % Susceptible
-                  </button>
-                  <button
-                    class="seg-btn"
-                    id="btn-abx-metric-r"
-                    onclick="setAntibiogramMetric('R')"
-                    title="Display % Resistant (%R)"
-                    style="padding: 5px 11px; font-size: 12px;"
-                  >
-                    <i class="fa-solid fa-biohazard"></i> % Resistant
-                  </button>
+            <!-- Table Display Container -->
+            <div class="table-wrap" id="antibiogram-table-container">
+              <div
+                style="padding: 40px; text-align: center; color: var(--text3)"
+              >
+                <i
+                  class="fa-solid fa-table-cells"
+                  style="
+                    font-size: 32px;
+                    margin-bottom: 12px;
+                    color: var(--accent);
+                  "
+                ></i>
+                <div style="font-size: 14px; font-weight: 600">
+                  No Antibiogram Loaded
                 </div>
-
-                <!-- Grouping Toggle: Class vs AWaRe vs Alphabetical -->
-                <div class="seg-control" id="abx-grouping-toggle">
-                  <button
-                    class="seg-btn active"
-                    id="btn-abx-group-class"
-                    onclick="setAntibiogramGrouping('class')"
-                    title="Group antibiotics by drug class (CLSI Appendix E2)"
-                    style="padding: 5px 11px; font-size: 12px;"
-                  >
-                    <i class="fa-solid fa-layer-group"></i> By Class
-                  </button>
-                  <button
-                    class="seg-btn"
-                    id="btn-abx-group-aware"
-                    onclick="setAntibiogramGrouping('aware')"
-                    title="Group antibiotics by WHO AWaRe classification (Access, Watch, Reserve)"
-                    style="padding: 5px 11px; font-size: 12px;"
-                  >
-                    <i class="fa-solid fa-shield-virus"></i> By AWaRe
-                  </button>
-                  <button
-                    class="seg-btn"
-                    id="btn-abx-group-alpha"
-                    onclick="setAntibiogramGrouping('alpha')"
-                    title="Alphabetical antibiotic listing (CLSI Appendix E1)"
-                    style="padding: 5px 11px; font-size: 12px;"
-                  >
-                    <i class="fa-solid fa-arrow-down-a-z"></i> Alphabetical
-                  </button>
+                <div style="font-size: 12px; margin-top: 4px">
+                  Click the button below or select a database to calculate
+                  susceptibility %S.
                 </div>
-
-                <!-- Location Type Filter: Dynamically populated from data file (WARD_TYPE) -->
-                <div class="chart-control-group" style="margin: 0;">
-                  <select
-                    id="abx-loctype-filter"
-                    class="chart-filter-select"
-                    onchange="loadAntibiogram()"
-                    style="min-width: 140px; height: 32px; font-size: 12px; padding: 0 28px 0 10px;"
-                    title="Filter antibiogram by Location Type from data file"
-                  >
-                    <option value="" selected>All Location Types</option>
-                  </select>
-                </div>
-
-                <!-- Specimen Type Filter -->
-                <div class="chart-control-group" style="margin: 0;">
-                  <select
-                    id="abx-spec-filter"
-                    class="chart-filter-select"
-                    onchange="loadAntibiogram()"
-                    style="min-width: 135px; height: 32px; font-size: 12px; padding: 0 28px 0 10px;"
-                    title="Filter by Specimen Type"
-                  >
-                    <option value="" selected>All Specimens</option>
-                  </select>
-                </div>
-              </div>
-
-              <!-- Options Window Trigger Button -->
-              <div>
                 <button
-                  type="button"
-                  class="btn btn-outline btn-sm"
-                  onclick="openAntibiogramOptionsModal()"
-                  title="Configure CLSI M39 deduplication rule, surveillance window, and minimum isolate threshold"
-                  style="display: inline-flex; align-items: center; gap: 7px; font-weight: 600; height: 32px; font-size: 12px; padding: 0 12px; white-space: nowrap;"
+                  class="btn btn-primary btn-sm"
+                  onclick="loadAntibiogram()"
+                  style="margin-top: 14px"
                 >
-                  <i class="fa-solid fa-sliders" style="color: var(--accent);"></i>
-                  <span>Options</span>
+                  <i class="fa-solid fa-arrows-rotate"></i> Generate Antibiogram
                 </button>
               </div>
-
-              <!-- Hidden inputs to preserve compatibility with programmatic calls -->
-              <input type="hidden" id="abx-dedup-select" value="patient_first" />
-              <input type="hidden" id="abx-period-preset" value="all" />
-              <input type="hidden" id="abx-start-date" value="" />
-              <input type="hidden" id="abx-end-date" value="" />
-              <input type="hidden" id="abx-min-isolates-input" value="30" />
             </div>
           </div>
+          <!-- End #antibiogram-table-view -->
 
-          <!-- Table Display Container -->
-          <div class="table-wrap" id="antibiogram-table-container">
-            <div style="padding: 40px; text-align: center; color: var(--text3)">
-              <i
-                class="fa-solid fa-table-cells"
-                style="
-                  font-size: 32px;
-                  margin-bottom: 12px;
-                  color: var(--accent);
-                "
-              ></i>
-              <div style="font-size: 14px; font-weight: 600">
-                No Antibiogram Loaded
-              </div>
-              <div style="font-size: 12px; margin-top: 4px">
-                Click the button below or select a database to calculate
-                susceptibility %S.
-              </div>
-              <button
-                class="btn btn-primary btn-sm"
-                onclick="loadAntibiogram()"
-                style="margin-top: 14px"
-              >
-                <i class="fa-solid fa-arrows-rotate"></i> Generate Antibiogram
-              </button>
-            </div>
-          </div>
-        </div>
-        <!-- End #antibiogram-table-view -->
-
-        <!-- AMR Longitudinal Trends Hub (CLSI M39 Appendix F) -->
-          <div id="antibiogram-trends-view" style="display: none;">
+          <!-- AMR Longitudinal Trends Hub (CLSI M39 Appendix F) -->
+          <div id="antibiogram-trends-view" style="display: none">
             <!-- Indicator Selector Bar -->
-            <div class="chart-analytics-card" style="margin-bottom: 16px; padding: 14px 18px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+            <div
+              class="chart-analytics-card"
+              style="margin-bottom: 16px; padding: 14px 18px"
+            >
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  gap: 12px;
+                  margin-bottom: 12px;
+                  flex-wrap: wrap;
+                "
+              >
                 <div>
-                  <div style="font-size: 13.5px; font-weight: 700; color: var(--text);">
-                    <i class="fa-solid fa-chart-line" style="color: var(--accent);"></i> Priority AMR Surveillance Indicators
+                  <div
+                    style="
+                      font-size: 13.5px;
+                      font-weight: 700;
+                      color: var(--text);
+                    "
+                  >
+                    <i
+                      class="fa-solid fa-chart-line"
+                      style="color: var(--accent)"
+                    ></i>
+                    Priority AMR Surveillance Indicators
                   </div>
-                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 2px;">
-                    Select an epidemiological indicator or choose a custom organism-antibiotic combination
+                  <div
+                    style="
+                      font-size: 11.5px;
+                      color: var(--text3);
+                      margin-top: 2px;
+                    "
+                  >
+                    Select an epidemiological indicator or choose a custom
+                    organism-antibiotic combination
                   </div>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px">
                   <button
                     type="button"
                     class="btn btn-outline btn-sm"
                     onclick="copyAmrTrendImage()"
                     title="Copy chart image to clipboard (paste directly into Word, Excel, or PowerPoint with Ctrl+V)"
-                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+                    style="
+                      height: 30px;
+                      font-size: 12px;
+                      padding: 0 10px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 6px;
+                    "
                   >
-                    <i class="fa-solid fa-copy"></i> Copy Image
+                    <i class="fa-regular fa-copy"></i> Copy Image
                   </button>
                   <button
                     type="button"
                     class="btn btn-outline btn-sm"
                     onclick="downloadAmrTrendPng()"
                     title="Download AMR trend chart as PNG"
-                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+                    style="
+                      height: 30px;
+                      font-size: 12px;
+                      padding: 0 10px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 6px;
+                    "
                   >
                     <i class="fa-solid fa-download"></i> Download PNG
                   </button>
@@ -1776,64 +1883,200 @@
               </div>
 
               <!-- Indicator Pills -->
-              <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                <button type="button" class="abx-trend-pill active" id="pill-trend-mrsa" onclick="setAmrTrendIndicator('mrsa')">
+              <div
+                style="
+                  display: flex;
+                  flex-wrap: wrap;
+                  gap: 8px;
+                  align-items: center;
+                "
+              >
+                <button
+                  type="button"
+                  class="abx-trend-pill active"
+                  id="pill-trend-mrsa"
+                  onclick="setAmrTrendIndicator('mrsa')"
+                >
                   <i class="fa-solid fa-virus"></i> MRSA (S. aureus)
                 </button>
-                <button type="button" class="abx-trend-pill" id="pill-trend-cre" onclick="setAmrTrendIndicator('cre')">
+                <button
+                  type="button"
+                  class="abx-trend-pill"
+                  id="pill-trend-cre"
+                  onclick="setAmrTrendIndicator('cre')"
+                >
                   <i class="fa-solid fa-biohazard"></i> CRE (Enterobacterales)
                 </button>
-                <button type="button" class="abx-trend-pill" id="pill-trend-esbl" onclick="setAmrTrendIndicator('esbl')">
-                  <i class="fa-solid fa-shield-halved"></i> ESBL (E. coli / K. pneumoniae)
+                <button
+                  type="button"
+                  class="abx-trend-pill"
+                  id="pill-trend-esbl"
+                  onclick="setAmrTrendIndicator('esbl')"
+                >
+                  <i class="fa-solid fa-shield-halved"></i> ESBL (E. coli / K.
+                  pneumoniae)
                 </button>
-                <button type="button" class="abx-trend-pill" id="pill-trend-crab" onclick="setAmrTrendIndicator('crab')">
+                <button
+                  type="button"
+                  class="abx-trend-pill"
+                  id="pill-trend-crab"
+                  onclick="setAmrTrendIndicator('crab')"
+                >
                   <i class="fa-solid fa-bacterium"></i> CRAB (A. baumannii)
                 </button>
-                <button type="button" class="abx-trend-pill" id="pill-trend-crpa" onclick="setAmrTrendIndicator('crpa')">
+                <button
+                  type="button"
+                  class="abx-trend-pill"
+                  id="pill-trend-crpa"
+                  onclick="setAmrTrendIndicator('crpa')"
+                >
                   <i class="fa-solid fa-dna"></i> CRPA (P. aeruginosa)
                 </button>
-                <button type="button" class="abx-trend-pill" id="pill-trend-vre" onclick="setAmrTrendIndicator('vre')">
+                <button
+                  type="button"
+                  class="abx-trend-pill"
+                  id="pill-trend-vre"
+                  onclick="setAmrTrendIndicator('vre')"
+                >
                   <i class="fa-solid fa-capsules"></i> VRE (Enterococcus)
                 </button>
-                <button type="button" class="abx-trend-pill" id="pill-trend-fq" onclick="setAmrTrendIndicator('fq_gn')">
-                  <i class="fa-solid fa-syringe"></i> Fluoroquinolone-R (Gram-negatives)
+                <button
+                  type="button"
+                  class="abx-trend-pill"
+                  id="pill-trend-fq"
+                  onclick="setAmrTrendIndicator('fq_gn')"
+                >
+                  <i class="fa-solid fa-syringe"></i> Fluoroquinolone-R
+                  (Gram-negatives)
                 </button>
-                <button type="button" class="abx-trend-pill" id="pill-trend-custom" onclick="setAmrTrendIndicator('custom')">
+                <button
+                  type="button"
+                  class="abx-trend-pill"
+                  id="pill-trend-custom"
+                  onclick="setAmrTrendIndicator('custom')"
+                >
                   <i class="fa-solid fa-sliders"></i> Custom Bug &amp; Drug
                 </button>
               </div>
 
               <!-- Custom Organism & Antibiotic Dropdowns (Visible when indicator === 'custom') -->
-              <div id="trend-custom-controls" style="display: none; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); gap: 14px; flex-wrap: wrap; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <label for="trend-custom-org-select" style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Organism:</label>
-                  <select id="trend-custom-org-select" class="chart-filter-select" onchange="renderAmrTrendChart()" style="min-width: 180px; height: 32px; font-size: 12px; padding: 0 8px;">
-                  </select>
+              <div
+                id="trend-custom-controls"
+                style="
+                  display: none;
+                  margin-top: 14px;
+                  padding-top: 12px;
+                  border-top: 1px dashed var(--border);
+                  gap: 14px;
+                  flex-wrap: wrap;
+                  align-items: center;
+                "
+              >
+                <div style="display: flex; align-items: center; gap: 6px">
+                  <label
+                    for="trend-custom-org-select"
+                    style="
+                      font-size: 11.5px;
+                      font-weight: 600;
+                      color: var(--text3);
+                    "
+                    >Organism:</label
+                  >
+                  <select
+                    id="trend-custom-org-select"
+                    class="chart-filter-select"
+                    onchange="renderAmrTrendChart()"
+                    style="
+                      min-width: 180px;
+                      height: 32px;
+                      font-size: 12px;
+                      padding: 0 8px;
+                    "
+                  ></select>
                 </div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <label for="trend-custom-abx-select" style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Antibiotic:</label>
-                  <select id="trend-custom-abx-select" class="chart-filter-select" onchange="renderAmrTrendChart()" style="min-width: 180px; height: 32px; font-size: 12px; padding: 0 8px;">
-                  </select>
+                <div style="display: flex; align-items: center; gap: 6px">
+                  <label
+                    for="trend-custom-abx-select"
+                    style="
+                      font-size: 11.5px;
+                      font-weight: 600;
+                      color: var(--text3);
+                    "
+                    >Antibiotic:</label
+                  >
+                  <select
+                    id="trend-custom-abx-select"
+                    class="chart-filter-select"
+                    onchange="renderAmrTrendChart()"
+                    style="
+                      min-width: 180px;
+                      height: 32px;
+                      font-size: 12px;
+                      padding: 0 8px;
+                    "
+                  ></select>
                 </div>
               </div>
 
               <!-- Filter & View Controls -->
-              <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);">
-                <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+              <div
+                style="
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  justify-content: space-between;
+                  gap: 10px;
+                  margin-top: 14px;
+                  padding-top: 12px;
+                  border-top: 1px solid var(--border);
+                "
+              >
+                <div
+                  style="
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    align-items: center;
+                  "
+                >
                   <!-- Metric Toggle -->
                   <div class="seg-control" id="trend-metric-toggle">
-                    <button class="seg-btn active" id="btn-trend-metric-r" onclick="setTrendMetric('R')" style="padding: 4px 10px; font-size: 11.5px;">
+                    <button
+                      class="seg-btn active"
+                      id="btn-trend-metric-r"
+                      onclick="setTrendMetric('R')"
+                      style="padding: 4px 10px; font-size: 11.5px"
+                    >
                       <i class="fa-solid fa-biohazard"></i> % Resistant (%R)
                     </button>
-                    <button class="seg-btn" id="btn-trend-metric-s" onclick="setTrendMetric('S')" style="padding: 4px 10px; font-size: 11.5px;">
-                      <i class="fa-solid fa-shield-virus"></i> % Susceptible (%S)
+                    <button
+                      class="seg-btn"
+                      id="btn-trend-metric-s"
+                      onclick="setTrendMetric('S')"
+                      style="padding: 4px 10px; font-size: 11.5px"
+                    >
+                      <i class="fa-solid fa-shield-virus"></i> % Susceptible
+                      (%S)
                     </button>
                   </div>
 
                   <!-- Location Filter -->
-                  <div class="chart-control-group" style="margin: 0;">
-                    <select id="trend-location-filter" class="chart-filter-select" onchange="renderAmrTrendChart()" style="min-width: 140px; height: 30px; font-size: 12px; padding: 0 8px;" title="Stratify by Patient Care Location">
-                      <option value="all" selected>All Locations (Overall)</option>
+                  <div class="chart-control-group" style="margin: 0">
+                    <select
+                      id="trend-location-filter"
+                      class="chart-filter-select"
+                      onchange="renderAmrTrendChart()"
+                      style="
+                        min-width: 140px;
+                        height: 30px;
+                        font-size: 12px;
+                        padding: 0 8px;
+                      "
+                      title="Stratify by Patient Care Location"
+                    >
+                      <option value="all" selected>
+                        All Locations (Overall)
+                      </option>
                       <option value="icu">ICU Wards</option>
                       <option value="inpatient">Inpatient (Non-ICU)</option>
                       <option value="outpatient">Outpatient</option>
@@ -1841,8 +2084,10 @@
                   </div>
                 </div>
 
-                <div id="trend-date-range-badge" style="font-size: 11.5px; color: var(--text3);">
-                </div>
+                <div
+                  id="trend-date-range-badge"
+                  style="font-size: 11.5px; color: var(--text3)"
+                ></div>
               </div>
             </div>
 
@@ -1851,64 +2096,157 @@
               <div class="abx-kpi-card">
                 <div class="abx-kpi-title">Total Tested (N)</div>
                 <div class="abx-kpi-value" id="trend-kpi-tested">—</div>
-                <div class="abx-kpi-sub" id="trend-kpi-tested-sub">Isolates evaluated</div>
+                <div class="abx-kpi-sub" id="trend-kpi-tested-sub">
+                  Isolates evaluated
+                </div>
               </div>
               <div class="abx-kpi-card">
                 <div class="abx-kpi-title">Period Average Rate</div>
-                <div class="abx-kpi-value" id="trend-kpi-avg" style="color: var(--accent);">—</div>
-                <div class="abx-kpi-sub" id="trend-kpi-avg-sub">Weighted surveillance mean</div>
+                <div
+                  class="abx-kpi-value"
+                  id="trend-kpi-avg"
+                  style="color: var(--accent)"
+                >
+                  —
+                </div>
+                <div class="abx-kpi-sub" id="trend-kpi-avg-sub">
+                  Weighted surveillance mean
+                </div>
               </div>
               <div class="abx-kpi-card">
                 <div class="abx-kpi-title">Latest Interval Rate</div>
                 <div class="abx-kpi-value" id="trend-kpi-latest">—</div>
-                <div class="abx-kpi-sub" id="trend-kpi-latest-sub">Most recent month</div>
+                <div class="abx-kpi-sub" id="trend-kpi-latest-sub">
+                  Most recent month
+                </div>
               </div>
               <div class="abx-kpi-card">
                 <div class="abx-kpi-title">Epidemiological Status</div>
-                <div class="abx-kpi-value" id="trend-kpi-status" style="font-size: 14px; font-family: 'Plus Jakarta Sans', sans-serif;">—</div>
-                <div class="abx-kpi-sub" id="trend-kpi-status-sub">WHO Priority Classification</div>
+                <div
+                  class="abx-kpi-value"
+                  id="trend-kpi-status"
+                  style="
+                    font-size: 14px;
+                    font-family: &quot;Plus Jakarta Sans&quot;, sans-serif;
+                  "
+                >
+                  —
+                </div>
+                <div class="abx-kpi-sub" id="trend-kpi-status-sub">
+                  WHO Priority Classification
+                </div>
               </div>
             </div>
 
             <!-- Line Chart Box -->
-            <div class="chart-analytics-card" style="margin-bottom: 16px; padding: 18px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                <div style="font-weight: 700; font-size: 14px; color: var(--text);" id="trend-chart-heading">
+            <div
+              class="chart-analytics-card"
+              style="margin-bottom: 16px; padding: 18px"
+            >
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  margin-bottom: 12px;
+                  flex-wrap: wrap;
+                  gap: 8px;
+                "
+              >
+                <div
+                  style="font-weight: 700; font-size: 14px; color: var(--text)"
+                  id="trend-chart-heading"
+                >
                   Longitudinal Resistance Trajectory
                 </div>
-                <div style="font-size: 11.5px; color: var(--text3);" id="trend-chart-sub">
+                <div
+                  style="font-size: 11.5px; color: var(--text3)"
+                  id="trend-chart-sub"
+                >
                   Monthly trend line with tested isolate volume
                 </div>
               </div>
-              <div style="position: relative; width: 100%; height: 360px;">
+              <div style="position: relative; width: 100%; height: 360px">
                 <canvas id="amr-trends-chart-canvas"></canvas>
               </div>
             </div>
 
             <!-- Monthly Breakdown Table Card -->
-            <div class="chart-analytics-card" style="padding: 18px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                <div style="font-weight: 700; font-size: 13.5px; color: var(--text);">
-                  <i class="fa-solid fa-table-list"></i> Monthly Breakdown &amp; Statistical Counts
+            <div class="chart-analytics-card" style="padding: 18px">
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  margin-bottom: 12px;
+                  flex-wrap: wrap;
+                  gap: 8px;
+                "
+              >
+                <div
+                  style="
+                    font-weight: 700;
+                    font-size: 13.5px;
+                    color: var(--text);
+                  "
+                >
+                  <i class="fa-solid fa-table-list"></i> Monthly Breakdown &amp;
+                  Statistical Counts
                 </div>
-                <button type="button" class="btn btn-outline btn-sm" onclick="copyTrendTableTsv()" style="font-size: 11.5px; padding: 3px 9px;">
-                  <i class="fa-solid fa-copy"></i> Copy Breakdown
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  onclick="copyTrendTableTsv()"
+                  style="font-size: 11.5px; padding: 3px 9px"
+                >
+                  <i class="fa-regular fa-copy"></i> Copy Breakdown
                 </button>
               </div>
-              <div style="overflow-x: auto; width: 100%;">
-                <table class="data-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px;">
+              <div style="overflow-x: auto; width: 100%">
+                <table
+                  class="data-table"
+                  style="
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 0;
+                    font-size: 12px;
+                  "
+                >
                   <thead>
-                    <tr style="background: var(--bg3);">
-                      <th style="padding: 8px 12px; text-align: left;">Surveillance Month</th>
-                      <th style="padding: 8px 10px; text-align: center;">Tested (N)</th>
-                      <th style="padding: 8px 10px; text-align: center;">Resistant (R)</th>
-                      <th style="padding: 8px 10px; text-align: center;">Susceptible (S)</th>
-                      <th style="padding: 8px 10px; text-align: center;">Intermediate (I)</th>
-                      <th style="padding: 8px 12px; text-align: right;">Resistance Rate (%)</th>
+                    <tr style="background: var(--bg3)">
+                      <th style="padding: 8px 12px; text-align: left">
+                        Surveillance Month
+                      </th>
+                      <th style="padding: 8px 10px; text-align: center">
+                        Tested (N)
+                      </th>
+                      <th style="padding: 8px 10px; text-align: center">
+                        Resistant (R)
+                      </th>
+                      <th style="padding: 8px 10px; text-align: center">
+                        Susceptible (S)
+                      </th>
+                      <th style="padding: 8px 10px; text-align: center">
+                        Intermediate (I)
+                      </th>
+                      <th style="padding: 8px 12px; text-align: right">
+                        Resistance Rate (%)
+                      </th>
                     </tr>
                   </thead>
                   <tbody id="trend-table-body">
-                    <tr><td colspan="6" style="padding: 24px; text-align: center; color: var(--text3);">Load an active database to display trend records</td></tr>
+                    <tr>
+                      <td
+                        colspan="6"
+                        style="
+                          padding: 24px;
+                          text-align: center;
+                          color: var(--text3);
+                        "
+                      >
+                        Load an active database to display trend records
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -1916,26 +2254,70 @@
           </div>
 
           <!-- Care Location Stratification View (CLSI M39 Section 6.4) -->
-          <div id="antibiogram-locations-view" style="display: none;">
+          <div id="antibiogram-locations-view" style="display: none">
             <!-- Control & Selector Bar -->
-            <div class="chart-analytics-card" style="margin-bottom: 16px; padding: 14px 18px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+            <div
+              class="chart-analytics-card"
+              style="margin-bottom: 16px; padding: 14px 18px"
+            >
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  gap: 12px;
+                  margin-bottom: 12px;
+                  flex-wrap: wrap;
+                "
+              >
                 <div>
-                  <div style="font-size: 13.5px; font-weight: 700; color: var(--text);">
-                    <i class="fa-solid fa-hospital-user" style="color: var(--accent);"></i> Care Location Stratification (CLSI M39 Section 6.4)
+                  <div
+                    style="
+                      font-size: 13.5px;
+                      font-weight: 700;
+                      color: var(--text);
+                    "
+                  >
+                    <i
+                      class="fa-solid fa-hospital-user"
+                      style="color: var(--accent)"
+                    ></i>
+                    Care Location Stratification (CLSI M39 Section 6.4)
                   </div>
-                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 2px;">
-                    Comparative antimicrobial susceptibility and resistance profiles across ICU, Inpatient (Non-ICU), and Outpatient cohorts
+                  <div
+                    style="
+                      font-size: 11.5px;
+                      color: var(--text3);
+                      margin-top: 2px;
+                    "
+                  >
+                    Comparative antimicrobial susceptibility and resistance
+                    profiles across ICU, Inpatient (Non-ICU), and Outpatient
+                    cohorts
                   </div>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                  "
+                >
                   <button
                     type="button"
                     class="btn btn-outline btn-sm"
                     onclick="copyLocationChartData()"
                     title="Copy formatted tabular data to clipboard (paste into Excel with Ctrl+V and press Alt+F1 for an instant 100% native editable Excel chart)"
-                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+                    style="
+                      height: 30px;
+                      font-size: 12px;
+                      padding: 0 10px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 6px;
+                    "
                   >
                     <i class="fa-solid fa-table"></i> Copy Data (for Excel)
                   </button>
@@ -1944,16 +2326,30 @@
                     class="btn btn-outline btn-sm"
                     onclick="copyLocationChartImage()"
                     title="Copy location comparison chart image to clipboard (paste directly into Word, Excel, or PowerPoint with Ctrl+V)"
-                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+                    style="
+                      height: 30px;
+                      font-size: 12px;
+                      padding: 0 10px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 6px;
+                    "
                   >
-                    <i class="fa-solid fa-copy"></i> Copy Image
+                    <i class="fa-regular fa-copy"></i> Copy Image
                   </button>
                   <button
                     type="button"
                     class="btn btn-outline btn-sm"
                     onclick="downloadLocationChartPng()"
                     title="Download location comparison chart as PNG"
-                    style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+                    style="
+                      height: 30px;
+                      font-size: 12px;
+                      padding: 0 10px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 6px;
+                    "
                   >
                     <i class="fa-solid fa-download"></i> Download PNG
                   </button>
@@ -1961,18 +2357,51 @@
               </div>
 
               <!-- Interactive Controls Row -->
-              <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
-                <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+              <div
+                style="
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  justify-content: space-between;
+                  gap: 12px;
+                  padding-top: 12px;
+                  border-top: 1px solid var(--border);
+                "
+              >
+                <div
+                  style="
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    align-items: center;
+                  "
+                >
                   <!-- Target Organism Selector -->
-                  <div style="display: flex; align-items: center; gap: 7px;">
-                    <label for="loc-org-select" style="font-size: 12px; font-weight: 700; color: var(--text);">
-                      <i class="fa-solid fa-bacterium" style="color: var(--accent);"></i> Organism:
+                  <div style="display: flex; align-items: center; gap: 7px">
+                    <label
+                      for="loc-org-select"
+                      style="
+                        font-size: 12px;
+                        font-weight: 700;
+                        color: var(--text);
+                      "
+                    >
+                      <i
+                        class="fa-solid fa-bacterium"
+                        style="color: var(--accent)"
+                      ></i>
+                      Organism:
                     </label>
                     <select
                       id="loc-org-select"
                       class="chart-filter-select"
                       onchange="renderLocationStratificationChart()"
-                      style="min-width: 240px; height: 32px; font-size: 12px; padding: 0 10px;"
+                      style="
+                        min-width: 240px;
+                        height: 32px;
+                        font-size: 12px;
+                        padding: 0 10px;
+                      "
                       title="Select organism to stratify by care location"
                     >
                       <option value="">Select an organism…</option>
@@ -1981,127 +2410,547 @@
 
                   <!-- Metric Toggle: %S vs %R -->
                   <div class="seg-control" id="loc-metric-toggle">
-                    <button class="seg-btn active" id="btn-loc-metric-s" onclick="setLocationMetric('S')" style="padding: 4px 10px; font-size: 11.5px;">
-                      <i class="fa-solid fa-shield-virus"></i> % Susceptible (%S)
+                    <button
+                      class="seg-btn active"
+                      id="btn-loc-metric-s"
+                      onclick="setLocationMetric('S')"
+                      style="padding: 4px 10px; font-size: 11.5px"
+                    >
+                      <i class="fa-solid fa-shield-virus"></i> % Susceptible
+                      (%S)
                     </button>
-                    <button class="seg-btn" id="btn-loc-metric-r" onclick="setLocationMetric('R')" style="padding: 4px 10px; font-size: 11.5px;">
+                    <button
+                      class="seg-btn"
+                      id="btn-loc-metric-r"
+                      onclick="setLocationMetric('R')"
+                      style="padding: 4px 10px; font-size: 11.5px"
+                    >
                       <i class="fa-solid fa-biohazard"></i> % Resistant (%R)
                     </button>
                   </div>
 
                   <!-- Hide Untested Checkbox -->
-                  <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); cursor: pointer; user-select: none;">
-                    <input type="checkbox" id="loc-hide-empty" checked onchange="renderLocationStratificationChart()" />
+                  <label
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                      font-size: 12px;
+                      color: var(--text2);
+                      cursor: pointer;
+                      user-select: none;
+                    "
+                  >
+                    <input
+                      type="checkbox"
+                      id="loc-hide-empty"
+                      checked
+                      onchange="renderLocationStratificationChart()"
+                    />
                     <span>Hide unexamined drugs</span>
                   </label>
                 </div>
 
-                <div id="loc-org-meta-badge" style="font-size: 11.5px; color: var(--text3);">
-                </div>
+                <div
+                  id="loc-org-meta-badge"
+                  style="font-size: 11.5px; color: var(--text3)"
+                ></div>
               </div>
             </div>
 
             <!-- KPI Metric Cards Grid -->
             <div class="abx-kpi-grid">
-              <div class="abx-kpi-card" style="border-left: 3px solid #6366f1;">
-                <div class="abx-kpi-title" style="color: #6366f1;">
+              <div class="abx-kpi-card" style="border-left: 3px solid #6366f1">
+                <div class="abx-kpi-title" style="color: #6366f1">
                   <i class="fa-solid fa-bed-pulse"></i> ICU Isolates (N)
                 </div>
                 <div class="abx-kpi-value" id="loc-kpi-icu">—</div>
-                <div class="abx-kpi-sub" id="loc-kpi-icu-sub">Intensive Care Units</div>
+                <div class="abx-kpi-sub" id="loc-kpi-icu-sub">
+                  Intensive Care Units
+                </div>
               </div>
 
-              <div class="abx-kpi-card" style="border-left: 3px solid #10b981;">
-                <div class="abx-kpi-title" style="color: #10b981;">
+              <div class="abx-kpi-card" style="border-left: 3px solid #10b981">
+                <div class="abx-kpi-title" style="color: #10b981">
                   <i class="fa-solid fa-hospital"></i> Inpatient (Non-ICU) (N)
                 </div>
                 <div class="abx-kpi-value" id="loc-kpi-inpatient">—</div>
-                <div class="abx-kpi-sub" id="loc-kpi-inpatient-sub">General Medical/Surgical Wards</div>
+                <div class="abx-kpi-sub" id="loc-kpi-inpatient-sub">
+                  General Medical/Surgical Wards
+                </div>
               </div>
 
-              <div class="abx-kpi-card" style="border-left: 3px solid #f59e0b;">
-                <div class="abx-kpi-title" style="color: #f59e0b;">
-                  <i class="fa-solid fa-person-walking"></i> Outpatient / OPD (N)
+              <div class="abx-kpi-card" style="border-left: 3px solid #f59e0b">
+                <div class="abx-kpi-title" style="color: #f59e0b">
+                  <i class="fa-solid fa-person-walking"></i> Outpatient / OPD
+                  (N)
                 </div>
                 <div class="abx-kpi-value" id="loc-kpi-outpatient">—</div>
-                <div class="abx-kpi-sub" id="loc-kpi-outpatient-sub">Ambulatory &amp; Clinic Patients</div>
+                <div class="abx-kpi-sub" id="loc-kpi-outpatient-sub">
+                  Ambulatory &amp; Clinic Patients
+                </div>
               </div>
 
-              <div class="abx-kpi-card" style="border-left: 3px solid var(--accent);">
-                <div class="abx-kpi-title" style="color: var(--accent);">
-                  <i class="fa-solid fa-arrows-split-up-and-left"></i> Max Setting Disparity (Δ)
+              <div
+                class="abx-kpi-card"
+                style="border-left: 3px solid var(--accent)"
+              >
+                <div class="abx-kpi-title" style="color: var(--accent)">
+                  <i class="fa-solid fa-arrows-split-up-and-left"></i> Max
+                  Setting Disparity (Δ)
                 </div>
                 <div class="abx-kpi-value" id="loc-kpi-disparity">—</div>
-                <div class="abx-kpi-sub" id="loc-kpi-disparity-sub">Highest ICU vs Outpatient gap</div>
+                <div class="abx-kpi-sub" id="loc-kpi-disparity-sub">
+                  Highest ICU vs Outpatient gap
+                </div>
               </div>
             </div>
 
             <!-- Grouped Bar Chart Box -->
-            <div class="chart-analytics-card" style="margin-bottom: 16px; padding: 18px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div
+              class="chart-analytics-card"
+              style="margin-bottom: 16px; padding: 18px"
+            >
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  margin-bottom: 12px;
+                  flex-wrap: wrap;
+                  gap: 8px;
+                "
+              >
                 <div>
-                  <div style="font-weight: 700; font-size: 14px; color: var(--text);" id="loc-chart-heading">
+                  <div
+                    style="
+                      font-weight: 700;
+                      font-size: 14px;
+                      color: var(--text);
+                    "
+                    id="loc-chart-heading"
+                  >
                     Care Location Susceptibility Disparity Comparison
                   </div>
-                  <div style="font-size: 11.5px; color: var(--text3); margin-top: 2px;" id="loc-chart-sub">
-                    Grouped comparison across ICU, Inpatient, and Outpatient settings
+                  <div
+                    style="
+                      font-size: 11.5px;
+                      color: var(--text3);
+                      margin-top: 2px;
+                    "
+                    id="loc-chart-sub"
+                  >
+                    Grouped comparison across ICU, Inpatient, and Outpatient
+                    settings
                   </div>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 14px; font-size: 11.5px; font-weight: 600;">
-                  <span style="display: flex; align-items: center; gap: 5px; color: #6366f1;">
-                    <span style="display: inline-block; width: 10px; height: 10px; background: #6366f1; border-radius: 2px;"></span> ICU
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                    font-size: 11.5px;
+                    font-weight: 600;
+                  "
+                >
+                  <span
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 5px;
+                      color: #6366f1;
+                    "
+                  >
+                    <span
+                      style="
+                        display: inline-block;
+                        width: 10px;
+                        height: 10px;
+                        background: #6366f1;
+                        border-radius: 2px;
+                      "
+                    ></span>
+                    ICU
                   </span>
-                  <span style="display: flex; align-items: center; gap: 5px; color: #10b981;">
-                    <span style="display: inline-block; width: 10px; height: 10px; background: #10b981; border-radius: 2px;"></span> Inpatient
+                  <span
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 5px;
+                      color: #10b981;
+                    "
+                  >
+                    <span
+                      style="
+                        display: inline-block;
+                        width: 10px;
+                        height: 10px;
+                        background: #10b981;
+                        border-radius: 2px;
+                      "
+                    ></span>
+                    Inpatient
                   </span>
-                  <span style="display: flex; align-items: center; gap: 5px; color: #f59e0b;">
-                    <span style="display: inline-block; width: 10px; height: 10px; background: #f59e0b; border-radius: 2px;"></span> Outpatient
+                  <span
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 5px;
+                      color: #f59e0b;
+                    "
+                  >
+                    <span
+                      style="
+                        display: inline-block;
+                        width: 10px;
+                        height: 10px;
+                        background: #f59e0b;
+                        border-radius: 2px;
+                      "
+                    ></span>
+                    Outpatient
                   </span>
                 </div>
               </div>
 
-              <div id="loc-chart-wrapper" style="position: relative; width: 100%; min-height: 380px;">
+              <div
+                id="loc-chart-wrapper"
+                style="position: relative; width: 100%; min-height: 380px"
+              >
                 <canvas id="loc-comparison-canvas"></canvas>
               </div>
             </div>
 
             <!-- Comparative Matrix Breakdown Table Card -->
-            <div class="chart-analytics-card" style="padding: 18px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div class="chart-analytics-card" style="padding: 18px">
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  margin-bottom: 12px;
+                  flex-wrap: wrap;
+                  gap: 8px;
+                "
+              >
                 <div>
-                  <div style="font-weight: 700; font-size: 13.5px; color: var(--text);">
-                    <i class="fa-solid fa-table-cells-large"></i> Location Stratification Matrix
+                  <div
+                    style="
+                      font-weight: 700;
+                      font-size: 13.5px;
+                      color: var(--text);
+                    "
+                  >
+                    <i class="fa-solid fa-table-cells-large"></i> Location
+                    Stratification Matrix
                   </div>
-                  <div style="font-size: 11px; color: var(--text3); margin-top: 2px;">
-                    CLSI M39 Section 6.4: Setting-specific sample sizes (N), susceptibility rates, and disparity (Δ)
+                  <div
+                    style="
+                      font-size: 11px;
+                      color: var(--text3);
+                      margin-top: 2px;
+                    "
+                  >
+                    CLSI M39 Section 6.4: Setting-specific sample sizes (N),
+                    susceptibility rates, and disparity (Δ)
                   </div>
                 </div>
-                <button type="button" class="btn btn-outline btn-sm" onclick="copyLocationTableTsv()" style="font-size: 11.5px; padding: 3px 9px;">
-                  <i class="fa-solid fa-copy"></i> Copy Matrix Table
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  onclick="copyLocationTableTsv()"
+                  style="font-size: 11.5px; padding: 3px 9px"
+                >
+                  <i class="fa-regular fa-copy"></i> Copy Matrix Table
                 </button>
               </div>
 
-              <div style="overflow-x: auto; width: 100%;">
-                <table class="data-table" id="loc-matrix-table" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px;">
+              <div style="overflow-x: auto; width: 100%">
+                <table
+                  class="data-table"
+                  id="loc-matrix-table"
+                  style="
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 0;
+                    font-size: 12px;
+                  "
+                >
                   <thead>
-                    <tr style="background: var(--bg3);">
-                      <th style="padding: 8px 12px; text-align: left;">Antimicrobial Agent</th>
-                      <th style="padding: 8px 10px; text-align: left;">Class</th>
-                      <th style="padding: 8px 10px; text-align: center; border-left: 2px solid #6366f1;">ICU (N)</th>
-                      <th style="padding: 8px 10px; text-align: center; color: #6366f1;">ICU Rate</th>
-                      <th style="padding: 8px 10px; text-align: center; border-left: 2px solid #10b981;">Inpatient (N)</th>
-                      <th style="padding: 8px 10px; text-align: center; color: #10b981;">Inpatient Rate</th>
-                      <th style="padding: 8px 10px; text-align: center; border-left: 2px solid #f59e0b;">Outpatient (N)</th>
-                      <th style="padding: 8px 10px; text-align: center; color: #f59e0b;">Outpatient Rate</th>
-                      <th style="padding: 8px 12px; text-align: right; border-left: 1px solid var(--border);">Disparity (Δ)</th>
+                    <tr style="background: var(--bg3)">
+                      <th style="padding: 8px 12px; text-align: left">
+                        Antimicrobial Agent
+                      </th>
+                      <th style="padding: 8px 10px; text-align: left">Class</th>
+                      <th
+                        style="
+                          padding: 8px 10px;
+                          text-align: center;
+                          border-left: 2px solid #6366f1;
+                        "
+                      >
+                        ICU (N)
+                      </th>
+                      <th
+                        style="
+                          padding: 8px 10px;
+                          text-align: center;
+                          color: #6366f1;
+                        "
+                      >
+                        ICU Rate
+                      </th>
+                      <th
+                        style="
+                          padding: 8px 10px;
+                          text-align: center;
+                          border-left: 2px solid #10b981;
+                        "
+                      >
+                        Inpatient (N)
+                      </th>
+                      <th
+                        style="
+                          padding: 8px 10px;
+                          text-align: center;
+                          color: #10b981;
+                        "
+                      >
+                        Inpatient Rate
+                      </th>
+                      <th
+                        style="
+                          padding: 8px 10px;
+                          text-align: center;
+                          border-left: 2px solid #f59e0b;
+                        "
+                      >
+                        Outpatient (N)
+                      </th>
+                      <th
+                        style="
+                          padding: 8px 10px;
+                          text-align: center;
+                          color: #f59e0b;
+                        "
+                      >
+                        Outpatient Rate
+                      </th>
+                      <th
+                        style="
+                          padding: 8px 12px;
+                          text-align: right;
+                          border-left: 1px solid var(--border);
+                        "
+                      >
+                        Disparity (Δ)
+                      </th>
                     </tr>
                   </thead>
                   <tbody id="loc-table-body">
-                    <tr><td colspan="9" style="padding: 24px; text-align: center; color: var(--text3);">Select an organism to view location stratification matrix</td></tr>
+                    <tr>
+                      <td
+                        colspan="9"
+                        style="
+                          padding: 24px;
+                          text-align: center;
+                          color: var(--text3);
+                        "
+                      >
+                        Select an organism to view location stratification
+                        matrix
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resource Explorer Page -->
+        <div class="page" id="page-resource-explorer">
+          <div class="section-header">
+            <div>
+              <div class="section-title">
+                <i class="fa-solid fa-book-bookmark"></i> Resource Explorer
+              </div>
+              <div class="section-sub">
+                Explore and inspect antibiotic breakpoints, expert
+                interpretation rules, and intrinsic resistance phenotypes.
+              </div>
+            </div>
+            <div
+              style="
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                margin-left: auto;
+                flex-wrap: wrap;
+              "
+            >
+              <!-- Section Switcher / SelectBar (Breakpoints vs Expert Rules vs Intrinsic Resistance) -->
+              <div
+                class="seg-control"
+                id="res-section-toggle"
+                role="tablist"
+                aria-label="Resource Explorer Sections"
+              >
+                <button
+                  type="button"
+                  class="seg-btn resource-tab-btn active"
+                  data-tab="breakpoints"
+                  role="tab"
+                  aria-selected="true"
+                  onclick="setResourceExplorerSection('breakpoints')"
+                  title="Explore antibiotic breakpoints"
+                  style="padding: 5px 12px; font-size: 12px"
+                >
+                  <i class="fa-solid fa-crosshairs"></i> Breakpoints
+                </button>
+                <button
+                  type="button"
+                  class="seg-btn resource-tab-btn"
+                  data-tab="expert-rules"
+                  role="tab"
+                  aria-selected="false"
+                  onclick="setResourceExplorerSection('expert-rules')"
+                  title="Explore clinical expert interpretation rules"
+                  style="padding: 5px 12px; font-size: 12px"
+                >
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Expert Rules
+                </button>
+                <button
+                  type="button"
+                  class="seg-btn resource-tab-btn"
+                  data-tab="intrinsic"
+                  role="tab"
+                  aria-selected="false"
+                  onclick="setResourceExplorerSection('intrinsic')"
+                  title="Explore intrinsic resistance phenotypes"
+                  style="padding: 5px 12px; font-size: 12px"
+                >
+                  <i class="fa-solid fa-shield-halved"></i> Intrinsic Resistance
+                </button>
+              </div>
+
+              <!-- Copy Table button (matching Antibiogram page style) -->
+              <button
+                class="btn btn-outline btn-sm"
+                id="btn-res-copy-table"
+                onclick="copyResourceTableTsv()"
+                title="Copy Table to Clipboard (ready to paste into Excel, Word, or Google Sheets)"
+              >
+                <i class="fa-regular fa-copy"></i>
+                <span>Copy</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Table Wrap with Toolbar, Table Container, and Pagination Footer -->
+          <div class="table-wrap">
+            <div class="table-toolbar">
+              <div class="search-box" style="flex: 1; min-width: 240px">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                  type="search"
+                  id="res-search"
+                  placeholder="Filter by organism name or code, drug, guideline, test, rule..."
+                  aria-label="Filter reference resources"
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  oninput="debouncedResourceSearch()"
+                />
+              </div>
+
+              <!-- Organism / Clinical Panel Filter (AMRIE Hierarchy) -->
+              <select
+                class="filter-select"
+                id="res-organism-filter"
+                aria-label="Filter by organism or clinical panel"
+                onchange="onResourceOrganismChange(event)"
+                style="min-width: 220px"
+              >
+                <option value="ALL">All Organisms &amp; Panels</option>
+              </select>
+
+              <!-- Guideline Filter (CLSI, EUCAST, SFM, All) -->
+              <select
+                class="filter-select"
+                id="res-guideline-filter"
+                aria-label="Filter by guideline"
+                onchange="onResourceGuidelineChange()"
+                style="min-width: 140px"
+              >
+                <option value="All Guidelines">All Guidelines</option>
+              </select>
+
+              <!-- Test Method Filter (Disk, MIC, All) -->
+              <select
+                class="filter-select"
+                id="res-method-filter"
+                aria-label="Filter by test method"
+                onchange="onResourceMethodChange()"
+                style="min-width: 125px"
+              >
+                <option value="All Methods">All Methods</option>
+              </select>
+
+              <!-- Breakpoint Type Filter (Human, Animal, ECOFF, All) -->
+              <select
+                class="filter-select"
+                id="res-type-filter"
+                aria-label="Filter by breakpoint type"
+                onchange="onResourceTypeChange()"
+                style="min-width: 120px"
+              >
+                <option value="All Types">All Types</option>
+              </select>
+
+              <!-- Revision Year Filter -->
+              <select
+                class="filter-select"
+                id="res-year-filter"
+                aria-label="Filter by revision year"
+                onchange="onResourceYearChange()"
+                style="min-width: 110px"
+              >
+                <option value="All Years">All Years</option>
+              </select>
+
+              <!-- Result Count Message -->
+              <div
+                id="res-count-msg"
+                style="
+                  font-size: 12px;
+                  color: var(--text3);
+                  font-weight: 500;
+                  margin-left: auto;
+                  white-space: nowrap;
+                "
+              >
+                Loading…
+              </div>
+            </div>
+
+            <!-- Table Container (Single Scrollable Table) -->
+            <div id="resource-explorer-table-container">
+              <!-- Dynamically rendered -->
             </div>
           </div>
         </div>
@@ -2591,8 +3440,29 @@
             "
           >
             <strong>Disclaimer &amp; Attributions:</strong><br />
-            • <strong>WHONET</strong> is the intellectual property of the <strong>WHO Collaborating Centre for Surveillance of Antimicrobial Resistance</strong> (Brigham and Women's Hospital).<br />
-            • <strong>AMRIE Architecture:</strong> AST measurement interpretation, clinical breakpoint hierarchy (<code style="font-size: 10.5px;">getApplicableBreakpoint</code>), and intrinsic resistance rules are adapted from and based on the open-source <strong>AMRIE (Antimicrobial Resistance Test Interpretation Engine)</strong> (<a href="https://github.com/WHONET-Development/AMRIE" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;">WHONET-Development/AMRIE</a>).<br /><br />
+            • <strong>WHONET</strong> is the intellectual property of the
+            <strong
+              >WHO Collaborating Centre for Surveillance of Antimicrobial
+              Resistance</strong
+            >
+            (Brigham and Women's Hospital).<br />
+            • <strong>AMRIE Architecture:</strong> AST measurement
+            interpretation, clinical breakpoint hierarchy (<code
+              style="font-size: 10.5px"
+              >getApplicableBreakpoint</code
+            >), and intrinsic resistance rules are adapted from and based on the
+            open-source
+            <strong
+              >AMRIE (Antimicrobial Resistance Test Interpretation
+              Engine)</strong
+            >
+            (<a
+              href="https://github.com/WHONET-Development/AMRIE"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="color: var(--accent); text-decoration: underline"
+              >WHONET-Development/AMRIE</a
+            >).<br /><br />
             This tool is an independent open-source utility developed by
             <a
               href="https://drshtmstry.github.io/"
@@ -2605,7 +3475,9 @@
               "
               >Dr. Darshit Mistry</a
             >
-            as a community tool and is not officially affiliated with, endorsed by, or sponsored by the WHO Collaborating Centre for Surveillance of Antimicrobial Resistance.
+            as a community tool and is not officially affiliated with, endorsed
+            by, or sponsored by the WHO Collaborating Centre for Surveillance of
+            Antimicrobial Resistance.
           </div>
           <div style="display: flex; gap: 12px; justify-content: flex-end">
             <button
@@ -2636,19 +3508,63 @@
       aria-modal="true"
       aria-labelledby="abx-modal-title"
     >
-      <div class="modal" style="max-width: 760px; width: 95vw; border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; display: flex; flex-direction: column; max-height: 90vh;">
+      <div
+        class="modal"
+        style="
+          max-width: 760px;
+          width: 95vw;
+          border-radius: 14px;
+          box-shadow: var(--shadow-lg);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          max-height: 90vh;
+        "
+      >
         <!-- Header -->
-        <div class="modal-header" style="padding: 16px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 36px; height: 36px; border-radius: 10px; background: var(--accent-light); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 15px;">
+        <div
+          class="modal-header"
+          style="
+            padding: 16px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          "
+        >
+          <div style="display: flex; align-items: center; gap: 12px">
+            <div
+              style="
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                background: var(--accent-light);
+                color: var(--accent);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 15px;
+              "
+            >
               <i class="fa-solid fa-sliders"></i>
             </div>
             <div>
-              <div id="abx-modal-title" style="font-size: 15.5px; font-weight: 700; color: var(--text); line-height: 1.2;">
+              <div
+                id="abx-modal-title"
+                style="
+                  font-size: 15.5px;
+                  font-weight: 700;
+                  color: var(--text);
+                  line-height: 1.2;
+                "
+              >
                 Antibiogram &amp; Deduplication Options
               </div>
-              <div style="font-size: 12px; color: var(--text3); margin-top: 2px;">
-                CLSI M39-A4 cumulative parameters and isolate deduplication rules
+              <div
+                style="font-size: 12px; color: var(--text3); margin-top: 2px"
+              >
+                CLSI M39-A4 cumulative parameters and isolate deduplication
+                rules
               </div>
             </div>
           </div>
@@ -2663,15 +3579,40 @@
         </div>
 
         <!-- Body -->
-        <div class="modal-body" style="padding: 20px 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px;">
+        <div
+          class="modal-body"
+          style="
+            padding: 20px 22px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+          "
+        >
           <!-- Deduplication Strategy Section -->
           <div>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-              <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3);">
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 10px;
+              "
+            >
+              <span
+                style="
+                  font-size: 11px;
+                  font-weight: 700;
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
+                  color: var(--text3);
+                "
+              >
                 Isolate Resolution Strategy
               </span>
-              <span style="font-size: 11px; color: var(--text3);">
-                <i class="fa-solid fa-circle-info" style="margin-right: 4px;"></i>Determines which isolate per species/patient is analyzed
+              <span style="font-size: 11px; color: var(--text3)">
+                <i class="fa-solid fa-circle-info" style="margin-right: 4px"></i
+                >Determines which isolate per species/patient is analyzed
               </span>
             </div>
 
@@ -2687,13 +3628,22 @@
                       <div class="abx-card-title">First Isolate / Patient</div>
                     </div>
                   </div>
-                  <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px">
                     <span class="abx-badge abx-badge-accent">CLSI M39</span>
-                    <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-first" value="patient_first" class="abx-card-radio" checked />
+                    <input
+                      type="radio"
+                      name="abx-dedup-mode-opt"
+                      id="abx-opt-by-patient-first"
+                      value="patient_first"
+                      class="abx-card-radio"
+                      checked
+                    />
                   </div>
                 </div>
                 <div class="abx-card-desc">
-                  Includes only the initial isolate of a given species per patient in the surveillance period. Standard for cumulative antibiograms.
+                  Includes only the initial isolate of a given species per
+                  patient in the surveillance period. Standard for cumulative
+                  antibiograms.
                 </div>
               </label>
 
@@ -2706,10 +3656,17 @@
                     </div>
                     <div class="abx-card-title">First with AST Results</div>
                   </div>
-                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-ast" value="patient_first_ast" class="abx-card-radio" />
+                  <input
+                    type="radio"
+                    name="abx-dedup-mode-opt"
+                    id="abx-opt-by-patient-ast"
+                    value="patient_first_ast"
+                    class="abx-card-radio"
+                  />
                 </div>
                 <div class="abx-card-desc">
-                  Skips screen or preliminary records without susceptibility testing and selects the first isolate with tested antibiotics.
+                  Skips screen or preliminary records without susceptibility
+                  testing and selects the first isolate with tested antibiotics.
                 </div>
               </label>
 
@@ -2722,13 +3679,37 @@
                     </div>
                     <div class="abx-card-title">Episode Window</div>
                   </div>
-                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-episode" value="episode" class="abx-card-radio" />
+                  <input
+                    type="radio"
+                    name="abx-dedup-mode-opt"
+                    id="abx-opt-by-episode"
+                    value="episode"
+                    class="abx-card-radio"
+                  />
                 </div>
-                <div class="abx-card-desc" style="margin-bottom: 8px;">
-                  Treat repeat isolates beyond the interval as independent infection episodes (CDC / NHSN surveillance model).
+                <div class="abx-card-desc" style="margin-bottom: 8px">
+                  Treat repeat isolates beyond the interval as independent
+                  infection episodes (CDC / NHSN surveillance model).
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 6px; border-top: 1px dashed var(--border);" onclick="event.stopPropagation();">
-                  <span style="font-size: 11px; font-weight: 600; color: var(--text2);">Repeat interval:</span>
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-top: auto;
+                    padding-top: 6px;
+                    border-top: 1px dashed var(--border);
+                  "
+                  onclick="event.stopPropagation()"
+                >
+                  <span
+                    style="
+                      font-size: 11px;
+                      font-weight: 600;
+                      color: var(--text2);
+                    "
+                    >Repeat interval:</span
+                  >
                   <input
                     type="number"
                     id="abx-opt-episode-days"
@@ -2736,10 +3717,20 @@
                     value="30"
                     min="1"
                     max="730"
-                    style="width: 70px; height: 26px; padding: 0 6px; font-size: 12px; font-weight: 600; text-align: center;"
-                    onfocus="document.getElementById('abx-opt-by-episode').checked = true;"
+                    style="
+                      width: 70px;
+                      height: 26px;
+                      padding: 0 6px;
+                      font-size: 12px;
+                      font-weight: 600;
+                      text-align: center;
+                    "
+                    onfocus="
+                      document.getElementById('abx-opt-by-episode').checked =
+                        true
+                    "
                   />
-                  <span style="font-size: 11px; color: var(--text3);">days</span>
+                  <span style="font-size: 11px; color: var(--text3)">days</span>
                 </div>
               </label>
 
@@ -2752,10 +3743,17 @@
                     </div>
                     <div class="abx-card-title">All Isolates (Raw)</div>
                   </div>
-                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-isolate" value="isolate" class="abx-card-radio" />
+                  <input
+                    type="radio"
+                    name="abx-dedup-mode-opt"
+                    id="abx-opt-by-isolate"
+                    value="isolate"
+                    class="abx-card-radio"
+                  />
                 </div>
                 <div class="abx-card-desc">
-                  Includes all isolate records without deduplication. Reflects total laboratory workload and specimen burden.
+                  Includes all isolate records without deduplication. Reflects
+                  total laboratory workload and specimen burden.
                 </div>
               </label>
 
@@ -2768,10 +3766,17 @@
                     </div>
                     <div class="abx-card-title">Most Resistant Isolate</div>
                   </div>
-                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-res" value="patient_most_resistant" class="abx-card-radio" />
+                  <input
+                    type="radio"
+                    name="abx-dedup-mode-opt"
+                    id="abx-opt-by-patient-res"
+                    value="patient_most_resistant"
+                    class="abx-card-radio"
+                  />
                 </div>
                 <div class="abx-card-desc">
-                  Prioritizes the isolate showing the highest resistance phenotype per antibiotic to monitor worst-case profiles.
+                  Prioritizes the isolate showing the highest resistance
+                  phenotype per antibiotic to monitor worst-case profiles.
                 </div>
               </label>
 
@@ -2784,10 +3789,17 @@
                     </div>
                     <div class="abx-card-title">Most Susceptible Isolate</div>
                   </div>
-                  <input type="radio" name="abx-dedup-mode-opt" id="abx-opt-by-patient-susc" value="patient_most_susceptible" class="abx-card-radio" />
+                  <input
+                    type="radio"
+                    name="abx-dedup-mode-opt"
+                    id="abx-opt-by-patient-susc"
+                    value="patient_most_susceptible"
+                    class="abx-card-radio"
+                  />
                 </div>
                 <div class="abx-card-desc">
-                  Selects the patient's most susceptible isolate for sensitive baseline analysis and therapeutic options review.
+                  Selects the patient's most susceptible isolate for sensitive
+                  baseline analysis and therapeutic options review.
                 </div>
               </label>
             </div>
@@ -2795,19 +3807,49 @@
 
           <!-- Surveillance Period & Cutoff Panel -->
           <div class="abx-params-panel">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+            <div
+              style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 18px;
+              "
+            >
               <!-- Left: Time Window -->
-              <div style="display: flex; flex-direction: column; gap: 10px;">
-                <div style="display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3);">
-                  <i class="fa-regular fa-calendar-days" style="color: var(--accent);"></i>
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 7px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    color: var(--text3);
+                  "
+                >
+                  <i
+                    class="fa-regular fa-calendar-days"
+                    style="color: var(--accent)"
+                  ></i>
                   <span>Surveillance Time Window</span>
                 </div>
                 <div>
-                  <label for="abx-modal-period-preset" style="display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px;">Preset Range</label>
+                  <label
+                    for="abx-modal-period-preset"
+                    style="
+                      display: block;
+                      font-size: 11px;
+                      font-weight: 600;
+                      color: var(--text2);
+                      margin-bottom: 4px;
+                    "
+                    >Preset Range</label
+                  >
                   <select
                     id="abx-modal-period-preset"
                     class="chart-filter-select"
-                    style="width: 100%; height: 32px;"
+                    style="width: 100%; height: 32px"
                     onchange="handleModalPeriodPreset(this.value)"
                   >
                     <option value="all" selected>All Surveillance Dates</option>
@@ -2817,40 +3859,108 @@
                     <option value="30d">Last 30 Days</option>
                   </select>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 8px;
+                  "
+                >
                   <div>
-                    <label for="abx-modal-start-date" style="display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px;">From</label>
+                    <label
+                      for="abx-modal-start-date"
+                      style="
+                        display: block;
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: var(--text2);
+                        margin-bottom: 4px;
+                      "
+                      >From</label
+                    >
                     <input
                       type="date"
                       id="abx-modal-start-date"
                       class="chart-filter-select"
-                      style="width: 100%; height: 32px; padding: 0 8px; font-size: 12px;"
+                      style="
+                        width: 100%;
+                        height: 32px;
+                        padding: 0 8px;
+                        font-size: 12px;
+                      "
                     />
                   </div>
                   <div>
-                    <label for="abx-modal-end-date" style="display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px;">To</label>
+                    <label
+                      for="abx-modal-end-date"
+                      style="
+                        display: block;
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: var(--text2);
+                        margin-bottom: 4px;
+                      "
+                      >To</label
+                    >
                     <input
                       type="date"
                       id="abx-modal-end-date"
                       class="chart-filter-select"
-                      style="width: 100%; height: 32px; padding: 0 8px; font-size: 12px;"
+                      style="
+                        width: 100%;
+                        height: 32px;
+                        padding: 0 8px;
+                        font-size: 12px;
+                      "
                     />
                   </div>
                 </div>
               </div>
 
               <!-- Right: Sample Size Cutoff Threshold -->
-              <div style="display: flex; flex-direction: column; gap: 10px;">
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div style="display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3);">
-                    <i class="fa-solid fa-chart-pie" style="color: var(--accent);"></i>
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                  "
+                >
+                  <div
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 7px;
+                      font-size: 11px;
+                      font-weight: 700;
+                      text-transform: uppercase;
+                      letter-spacing: 0.05em;
+                      color: var(--text3);
+                    "
+                  >
+                    <i
+                      class="fa-solid fa-chart-pie"
+                      style="color: var(--accent)"
+                    ></i>
                     <span>Statistical Cutoff (N Isolates)</span>
                   </div>
-                  <span style="font-size: 11px; color: var(--text3);">Min: 1</span>
+                  <span style="font-size: 11px; color: var(--text3)"
+                    >Min: 1</span
+                  >
                 </div>
                 <div>
-                  <label for="abx-modal-min-isolates" style="display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px;">Minimum Isolates Required to Report</label>
-                  <div style="display: flex; align-items: center; gap: 8px;">
+                  <label
+                    for="abx-modal-min-isolates"
+                    style="
+                      display: block;
+                      font-size: 11px;
+                      font-weight: 600;
+                      color: var(--text2);
+                      margin-bottom: 4px;
+                    "
+                    >Minimum Isolates Required to Report</label
+                  >
+                  <div style="display: flex; align-items: center; gap: 8px">
                     <input
                       type="number"
                       id="abx-modal-min-isolates"
@@ -2859,59 +3969,167 @@
                       min="1"
                       max="1000"
                       oninput="handleModalMinCutoffChange()"
-                      style="width: 100px; height: 32px; padding: 0 10px; font-weight: 700; font-size: 13px;"
+                      style="
+                        width: 100px;
+                        height: 32px;
+                        padding: 0 10px;
+                        font-weight: 700;
+                        font-size: 13px;
+                      "
                     />
-                    <span style="font-size: 12px; color: var(--text3);">isolates per species</span>
+                    <span style="font-size: 12px; color: var(--text3)"
+                      >isolates per species</span
+                    >
                   </div>
                 </div>
                 <div>
-                  <div style="font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 6px;">Quick Presets</div>
-                  <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                    <button type="button" class="abx-cutoff-pill active" data-cutoff="30" onclick="setModalMinCutoff(30)">
+                  <div
+                    style="
+                      font-size: 11px;
+                      font-weight: 600;
+                      color: var(--text2);
+                      margin-bottom: 6px;
+                    "
+                  >
+                    Quick Presets
+                  </div>
+                  <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                    <button
+                      type="button"
+                      class="abx-cutoff-pill active"
+                      data-cutoff="30"
+                      onclick="setModalMinCutoff(30)"
+                    >
                       ≥30 (CLSI M39)
                     </button>
-                    <button type="button" class="abx-cutoff-pill" data-cutoff="20" onclick="setModalMinCutoff(20)">
+                    <button
+                      type="button"
+                      class="abx-cutoff-pill"
+                      data-cutoff="20"
+                      onclick="setModalMinCutoff(20)"
+                    >
                       ≥20
                     </button>
-                    <button type="button" class="abx-cutoff-pill" data-cutoff="15" onclick="setModalMinCutoff(15)">
+                    <button
+                      type="button"
+                      class="abx-cutoff-pill"
+                      data-cutoff="15"
+                      onclick="setModalMinCutoff(15)"
+                    >
                       ≥15
                     </button>
-                    <button type="button" class="abx-cutoff-pill" data-cutoff="10" onclick="setModalMinCutoff(10)">
+                    <button
+                      type="button"
+                      class="abx-cutoff-pill"
+                      data-cutoff="10"
+                      onclick="setModalMinCutoff(10)"
+                    >
                       ≥10
                     </button>
-                    <button type="button" class="abx-cutoff-pill" data-cutoff="1" onclick="setModalMinCutoff(1)">
+                    <button
+                      type="button"
+                      class="abx-cutoff-pill"
+                      data-cutoff="1"
+                      onclick="setModalMinCutoff(1)"
+                    >
                       All (≥1)
                     </button>
                   </div>
                 </div>
-                <div style="font-size: 11.5px; color: var(--text3); line-height: 1.4; margin-top: auto;">
-                  <i class="fa-solid fa-circle-info" style="color: var(--accent); margin-right: 4px;"></i>CLSI M39 recommends a minimum of 30 isolates for statistical validity. Species below threshold are flagged or suppressed.
+                <div
+                  style="
+                    font-size: 11.5px;
+                    color: var(--text3);
+                    line-height: 1.4;
+                    margin-top: auto;
+                  "
+                >
+                  <i
+                    class="fa-solid fa-circle-info"
+                    style="color: var(--accent); margin-right: 4px"
+                  ></i
+                  >CLSI M39 recommends a minimum of 30 isolates for statistical
+                  validity. Species below threshold are flagged or suppressed.
                 </div>
               </div>
             </div>
           </div>
 
           <!-- Presentation Options: Hide Empty Antibiotics -->
-          <div style="background: var(--bg3); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px 16px;">
-            <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; user-select: none;">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div class="abx-card-icon" style="width: 28px; height: 28px; font-size: 11px;">
+          <div
+            style="
+              background: var(--bg3);
+              border: 1.5px solid var(--border);
+              border-radius: var(--radius);
+              padding: 12px 16px;
+            "
+          >
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                cursor: pointer;
+                user-select: none;
+              "
+            >
+              <div style="display: flex; align-items: center; gap: 10px">
+                <div
+                  class="abx-card-icon"
+                  style="width: 28px; height: 28px; font-size: 11px"
+                >
                   <i class="fa-solid fa-eye-slash"></i>
                 </div>
                 <div>
-                  <div style="font-weight: 700; font-size: 12.5px; color: var(--text);">Hide antibiotics without any % (untested)</div>
-                  <div style="font-size: 11px; color: var(--text3); margin-top: 1px;">
-                    Suppresses empty antibiotic columns that have no susceptibility results across the displayed organisms
+                  <div
+                    style="
+                      font-weight: 700;
+                      font-size: 12.5px;
+                      color: var(--text);
+                    "
+                  >
+                    Hide antibiotics without any % (untested)
+                  </div>
+                  <div
+                    style="
+                      font-size: 11px;
+                      color: var(--text3);
+                      margin-top: 1px;
+                    "
+                  >
+                    Suppresses empty antibiotic columns that have no
+                    susceptibility results across the displayed organisms
                   </div>
                 </div>
               </div>
-              <input type="checkbox" id="abx-modal-hide-empty-abx" checked style="width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer;" />
+              <input
+                type="checkbox"
+                id="abx-modal-hide-empty-abx"
+                checked
+                style="
+                  width: 17px;
+                  height: 17px;
+                  accent-color: var(--accent);
+                  cursor: pointer;
+                "
+              />
             </label>
           </div>
         </div>
 
         <!-- Footer -->
-        <div class="modal-footer" style="padding: 14px 22px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg2);">
+        <div
+          class="modal-footer"
+          style="
+            padding: 14px 22px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg2);
+          "
+        >
           <button
             type="button"
             class="abx-modal-btn abx-modal-btn-ghost"
@@ -2921,7 +4139,7 @@
             <i class="fa-solid fa-arrow-rotate-left"></i>
             <span>Reset CLSI Defaults</span>
           </button>
-          <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px">
             <button
               type="button"
               class="abx-modal-btn abx-modal-btn-secondary"
@@ -2950,18 +4168,63 @@
       aria-modal="true"
       aria-labelledby="spectrum-modal-title"
     >
-      <div class="modal" style="max-width: 900px; width: 95vw; border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; display: flex; flex-direction: column; max-height: 92vh;">
+      <div
+        class="modal"
+        style="
+          max-width: 900px;
+          width: 95vw;
+          border-radius: 14px;
+          box-shadow: var(--shadow-lg);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          max-height: 92vh;
+        "
+      >
         <!-- Header -->
-        <div class="modal-header" style="padding: 16px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg2);">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(16, 185, 129, 0.12); color: var(--green); display: flex; align-items: center; justify-content: center; font-size: 16px;">
+        <div
+          class="modal-header"
+          style="
+            padding: 16px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg2);
+          "
+        >
+          <div style="display: flex; align-items: center; gap: 12px">
+            <div
+              style="
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                background: rgba(16, 185, 129, 0.12);
+                color: var(--green);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 16px;
+              "
+            >
               <i class="fa-solid fa-chart-column"></i>
             </div>
             <div>
-              <div id="spectrum-modal-title" style="font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.2;">
+              <div
+                id="spectrum-modal-title"
+                style="
+                  font-size: 16px;
+                  font-weight: 700;
+                  color: var(--text);
+                  line-height: 1.2;
+                "
+              >
                 Antimicrobial Susceptibility Spectrum
               </div>
-              <div id="spectrum-modal-subtitle" style="font-size: 12px; color: var(--text3); margin-top: 2px;">
+              <div
+                id="spectrum-modal-subtitle"
+                style="font-size: 12px; color: var(--text3); margin-top: 2px"
+              >
                 Cumulative AST Profile (%S / %I / %R)
               </div>
             </div>
@@ -2977,16 +4240,42 @@
         </div>
 
         <!-- Controls Bar -->
-        <div style="padding: 10px 22px; background: var(--bg3); border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
-          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div
+          style="
+            padding: 10px 22px;
+            background: var(--bg3);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+          "
+        >
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              flex-wrap: wrap;
+            "
+          >
             <!-- Metric Mode: Full Spectrum vs %S Only vs %R Only -->
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Metric:</span>
+            <div style="display: flex; align-items: center; gap: 6px">
+              <span
+                style="font-size: 11.5px; font-weight: 600; color: var(--text3)"
+                >Metric:</span
+              >
               <select
                 id="spectrum-metric-select"
                 class="chart-filter-select"
                 onchange="renderOrganismSpectrumChart()"
-                style="height: 30px; font-size: 12px; padding: 0 28px 0 10px; min-width: 165px;"
+                style="
+                  height: 30px;
+                  font-size: 12px;
+                  padding: 0 28px 0 10px;
+                  min-width: 165px;
+                "
               >
                 <option value="all" selected>%S / %I / %R (Full)</option>
                 <option value="S">%S Only (Susceptible)</option>
@@ -2995,13 +4284,21 @@
             </div>
 
             <!-- Orientation: Horizontal vs Vertical -->
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Orientation:</span>
+            <div style="display: flex; align-items: center; gap: 6px">
+              <span
+                style="font-size: 11.5px; font-weight: 600; color: var(--text3)"
+                >Orientation:</span
+              >
               <select
                 id="spectrum-orientation-select"
                 class="chart-filter-select"
                 onchange="renderOrganismSpectrumChart()"
-                style="height: 30px; font-size: 12px; padding: 0 26px 0 10px; min-width: 120px;"
+                style="
+                  height: 30px;
+                  font-size: 12px;
+                  padding: 0 26px 0 10px;
+                  min-width: 120px;
+                "
               >
                 <option value="horizontal" selected>Horizontal</option>
                 <option value="vertical">Vertical</option>
@@ -3009,13 +4306,21 @@
             </div>
 
             <!-- Sort Order Selector -->
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 11.5px; font-weight: 600; color: var(--text3);">Sort:</span>
+            <div style="display: flex; align-items: center; gap: 6px">
+              <span
+                style="font-size: 11.5px; font-weight: 600; color: var(--text3)"
+                >Sort:</span
+              >
               <select
                 id="spectrum-sort-select"
                 class="chart-filter-select"
                 onchange="renderOrganismSpectrumChart()"
-                style="height: 30px; font-size: 12px; padding: 0 28px 0 10px; min-width: 205px;"
+                style="
+                  height: 30px;
+                  font-size: 12px;
+                  padding: 0 28px 0 10px;
+                  min-width: 205px;
+                "
               >
                 <option value="class" selected>By Drug Class</option>
                 <option value="aware">By WHO AWaRe</option>
@@ -3028,26 +4333,48 @@
             </div>
 
             <!-- Hide Untested Checkbox -->
-            <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); cursor: pointer; user-select: none;">
+            <label
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 12px;
+                color: var(--text2);
+                cursor: pointer;
+                user-select: none;
+              "
+            >
               <input
                 type="checkbox"
                 id="spectrum-hide-untested"
                 checked
                 onchange="renderOrganismSpectrumChart()"
-                style="width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer;"
+                style="
+                  width: 15px;
+                  height: 15px;
+                  accent-color: var(--accent);
+                  cursor: pointer;
+                "
               />
               <span>Hide untested</span>
             </label>
           </div>
 
           <!-- Actions: Copy Data, Copy Image & Download PNG -->
-          <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px">
             <button
               type="button"
               class="btn btn-outline btn-sm"
               onclick="copySpectrumChartData()"
               title="Copy chart data table to clipboard (paste into Excel with Ctrl+V and press Alt+F1 for native editable chart)"
-              style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+              style="
+                height: 30px;
+                font-size: 12px;
+                padding: 0 10px;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+              "
             >
               <i class="fa-solid fa-table"></i>
               <span>Copy Data</span>
@@ -3057,9 +4384,16 @@
               class="btn btn-outline btn-sm"
               onclick="copySpectrumChartImage()"
               title="Copy chart image to clipboard (paste directly into Word, Excel, or PowerPoint with Ctrl+V)"
-              style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+              style="
+                height: 30px;
+                font-size: 12px;
+                padding: 0 10px;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+              "
             >
-              <i class="fa-solid fa-copy"></i>
+              <i class="fa-regular fa-copy"></i>
               <span>Copy Image</span>
             </button>
             <button
@@ -3067,7 +4401,14 @@
               class="btn btn-outline btn-sm"
               onclick="downloadSpectrumChartPng()"
               title="Download spectrum chart as high-resolution PNG image"
-              style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;"
+              style="
+                height: 30px;
+                font-size: 12px;
+                padding: 0 10px;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+              "
             >
               <i class="fa-solid fa-download"></i>
               <span>Download PNG</span>
@@ -3076,36 +4417,150 @@
         </div>
 
         <!-- Body -->
-        <div class="modal-body" style="padding: 16px 22px; overflow-y: auto; overflow-x: auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px;">
+        <div
+          class="modal-body"
+          style="
+            padding: 16px 22px;
+            overflow-y: auto;
+            overflow-x: auto;
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+          "
+        >
           <!-- Custom Legend Badges -->
-          <div id="spectrum-legend-badges" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; padding: 8px 12px; background: var(--bg2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
-            <div id="spectrum-badge-s" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
-              <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #10b981;"></span>
-              <span style="font-weight: 600;">% Susceptible (%S)</span>
+          <div
+            id="spectrum-legend-badges"
+            style="
+              display: flex;
+              flex-wrap: wrap;
+              align-items: center;
+              justify-content: center;
+              gap: 14px;
+              padding: 8px 12px;
+              background: var(--bg2);
+              border-radius: var(--radius-sm);
+              border: 1px solid var(--border);
+            "
+          >
+            <div
+              id="spectrum-badge-s"
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11.5px;
+                color: var(--text);
+              "
+            >
+              <span
+                style="
+                  display: inline-block;
+                  width: 12px;
+                  height: 12px;
+                  border-radius: 3px;
+                  background: #10b981;
+                "
+              ></span>
+              <span style="font-weight: 600">% Susceptible (%S)</span>
             </div>
-            <div id="spectrum-badge-i" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
-              <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #f59e0b;"></span>
-              <span style="font-weight: 600;">% Intermediate / SDD (%I)</span>
+            <div
+              id="spectrum-badge-i"
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11.5px;
+                color: var(--text);
+              "
+            >
+              <span
+                style="
+                  display: inline-block;
+                  width: 12px;
+                  height: 12px;
+                  border-radius: 3px;
+                  background: #f59e0b;
+                "
+              ></span>
+              <span style="font-weight: 600">% Intermediate / SDD (%I)</span>
             </div>
-            <div id="spectrum-badge-r" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
-              <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #ef4444;"></span>
-              <span style="font-weight: 600;">% Resistant (%R)</span>
+            <div
+              id="spectrum-badge-r"
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11.5px;
+                color: var(--text);
+              "
+            >
+              <span
+                style="
+                  display: inline-block;
+                  width: 12px;
+                  height: 12px;
+                  border-radius: 3px;
+                  background: #ef4444;
+                "
+              ></span>
+              <span style="font-weight: 600">% Resistant (%R)</span>
             </div>
-            <div id="spectrum-badge-intrinsic" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text);">
-              <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #991b1b;"></span>
-              <span style="font-weight: 600;">Intrinsic Resistance (R)</span>
+            <div
+              id="spectrum-badge-intrinsic"
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11.5px;
+                color: var(--text);
+              "
+            >
+              <span
+                style="
+                  display: inline-block;
+                  width: 12px;
+                  height: 12px;
+                  border-radius: 3px;
+                  background: #991b1b;
+                "
+              ></span>
+              <span style="font-weight: 600">Intrinsic Resistance (R)</span>
             </div>
           </div>
 
           <!-- Canvas Container -->
-          <div id="spectrum-canvas-container" style="position: relative; width: 100%; min-height: 460px; flex-shrink: 0;">
+          <div
+            id="spectrum-canvas-container"
+            style="
+              position: relative;
+              width: 100%;
+              min-height: 460px;
+              flex-shrink: 0;
+            "
+          >
             <canvas id="spectrum-chart-canvas"></canvas>
           </div>
         </div>
 
         <!-- Footer -->
-        <div class="modal-footer" style="padding: 12px 22px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg2);">
-          <div id="spectrum-modal-stats" style="font-size: 12px; color: var(--text3);">
+        <div
+          class="modal-footer"
+          style="
+            padding: 12px 22px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg2);
+          "
+        >
+          <div
+            id="spectrum-modal-stats"
+            style="font-size: 12px; color: var(--text3)"
+          >
             <!-- Populated dynamically -->
           </div>
           <button

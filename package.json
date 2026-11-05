@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node --watch server.js",
+    "build:resources": "node scripts/build-resources.js",
     "web:dev": "vite",
     "web:build": "vite build",
     "web:preview": "vite preview",
