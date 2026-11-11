@@ -1,8 +1,7 @@
-import { state } from '../state/store.js';
+import { state, API_BASE } from '../state/store.js';
 import { handleWasmApi } from './wasm-emulator.js';
 
-const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-export const API_BASE = isLocalHost && (window.location.port === '7890' || window.location.port === '') ? '' : 'http://localhost:7890';
+export { API_BASE };
 
 /**
  * Hybrid API Dispatcher:
@@ -16,11 +15,24 @@ export async function api(path, options = {}) {
 
   try {
     const res = await fetch(API_BASE + path, options);
-    if (!res.ok && res.status >= 500) {
-      const err = await res.json().catch(() => ({ error: `Server error (${res.status})` }));
-      return { error: err.error || `HTTP ${res.status}` };
+    const contentType = res.headers.get('content-type') || '';
+    if (!res.ok) {
+      if (contentType.includes('application/json')) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        return { error: err.error || `HTTP ${res.status}` };
+      }
+      const text = await res.text().catch(() => '');
+      return { error: text.trim() || `HTTP ${res.status}` };
     }
-    return await res.json();
+    if (contentType.includes('application/json')) {
+      return await res.json();
+    }
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      return { error: text.trim() || 'Unexpected non-JSON server response' };
+    }
   } catch (err) {
     return { error: `Network/Server error: ${err.message}` };
   }

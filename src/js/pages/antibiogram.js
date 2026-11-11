@@ -4,6 +4,12 @@ import { toast } from "../ui/toast.js";
 import { getSpecimenName } from "../utils/specimens.js";
 import { escapeHtml, formatWardTypeLabel, formatAmrMonthLabel } from "../utils/formatters.js";
 import { getAwareCategory } from "../utils/antibiogram-engine.js";
+import {
+  resolveSurveillancePeriod,
+  suggestSurveillancePeriods,
+  buildBadDatesInspectSql,
+} from "../utils/date-profile.js";
+import { insertSQL, runSQL, sqlSchemaCache } from "./sql-workspace.js";
 
 const AWARE_ORDER = { Access: 1, Watch: 2, Reserve: 3, Other: 4 };
 
@@ -11,7 +17,6 @@ let currentReportData = null;
 let currentGroupingMode = "class"; // 'class' | 'aware' | 'alpha'
 let currentGroupByClass = true; // backward compatibility
 let currentMetric = "S"; // 'S' = % Susceptible, 'R' = % Resistant
-let hideUnderMinIsolates = true; // default CLSI M39 threshold filter (hide organisms < threshold)
 let hideEmptyAbx = true; // default: hide antibiotics without any data / % for displayed organisms
 
 export function toggleHideEmptyAbx(checked) {
@@ -23,9 +28,11 @@ export function toggleHideEmptyAbx(checked) {
 let currentDedupMode = "patient_first"; // 'patient_first' | 'isolate' | 'patient_first_ast' | 'episode' | 'patient_most_resistant' | 'patient_most_susceptible'
 let currentEpisodeDays = 30; // Number of days for episode window
 let currentMinIsolates = 30; // CLSI M39 recommendation
-let currentPeriodPreset = "all"; // 'all' | '1y' | '6m' | '90d' | '30d' | 'custom'
+let currentPeriodPreset = "all"; // 'all' | 'annual:YYYY' | 'h1:YYYY' | 'h2:YYYY' | 'q1..q4:YYYY' | 'custom'
 let currentStartDate = "";
 let currentEndDate = "";
+let lastPeriodContextDb = null;
+let dismissedDateBannerForDb = null;
 
 export function setAntibiogramMetric(metric) {
   currentMetric = metric;
@@ -71,20 +78,6 @@ export function setAntibiogramMinIsolates(val) {
   loadAntibiogram();
 }
 
-export function toggleHideUnderMinIsolates(checkbox) {
-  if (currentReportData) updateAntibiogramMetaHeader(currentReportData);
-  renderAntibiogramTable();
-}
-// Backward compatibility
-export const toggleHideUnder30 = toggleHideUnderMinIsolates;
-
-function updateHideThresholdLabel() {
-  const lbl = document.getElementById("abx-hide-under-label");
-  if (lbl) {
-    lbl.textContent = `Hide species with < ${currentMinIsolates} isolates`;
-  }
-}
-
 export function setAntibiogramDedupMode(mode) {
   currentDedupMode = mode;
   const selectEl = document.getElementById("abx-dedup-select");
@@ -92,32 +85,155 @@ export function setAntibiogramDedupMode(mode) {
   loadAntibiogram();
 }
 
+function getActiveSuggestedPeriods() {
+  if (state.stats?.suggestedPeriods?.presets?.length) {
+    return state.stats.suggestedPeriods;
+  }
+  return suggestSurveillancePeriods(state.stats?.dateProfile || null);
+}
+
+function buildPeriodSelectOptionsHtml(presets, { includeCustom = false } = {}) {
+  const groups = new Map();
+  for (const preset of presets) {
+    const grp = preset.group || "Other";
+    if (!groups.has(grp)) groups.set(grp, []);
+    groups.get(grp).push(preset);
+  }
+
+  let html = "";
+  for (const [groupName, items] of groups.entries()) {
+    const optionsHtml = items
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`,
+      )
+      .join("");
+    if (groupName === "File" && items.length === 1) {
+      html += optionsHtml;
+    } else {
+      html += `<optgroup label="${escapeHtml(groupName)}">${optionsHtml}</optgroup>`;
+    }
+  }
+
+  if (includeCustom || currentPeriodPreset === "custom") {
+    html += `<option value="custom">Custom Date Range</option>`;
+  }
+  return html;
+}
+
+function renderModalDateInsight() {
+  const insightEl = document.getElementById("abx-modal-date-insight");
+  if (!insightEl) return;
+
+  const dp = state.stats?.dateProfile;
+  const suggested = getActiveSuggestedPeriods();
+  const warnings = dp?.warnings || [];
+
+  if (!dp && !suggested?.recommendationReason) {
+    insightEl.style.display = "none";
+    insightEl.innerHTML = "";
+    return;
+  }
+
+  const lines = [];
+  if (suggested?.recommendationReason) {
+    lines.push(
+      `<div><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--accent); margin-right: 5px;"></i><strong>Auto-Suggestion:</strong> ${escapeHtml(suggested.recommendationReason)}</div>`,
+    );
+  }
+  if (warnings.length > 0) {
+    const hasWarn = warnings.some((w) => w.severity === "warning");
+    const color = hasWarn ? "#b45309" : "var(--text2)";
+    const icon = hasWarn ? "fa-triangle-exclamation" : "fa-circle-info";
+    lines.push(
+      `<div style="margin-top: 3px; color: ${color};"><i class="fa-solid ${icon}" style="margin-right: 5px;"></i>${escapeHtml(warnings[0].message)}</div>`,
+    );
+  }
+
+  if (!lines.length) {
+    insightEl.style.display = "none";
+    insightEl.innerHTML = "";
+    return;
+  }
+
+  insightEl.style.display = "block";
+  insightEl.innerHTML = lines.join("");
+}
+
+/**
+ * Syncs Antibiogram toolbar & modal period selectors with state.stats.suggestedPeriods.
+ * Optionally resets active window to Entire File ('all') on database switch (Option A).
+ */
+export function refreshAntibiogramPeriodControls({ resetToAll = false } = {}) {
+  const activeDbKey = state.currentDb || "__default__";
+  if (resetToAll || lastPeriodContextDb !== activeDbKey) {
+    currentPeriodPreset = "all";
+    currentStartDate = "";
+    currentEndDate = "";
+    dismissedDateBannerForDb = null;
+    lastPeriodContextDb = activeDbKey;
+  }
+
+  const { presets } = getActiveSuggestedPeriods();
+  const toolbarEl = document.getElementById("abx-toolbar-period-select");
+  if (toolbarEl) {
+    toolbarEl.innerHTML = buildPeriodSelectOptionsHtml(presets, { includeCustom: true });
+    toolbarEl.value = currentPeriodPreset;
+    if (toolbarEl.value !== currentPeriodPreset) toolbarEl.value = "all";
+  }
+
+  const modalEl = document.getElementById("abx-modal-period-preset");
+  if (modalEl) {
+    modalEl.innerHTML = buildPeriodSelectOptionsHtml(presets, { includeCustom: true });
+    modalEl.value = currentPeriodPreset;
+    if (modalEl.value !== currentPeriodPreset) modalEl.value = "all";
+  }
+
+  const hiddenPreset = document.getElementById("abx-period-preset");
+  const startInput = document.getElementById("abx-start-date");
+  const endInput = document.getElementById("abx-end-date");
+  if (hiddenPreset) hiddenPreset.value = currentPeriodPreset;
+  if (startInput) startInput.value = currentStartDate;
+  if (endInput) endInput.value = currentEndDate;
+
+  renderModalDateInsight();
+}
+
+function computePeriodRange(preset) {
+  if (preset === "custom") {
+    return { start: currentStartDate, end: currentEndDate };
+  }
+  const resolved = resolveSurveillancePeriod(
+    preset,
+    state.stats?.dateProfile || null,
+    state.stats?.months || [],
+    state.stats?.maxDate || null,
+  );
+  return { start: resolved.start, end: resolved.end };
+}
+
 export function setAntibiogramPeriodPreset(preset) {
+  if (preset === "custom") {
+    openAntibiogramOptionsModal();
+    const modalSelect = document.getElementById("abx-modal-period-preset");
+    if (modalSelect) modalSelect.value = "custom";
+    const toolbarEl = document.getElementById("abx-toolbar-period-select");
+    if (toolbarEl) toolbarEl.value = currentPeriodPreset;
+    return;
+  }
+
   currentPeriodPreset = preset;
   const presetSelect = document.getElementById("abx-period-preset");
   if (presetSelect) presetSelect.value = preset;
+  const toolbarSelect = document.getElementById("abx-toolbar-period-select");
+  if (toolbarSelect) toolbarSelect.value = preset;
 
   const startInput = document.getElementById("abx-start-date");
   const endInput = document.getElementById("abx-end-date");
 
-  if (preset === "all") {
-    currentStartDate = "";
-    currentEndDate = "";
-  } else {
-    const now = new Date();
-    const endStr = now.toISOString().slice(0, 10);
-    let pastDays = 365;
-    if (preset === "30d") pastDays = 30;
-    else if (preset === "90d") pastDays = 90;
-    else if (preset === "6m") pastDays = 180;
-    else if (preset === "1y") pastDays = 365;
-
-    const past = new Date(now.getTime() - pastDays * 24 * 60 * 60 * 1000);
-    const startStr = past.toISOString().slice(0, 10);
-
-    currentStartDate = startStr;
-    currentEndDate = endStr;
-  }
+  const { start, end } = computePeriodRange(preset);
+  currentStartDate = start;
+  currentEndDate = end;
 
   if (startInput) startInput.value = currentStartDate;
   if (endInput) endInput.value = currentEndDate;
@@ -130,14 +246,53 @@ export function handleDateInputChange() {
   const endInput = document.getElementById("abx-end-date");
   currentStartDate = startInput ? startInput.value : "";
   currentEndDate = endInput ? endInput.value : "";
-  currentPeriodPreset = "custom";
+  currentPeriodPreset = !currentStartDate && !currentEndDate ? "all" : "custom";
   const presetSelect = document.getElementById("abx-period-preset");
-  if (presetSelect) presetSelect.value = "custom";
+  if (presetSelect) presetSelect.value = currentPeriodPreset;
+  const toolbarSelect = document.getElementById("abx-toolbar-period-select");
+  if (toolbarSelect) toolbarSelect.value = currentPeriodPreset;
   loadAntibiogram();
+}
+
+export function handleModalDateInputChange() {
+  const startEl = document.getElementById("abx-modal-start-date");
+  const endEl = document.getElementById("abx-modal-end-date");
+  const modalPreset = document.getElementById("abx-modal-period-preset");
+  if (!modalPreset) return;
+  const hasDates = Boolean(startEl?.value || endEl?.value);
+  modalPreset.value = hasDates ? "custom" : "all";
+}
+
+export function scopeAntibiogramToPrimaryYear() {
+  const primaryYear = state.stats?.dateProfile?.primaryYear;
+  if (!primaryYear) return;
+  setAntibiogramPeriodPreset(`annual:${primaryYear}`);
+  toast(`Scoped antibiogram to ${primaryYear} (${primaryYear}-01-01 → ${primaryYear}-12-31)`, "info");
+}
+
+export function dismissAntibiogramDateBanner() {
+  dismissedDateBannerForDb = state.currentDb || "__default__";
+  if (currentReportData) {
+    updateAntibiogramMetaHeader(currentReportData);
+  }
+}
+
+export function inspectAntibiogramBadDates() {
+  const dp = state.stats?.dateProfile || null;
+  const cols = state.schema?.columns?.Isolates || sqlSchemaCache?.columns?.Isolates || [];
+  const sql = buildBadDatesInspectSql(dp, cols);
+  if (typeof window.showPage === "function") {
+    window.showPage("sql");
+  }
+  insertSQL(sql);
+  runSQL();
 }
 
 export async function loadAntibiogram() {
   if (!state.currentDb) return;
+  if (lastPeriodContextDb !== (state.currentDb || "__default__")) {
+    refreshAntibiogramPeriodControls({ resetToAll: true });
+  }
   const container = document.getElementById("antibiogram-table-container");
   if (container) {
     container.innerHTML = `
@@ -178,7 +333,7 @@ export async function loadAntibiogram() {
       container.innerHTML = `
         <div style="padding: 32px; text-align: center; color: var(--red);">
           <i class="fa-solid fa-circle-exclamation" style="font-size: 24px; margin-bottom: 8px;"></i>
-          <div>${res.error}</div>
+          <div>${escapeHtml(res.error)}</div>
         </div>
       `;
     }
@@ -254,14 +409,26 @@ function updateAntibiogramMetaHeader(data) {
   `
     : "";
 
-  const dateBadge =
+  const activeSuggested = getActiveSuggestedPeriods();
+  const activePresetObj = activeSuggested.presets.find((p) => p.key === currentPeriodPreset);
+  const dateRangeText =
     data.startDate || data.endDate
-      ? `
-    <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;" title="Surveillance Period">
-      <i class="fa-regular fa-calendar" style="color: var(--accent); margin-right: 4px;"></i>${data.startDate || "Start"} &rarr; ${data.endDate || "Latest"}
+      ? `${activePresetObj ? `${activePresetObj.shortLabel}: ` : ""}${data.startDate || "Start"} &rarr; ${data.endDate || "Latest"}`
+      : "";
+  const excludedParts = [];
+  if (data.excludedOutsideRange > 0) excludedParts.push(`${data.excludedOutsideRange} outside range`);
+  if (data.excludedUndated > 0) excludedParts.push(`${data.excludedUndated} undated/invalid`);
+  const dateBadgeTitle = excludedParts.length
+    ? `Surveillance Period (${excludedParts.join(", ")} excluded)`
+    : "Surveillance Period";
+
+  const dateBadge = dateRangeText
+    ? `
+    <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;" title="${escapeHtml(dateBadgeTitle)}">
+      <i class="fa-regular fa-calendar" style="color: var(--accent); margin-right: 4px;"></i>${dateRangeText}
     </span>
   `
-      : "";
+    : "";
 
   const dedupBadge = `
     <span class="badge" style="background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; font-weight: 600;" title="Deduplication: ${escapeHtml(getDedupModeLabel(data.dedupMode || currentDedupMode))}">
@@ -274,6 +441,79 @@ function updateAntibiogramMetaHeader(data) {
       <i class="fa-solid fa-filter" style="color: var(--accent); margin-right: 4px;"></i>&ge;${threshold}
     </span>
   `;
+
+  const dp = state.stats?.dateProfile;
+  const activeDbKey = state.currentDb || "__default__";
+  const warnings = dp?.warnings || [];
+  const hasRealWarning = warnings.some((w) => w.severity === "warning");
+  const showDateNotice =
+    dismissedDateBannerForDb !== activeDbKey &&
+    (warnings.length > 0 || (data.excludedUndated > 0 && currentPeriodPreset !== "all"));
+
+  let dateNoticeHtml = "";
+  if (showDateNotice) {
+    const recPresetObj = activeSuggested.presets.find(
+      (p) => p.key === activeSuggested.recommendedPreset,
+    );
+    const messages = warnings.map((w) => escapeHtml(w.message));
+    if (data.excludedUndated > 0 && currentPeriodPreset !== "all") {
+      messages.push(
+        `${data.excludedUndated.toLocaleString()} isolate${data.excludedUndated === 1 ? "" : "s"} without a valid SPEC_DATE excluded by current date filter`,
+      );
+    }
+
+    const sampleItems = (dp?.anomalySamples || [])
+      .slice(0, 3)
+      .map((s) => `#${s.rowIdx ?? "?"}: "${s.rawDate || "blank"}"`)
+      .join(", ");
+    const sampleHtml = sampleItems
+      ? `<span style="opacity: 0.85; font-size: 11px;">(${escapeHtml(sampleItems)})</span>`
+      : "";
+
+    const actionButtons = [];
+    if (
+      dp?.primaryYear &&
+      hasRealWarning &&
+      currentPeriodPreset !== `annual:${dp.primaryYear}`
+    ) {
+      actionButtons.push(
+        `<button type="button" class="btn btn-outline btn-xs" onclick="scopeAntibiogramToPrimaryYear()" style="font-size: 11px; padding: 2px 8px; height: 24px; white-space: nowrap;">Scope to ${escapeHtml(dp.primaryYear)} Only</button>`,
+      );
+    }
+    if (
+      recPresetObj &&
+      recPresetObj.key !== currentPeriodPreset &&
+      !(dp?.primaryYear && hasRealWarning && recPresetObj.key === `annual:${dp.primaryYear}`)
+    ) {
+      actionButtons.push(
+        `<button type="button" class="btn btn-outline btn-xs" onclick="setAntibiogramPeriodPreset('${escapeHtml(recPresetObj.key)}')" style="font-size: 11px; padding: 2px 8px; height: 24px; white-space: nowrap;">Use ${escapeHtml(recPresetObj.shortLabel)}</button>`,
+      );
+    }
+    if (hasRealWarning || data.excludedUndated > 0) {
+      actionButtons.push(
+        `<button type="button" class="btn btn-outline btn-xs" onclick="inspectAntibiogramBadDates()" style="font-size: 11px; padding: 2px 8px; height: 24px; white-space: nowrap;">Inspect Bad Dates</button>`,
+      );
+    }
+
+    const bannerBg = hasRealWarning ? "rgba(245, 158, 11, 0.10)" : "var(--bg3)";
+    const bannerBorder = hasRealWarning ? "rgba(245, 158, 11, 0.35)" : "var(--border)";
+    const iconColor = hasRealWarning ? "#d97706" : "var(--accent)";
+    const iconClass = hasRealWarning ? "fa-triangle-exclamation" : "fa-circle-info";
+
+    dateNoticeHtml = `
+      <div style="margin-top: 9px; padding: 7px 10px; border-radius: 6px; background: ${bannerBg}; border: 1px solid ${bannerBorder}; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 11.5px;">
+        <div style="display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--text);">
+          <i class="fa-solid ${iconClass}" style="color: ${iconColor};"></i>
+          <span>${messages.join(" • ")}</span>
+          ${sampleHtml}
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+          ${actionButtons.join("")}
+          <button type="button" onclick="dismissAntibiogramDateBanner()" title="Dismiss notice for this database" style="background: transparent; border: none; color: var(--text3); cursor: pointer; padding: 2px 4px; font-size: 13px; line-height: 1;">&times;</button>
+        </div>
+      </div>
+    `;
+  }
 
   metaEl.innerHTML = `
     <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11.5px; white-space: nowrap; overflow-x: auto; scrollbar-width: none;">
@@ -294,6 +534,7 @@ function updateAntibiogramMetaHeader(data) {
         <span title="${qualifiedCount} species meet the ≥${threshold} isolate cutoff for statistical validity (${orgCount} total species detected)">Species: <strong style="color:var(--text);">${qualifiedCount}</strong>/<strong style="color:var(--text);">${orgCount}</strong> qualified (&ge;${threshold})</span>
       </div>
     </div>
+    ${dateNoticeHtml}
   `;
 }
 
@@ -726,20 +967,10 @@ export function handleModalPeriodPreset(preset) {
   const startEl = document.getElementById("abx-modal-start-date");
   const endEl = document.getElementById("abx-modal-end-date");
   if (!startEl || !endEl) return;
-  if (preset === "all") {
-    startEl.value = "";
-    endEl.value = "";
-  } else {
-    const now = new Date();
-    let days = 365;
-    if (preset === "30d") days = 30;
-    else if (preset === "90d") days = 90;
-    else if (preset === "6m") days = 180;
-    endEl.value = now.toISOString().slice(0, 10);
-    startEl.value = new Date(now.getTime() - days * 86400000)
-      .toISOString()
-      .slice(0, 10);
-  }
+  if (preset === "custom") return;
+  const { start, end } = computePeriodRange(preset);
+  startEl.value = start;
+  endEl.value = end;
 }
 
 export function resetAntibiogramOptionsDefaults() {
@@ -771,6 +1002,8 @@ export function resetAntibiogramOptionsDefaults() {
 export function openAntibiogramOptionsModal() {
   const modal = document.getElementById("antibiogram-options-modal");
   if (!modal) return;
+
+  refreshAntibiogramPeriodControls({ resetToAll: false });
 
   // Sync inputs with current state
   const radioByIsolate = document.getElementById("abx-opt-by-isolate");
@@ -835,6 +1068,17 @@ export function closeAntibiogramOptionsModal() {
 }
 
 export function applyAntibiogramOptions() {
+  const modalPeriodPreset = document.getElementById("abx-modal-period-preset");
+  const modalStartDate = document.getElementById("abx-modal-start-date");
+  const modalEndDate = document.getElementById("abx-modal-end-date");
+
+  const nextStart = modalStartDate ? modalStartDate.value : "";
+  const nextEnd = modalEndDate ? modalEndDate.value : "";
+  if (nextStart && nextEnd && nextStart > nextEnd) {
+    toast("Start date must be on or before end date", "error");
+    return;
+  }
+
   const selectedRadio = document.querySelector(
     'input[name="abx-dedup-mode-opt"]:checked',
   );
@@ -860,17 +1104,27 @@ export function applyAntibiogramOptions() {
     if (barInput) barInput.value = currentMinIsolates;
   }
 
-  const modalPeriodPreset = document.getElementById("abx-modal-period-preset");
-  const modalStartDate = document.getElementById("abx-modal-start-date");
-  const modalEndDate = document.getElementById("abx-modal-end-date");
   if (modalPeriodPreset) {
     currentPeriodPreset = modalPeriodPreset.value;
     const barPreset = document.getElementById("abx-period-preset");
     if (barPreset) barPreset.value = currentPeriodPreset;
+    const toolbarPreset = document.getElementById("abx-toolbar-period-select");
+    if (toolbarPreset) {
+      if (
+        currentPeriodPreset === "custom" &&
+        !Array.from(toolbarPreset.options).some((o) => o.value === "custom")
+      ) {
+        const opt = document.createElement("option");
+        opt.value = "custom";
+        opt.textContent = "Custom Date Range";
+        toolbarPreset.appendChild(opt);
+      }
+      toolbarPreset.value = currentPeriodPreset;
+    }
   }
   if (modalStartDate && modalEndDate) {
-    currentStartDate = modalStartDate.value;
-    currentEndDate = modalEndDate.value;
+    currentStartDate = nextStart;
+    currentEndDate = nextEnd;
     const barStart = document.getElementById("abx-start-date");
     const barEnd = document.getElementById("abx-end-date");
     if (barStart) barStart.value = currentStartDate;
@@ -1758,7 +2012,7 @@ export function copySpectrumChartData() {
     }
 
     tsvRows.push(row.join("\t"));
-    htmlRows += `<tr>${row.map((c) => `<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:${typeof c === "number" || (typeof c === "string" && c.endsWith("%")) ? "center" : "left"};">${c}</td>`).join("")}</tr>`;
+    htmlRows += `<tr>${row.map((c) => `<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:${typeof c === "number" || (typeof c === "string" && c.endsWith("%")) ? "center" : "left"};">${escapeHtml(c)}</td>`).join("")}</tr>`;
   }
 
   const tsvText = tsvRows.join("\n");
@@ -1932,22 +2186,30 @@ function populateTrendCustomDropdowns() {
   const abxSel = document.getElementById("trend-custom-abx-select");
   if (!orgSel || !abxSel) return;
 
-  if (orgSel.options.length === 0 && currentReportData.organisms) {
+  if (currentReportData.organisms) {
+    const prevOrg = orgSel.value;
     orgSel.innerHTML = currentReportData.organisms
       .map(
         (o) =>
-          `<option value="${o.orgCode}">${escapeHtml(o.orgName)} (${o.orgCode})</option>`,
+          `<option value="${escapeHtml(o.orgCode)}">${escapeHtml(o.orgName)} (${escapeHtml(o.orgCode)})</option>`,
       )
       .join("");
+    if (prevOrg && currentReportData.organisms.some((o) => o.orgCode === prevOrg)) {
+      orgSel.value = prevOrg;
+    }
   }
 
-  if (abxSel.options.length === 0 && currentReportData.antibiotics) {
+  if (currentReportData.antibiotics) {
+    const prevAbx = abxSel.value;
     abxSel.innerHTML = currentReportData.antibiotics
       .map(
         (a) =>
-          `<option value="${a.code}">${escapeHtml(a.name)} (${a.code})</option>`,
+          `<option value="${escapeHtml(a.code)}">${escapeHtml(a.name)} (${escapeHtml(a.code)})</option>`,
       )
       .join("");
+    if (prevAbx && currentReportData.antibiotics.some((a) => a.code === prevAbx)) {
+      abxSel.value = prevAbx;
+    }
   }
 }
 
@@ -2065,14 +2327,19 @@ export function renderAmrTrendChart() {
         m.pairs?.[`${customOrg.toLowerCase()}:${customAbx.toUpperCase()}`];
       stat = pair
         ? {
-            total: pair.total,
-            R: pair.R,
-            S: pair.S,
-            I: pair.I,
+            ...pair,
             pctR:
-              pair.total > 0 ? Math.round((pair.R / pair.total) * 100) : null,
+              pair.pctR !== undefined
+                ? pair.pctR
+                : pair.total > 0
+                  ? Math.round((pair.R / pair.total) * 100)
+                  : null,
             pctS:
-              pair.total > 0 ? Math.round((pair.S / pair.total) * 100) : null,
+              pair.pctS !== undefined
+                ? pair.pctS
+                : pair.total > 0
+                  ? Math.round((pair.S / pair.total) * 100)
+                  : null,
           }
         : { total: 0, R: 0, S: 0, I: 0, pctR: null, pctS: null };
     } else {
@@ -2086,21 +2353,15 @@ export function renderAmrTrendChart() {
       };
     }
 
-    if (locFilter !== "all" && m.locations && stat.total > 0) {
-      const locRate = m.locations[locFilter];
-      const locVol = m.locations[`${locFilter}Total`] || 0;
-      if (locVol > 0) {
-        stat = {
-          total: locVol,
-          R: Math.round((locRate / 100) * locVol),
-          S: locVol - Math.round((locRate / 100) * locVol),
-          I: 0,
-          pctR: locRate,
-          pctS: 100 - locRate,
-        };
-      } else {
-        stat = { total: 0, R: 0, S: 0, I: 0, pctR: null, pctS: null };
-      }
+    if (locFilter !== "all") {
+      stat = stat.byLoc?.[locFilter] || {
+        total: 0,
+        R: 0,
+        S: 0,
+        I: 0,
+        pctR: null,
+        pctS: null,
+      };
     }
 
     const rate = currentTrendMetric === "R" ? stat.pctR : stat.pctS;
@@ -2412,7 +2673,7 @@ export function populateLocationOrgDropdown() {
   const optionsHtml = orgList
     .map((o) => {
       const isSelected = o.orgCode === prevValue;
-      return `<option value="${o.orgCode}" ${isSelected ? "selected" : ""}>${escapeHtml(o.orgName)} (${o.orgCode.toUpperCase()}) — ${o.totalCount} isolates</option>`;
+      return `<option value="${escapeHtml(o.orgCode)}" ${isSelected ? "selected" : ""}>${escapeHtml(o.orgName)} (${escapeHtml(o.orgCode.toUpperCase())}) — ${o.totalCount} isolates</option>`;
     })
     .join("");
 
@@ -2607,7 +2868,7 @@ export function renderLocationStratificationChart() {
           return `
           <tr style="border-bottom: 1px solid var(--border);">
             <td style="padding: 8px 12px; font-weight: 600; color: var(--text);">
-              ${escapeHtml(d.name)} <span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px;">(${d.code})</span>${urineBadge}
+              ${escapeHtml(d.name)} <span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px;">(${escapeHtml(d.code)})</span>${urineBadge}
             </td>
             <td style="padding: 8px 10px; color: var(--text3); font-size: 11px;">${escapeHtml(d.class)}</td>
             <td style="padding: 8px 10px; text-align: center; font-family: 'JetBrains Mono', monospace; border-left: 2px solid #6366f1; color: var(--text2);">${d.icu.total || "—"}</td>
@@ -2830,7 +3091,7 @@ export function copyLocationChartData() {
     ];
 
     tsvRows.push(row.join("\t"));
-    htmlRows += `<tr>${row.map((c) => `<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:${typeof c === "number" || (typeof c === "string" && c.endsWith("%")) ? "center" : "left"};">${c}</td>`).join("")}</tr>`;
+    htmlRows += `<tr>${row.map((c) => `<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:${typeof c === "number" || (typeof c === "string" && c.endsWith("%")) ? "center" : "left"};">${escapeHtml(c)}</td>`).join("")}</tr>`;
   }
 
   const tsvText = tsvRows.join("\n");

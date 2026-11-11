@@ -2,6 +2,8 @@
  * Specimen Dictionary & Badge Rendering Utilities
  */
 
+import { escapeHtml } from './formatters.js';
+
 /**
  * Looks up full sample name for a WHONET specimen code.
  * @param {string|null|undefined} code 
@@ -29,11 +31,12 @@ export function renderSpecimenBadge(code, extraStyle = '') {
   const cleanCode = String(code).trim();
   const name = getSpecimenName(cleanCode);
   const rawTitle = name ? `${name} (${cleanCode})` : cleanCode;
-  const safeTitle = rawTitle.replace(/"/g, '&quot;');
-  const safeCode = cleanCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const safeTitle = escapeHtml(rawTitle);
+  const safeCode = escapeHtml(cleanCode);
+  const safeName = escapeHtml(name);
   
   if (!name) {
     return `<span class="badge" title="${safeTitle}" style="${extraStyle}">${safeCode}</span>`;
   }
-  return `<span class="badge" title="${safeTitle}" style="font-weight: 600; ${extraStyle}">${safeCode} <span style="opacity: 0.65; font-size: 11px; font-weight: normal;">· ${name}</span></span>`;
+  return `<span class="badge" title="${safeTitle}" style="font-weight: 600; ${extraStyle}">${safeCode} <span style="opacity: 0.65; font-size: 11px; font-weight: normal;">· ${safeName}</span></span>`;
 }

@@ -1,6 +1,6 @@
 import { state, setRuntimeBadge } from "../state/store.js";
 import { toast } from "../ui/toast.js";
-import { isSqliteDatabase } from "../utils/formatters.js";
+import { isSqliteDatabase, escapeHtml } from "../utils/formatters.js";
 import { getSqlJs, normaliseSchema, wasmSelect } from "./wasm.js";
 import { API_BASE } from "../api/client.js";
 import { parseLabConfig } from "../utils/antibiogram-engine.js";
@@ -298,7 +298,7 @@ export function renderLaunchDbSelect() {
       `<option value="" ${!state.currentDb ? "selected disabled" : ""}>Select file</option>`,
       ...localDbs.map(
         (db) =>
-          `<option value="${db}" ${db === state.currentDb ? "selected" : ""}>${db}</option>`,
+          `<option value="${escapeHtml(db)}" ${db === state.currentDb ? "selected" : ""}>${escapeHtml(db)}</option>`,
       ),
     ];
     sel.innerHTML = wasmOptions.join("");
@@ -337,7 +337,7 @@ export function renderLaunchDbSelect() {
     `<option value="" ${!state.currentDb ? "selected disabled" : ""}>Select file</option>`,
     ...localDbs.map(
       (db) =>
-        `<option value="${db}" ${db === state.currentDb ? "selected" : ""}>${db}</option>`,
+        `<option value="${escapeHtml(db)}" ${db === state.currentDb ? "selected" : ""}>${escapeHtml(db)}</option>`,
     ),
   ];
   sel.innerHTML = localOptions.join("");

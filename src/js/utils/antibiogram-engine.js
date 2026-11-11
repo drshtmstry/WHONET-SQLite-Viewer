@@ -123,7 +123,7 @@ export const TAXON_PARENT_GROUPS = {
   apt: ['ac-', 'acb'],
 
   // Pseudomonas (psd, pae)
-  pae: ['psd'], ppu: ['psd'], pfl: ['psd'], pst: ['psd'],
+  pae: ['psd'], ppu: ['psd'], pfl: ['psd'], psz: ['psd'], 'ps-': ['psd'],
 
   // Streptococci (str, stp)
   spn: ['str', 'stp'], spy: ['str', 'stp'], sag: ['str', 'stp'],
@@ -224,10 +224,43 @@ export function isBlankAstValue(val) {
   return false;
 }
 
+const AST_COL_REGEX = /(_ND\d+|_NM|_NE\d*|_EM|_ED\d+|_EE\d*)$/i;
+const MIC_COL_REGEX = /(_NM|_NE\d*|_EM|_EE\d*)$/i;
+
 /**
- * Interpret a raw AST measurement (zone size mm or MIC)
- * @param {string} orgCode WHONET organism code (e.g. 'sau', 'eco', 'kpn')
- * @param {string} testCol AST Column name (e.g. 'FOX_ND30', 'AMP_ND10', 'VAN_NM')
+ * Extracts and caches interpreted antibiotic results for a single isolate row
+ * across cumulative antibiogram, trends, and location stratification passes.
+ */
+function extractIsolateAbxInterpretations(row, orgCode, customLabConfig = null, cacheMap = null) {
+  if (cacheMap && cacheMap.has(row)) {
+    return cacheMap.get(row);
+  }
+  const rowIsUrine = isUrineSpecimen(row.SPEC_TYPE);
+  const abxEntries = {};
+  for (const [col, val] of Object.entries(row)) {
+    if (AST_COL_REGEX.test(col) && !isBlankAstValue(val)) {
+      const abxCode = col.split('_')[0].toUpperCase();
+      if (URINE_SPECIFIC_ANTIBIOTICS.has(abxCode) && !rowIsUrine) {
+        continue;
+      }
+      const interp = interpretAstValue(orgCode, col, val, customLabConfig);
+      if (interp) {
+        const isMic = MIC_COL_REGEX.test(col);
+        // Prefer MIC over Disk if both present in the same isolate
+        if (!abxEntries[abxCode] || isMic) {
+          abxEntries[abxCode] = { interp, col, isMic };
+        }
+      }
+    }
+  }
+  if (cacheMap) cacheMap.set(row, abxEntries);
+  return abxEntries;
+}
+
+/**
+ * Resolves the clinical interpretation ('S', 'I', 'R', or null) for an isolate's AST test result
+ * @param {string} orgCode Organism code (e.g. 'eco', 'sau')
+ * @param {string} testCol AST Column name (e.g. 'FOX_ND30', 'AMP_ND10', 'VAN_NM', 'VAN_NE32')
  * @param {number|string} rawValue Raw measurement
  * @param {object} [customLabConfig] Optional active lab configuration
  * @returns {'S'|'I'|'R'|null} Clinical interpretation
@@ -235,7 +268,7 @@ export function isBlankAstValue(val) {
 export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = null) {
   if (isBlankAstValue(rawValue)) return null;
 
-  const abxCode = testCol.split('_')[0];
+  const abxCode = testCol.split('_')[0].toUpperCase();
   const orgLower = (orgCode || '').toLowerCase().trim();
 
   // 1. AMRIE Rule: Check Intrinsic Resistance first (ExpectedResistancePhenotypes)
@@ -256,8 +289,8 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
   const numVal = parseFloat(rawStr.replace(/[<>=]/g, '').trim());
   if (isNaN(numVal)) return null;
 
-  // Determine if MIC or Disk Diffusion
-  const isMic = testCol.endsWith('_NM') || testCol.endsWith('_NE') || testCol.endsWith('_EM') || testCol.endsWith('_EE');
+  // Determine if MIC or Disk Diffusion (supports _NM, _NE, _NE32, _EM, _EE, _EE16, etc.)
+  const isMic = MIC_COL_REGEX.test(testCol);
 
   // 2. Resolve Applicable Breakpoint via AMRIE logic
   const bp = getApplicableBreakpoint(orgLower, testCol, customLabConfig);
@@ -282,7 +315,7 @@ export function interpretAstValue(orgCode, testCol, rawValue, customLabConfig = 
 export function hasAstResults(row) {
   if (!row || typeof row !== 'object') return false;
   for (const [col, val] of Object.entries(row)) {
-    if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && !isBlankAstValue(val)) {
+    if (AST_COL_REGEX.test(col) && !isBlankAstValue(val)) {
       return true;
     }
   }
@@ -347,8 +380,13 @@ export function deduplicateFirstIsolates(records, options = {}) {
   const episodeDays = Number(options.episodeDays) > 0 ? Number(options.episodeDays) : 30;
   const customLabConfig = options.customLabConfig || null;
 
-  // Filter out negative results ('xxx', 'xpa', etc.), empty organism, and isolates without AST results (all blank)
-  const validRecords = records.filter(r => !isNegativeOrganismResult(r.ORGANISM) && hasAstResults(r));
+  // Filter out negative results ('xxx', 'xpa', etc.) and empty organism.
+  // Note: patient_first_ast preserves isolates without AST upfront so fallbackMap can rescue
+  // patients whose only isolate lacks AST results.
+  const nonNegativeRecords = records.filter(r => !isNegativeOrganismResult(r.ORGANISM) && (r.ORGANISM || '').trim() !== '');
+  const validRecords = mode === 'patient_first_ast'
+    ? nonNegativeRecords
+    : nonNegativeRecords.filter(r => hasAstResults(r));
 
   // 1. By isolate: No deduplication — include all non-negative isolate records with AST results
   if (mode === 'isolate') {
@@ -369,7 +407,11 @@ export function deduplicateFirstIsolates(records, options = {}) {
     for (const rec of sorted) {
       const patId = (rec.PATIENT_ID || '').trim().toLowerCase();
       const org = (rec.ORGANISM || '').trim().toLowerCase();
-      if (!patId || !org || isNegativeOrganismResult(org)) {
+      if (!org || isNegativeOrganismResult(org)) {
+        continue;
+      }
+      if (!patId) {
+        result.push(rec);
         continue;
       }
       const key = `${patId}|${org}`;
@@ -625,6 +667,7 @@ export function isUrineSpecimen(specType) {
 export function calculateCumulativeAntibiogram(isolates, options = {}) {
   const minIsolates = options.minIsolates !== undefined ? options.minIsolates : 30;
   const customLabConfig = options.customLabConfig || null;
+  const astCache = options._astCache || new Map();
 
   const testColsSet = new Set();
   const orgMap = {};
@@ -648,35 +691,12 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
     }
     orgMap[orgCode].totalCount++;
 
-    const rowIsUrine = isUrineSpecimen(row.SPEC_TYPE);
-
-    // Track tested antibiotics for this isolate to prevent double-counting across disk & MIC
-    const abxEntriesThisRow = {};
-
-    for (const [col, val] of Object.entries(row)) {
-      if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && !isBlankAstValue(val)) {
-        const abxCode = col.split('_')[0].toUpperCase();
-
-        // CLSI M39 Section 5.3: Urinary tract agents (e.g., Nitrofurantoin, Norfloxacin)
-        // must ONLY be calculated from urinary isolates!
-        if (URINE_SPECIFIC_ANTIBIOTICS.has(abxCode) && !rowIsUrine) {
-          continue;
-        }
-
-        const interp = interpretAstValue(orgCode, col, val, customLabConfig);
-        if (interp) {
-          testColsSet.add(col);
-          const isMic = col.endsWith('_NM') || col.endsWith('_NE') || col.endsWith('_EM') || col.endsWith('_EE');
-          // Prefer MIC over Disk if both present in the same isolate
-          if (!abxEntriesThisRow[abxCode] || isMic) {
-            abxEntriesThisRow[abxCode] = { interp, col };
-          }
-        }
-      }
-    }
+    // Single-pass AST interpretation (cached across trends & location passes)
+    const abxEntriesThisRow = extractIsolateAbxInterpretations(row, orgCode, customLabConfig, astCache);
 
     // Record at most ONE test result per antibiotic per isolate
     for (const [abxCode, entry] of Object.entries(abxEntriesThisRow)) {
+      testColsSet.add(entry.col);
       if (!orgMap[orgCode].tested[abxCode]) {
         orgMap[orgCode].tested[abxCode] = { total: 0, S: 0, I: 0, R: 0, intrinsic: false };
       }
@@ -771,8 +791,9 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
     isUrineOnly: URINE_SPECIFIC_ANTIBIOTICS.has(code)
   })).sort((a, b) => a.name.localeCompare(b.name));
 
-  const trends = calculateAmrTrends(isolates, options);
-  const locations = calculateLocationStratification(isolates, options);
+  const sharedOptions = options._astCache ? options : { ...options, _astCache: astCache };
+  const trends = calculateAmrTrends(isolates, sharedOptions);
+  const locations = calculateLocationStratification(isolates, sharedOptions);
 
   return {
     organisms,
@@ -803,12 +824,33 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
  */
 export function calculateAmrTrends(isolates, options = {}) {
   const customLabConfig = options.customLabConfig || null;
+  const astCache = options._astCache || null;
 
   const monthMap = new Map();
 
   const ENTEROBACTERALES = new Set(['eco', 'kpn', 'kox', 'ecl', 'eca', 'eae', 'ccl', 'cfr', 'pmi', 'pvu', 'mor', 'sma', 'ebc']);
   const CARBAPENEMS = new Set(['MEM', 'IPM', 'ETP', 'DOR']);
   const CEPH_34 = new Set(['CRO', 'CTX', 'CAZ', 'FEP']);
+
+  const createIndicatorBucket = () => ({
+    total: 0,
+    R: 0,
+    S: 0,
+    I: 0,
+    byLoc: {
+      icu: { total: 0, R: 0, S: 0, I: 0 },
+      inpatient: { total: 0, R: 0, S: 0, I: 0 },
+      outpatient: { total: 0, R: 0, S: 0, I: 0 }
+    }
+  });
+
+  const recordOutcome = (bucket, locKey, outcome) => {
+    bucket.total++;
+    bucket[outcome]++;
+    const locBucket = bucket.byLoc[locKey];
+    locBucket.total++;
+    locBucket[outcome]++;
+  };
 
   for (const row of isolates) {
     const orgCode = (row.ORGANISM || '').trim().toLowerCase();
@@ -822,13 +864,13 @@ export function calculateAmrTrends(isolates, options = {}) {
     if (!monthMap.has(monthKey)) {
       monthMap.set(monthKey, {
         month: monthKey,
-        mrsa: { total: 0, R: 0, S: 0, I: 0 },
-        cre: { total: 0, R: 0, S: 0, I: 0 },
-        esbl: { total: 0, R: 0, S: 0, I: 0 },
-        crab: { total: 0, R: 0, S: 0, I: 0 },
-        crpa: { total: 0, R: 0, S: 0, I: 0 },
-        vre: { total: 0, R: 0, S: 0, I: 0 },
-        fq_gn: { total: 0, R: 0, S: 0, I: 0 },
+        mrsa: createIndicatorBucket(),
+        cre: createIndicatorBucket(),
+        esbl: createIndicatorBucket(),
+        crab: createIndicatorBucket(),
+        crpa: createIndicatorBucket(),
+        vre: createIndicatorBucket(),
+        fq_gn: createIndicatorBucket(),
         locations: {
           icu: { total: 0, resistant: 0 },
           inpatient: { total: 0, resistant: 0 },
@@ -845,30 +887,17 @@ export function calculateAmrTrends(isolates, options = {}) {
     const isOutpatient = wardTypeLower === 'out' || wardLower.includes('opd') || wardLower.includes('out') || wardLower.includes('clinic');
     const locKey = isIcu ? 'icu' : (isOutpatient ? 'outpatient' : 'inpatient');
 
-    const rowIsUrine = isUrineSpecimen(row.SPEC_TYPE);
-
+    const abxEntries = extractIsolateAbxInterpretations(row, orgCode, customLabConfig, astCache);
     const abxInterps = {};
-    for (const [col, val] of Object.entries(row)) {
-      if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && !isBlankAstValue(val)) {
-        const abxCode = col.split('_')[0].toUpperCase();
-        if (URINE_SPECIFIC_ANTIBIOTICS.has(abxCode) && !rowIsUrine) continue;
-
-        const interp = interpretAstValue(orgCode, col, val, customLabConfig);
-        if (interp) {
-          const isMic = col.endsWith('_NM') || col.endsWith('_NE') || col.endsWith('_EM') || col.endsWith('_EE');
-          if (!abxInterps[abxCode] || isMic) {
-            abxInterps[abxCode] = interp;
-          }
-        }
-      }
+    for (const [abxCode, entry] of Object.entries(abxEntries)) {
+      abxInterps[abxCode] = entry.interp;
     }
 
     // 1. MRSA: Staphylococcus aureus ('sau') vs Cefoxitin ('FOX') or Oxacillin ('OXA')
     if (orgCode === 'sau') {
       const foxInterp = abxInterps['FOX'] || abxInterps['OXA'];
       if (foxInterp) {
-        mData.mrsa.total++;
-        mData.mrsa[foxInterp]++;
+        recordOutcome(mData.mrsa, locKey, foxInterp);
         mData.locations[locKey].total++;
         if (foxInterp === 'R') mData.locations[locKey].resistant++;
       }
@@ -887,11 +916,8 @@ export function calculateAmrTrends(isolates, options = {}) {
         }
       }
       if (testedCarbapenem) {
-        mData.cre.total++;
-        if (isResistant) mData.cre.R++;
-        else if (hasInterm) mData.cre.I++;
-        else mData.cre.S++;
-
+        const outcome = isResistant ? 'R' : (hasInterm ? 'I' : 'S');
+        recordOutcome(mData.cre, locKey, outcome);
         mData.locations[locKey].total++;
         if (isResistant) mData.locations[locKey].resistant++;
       }
@@ -910,10 +936,8 @@ export function calculateAmrTrends(isolates, options = {}) {
         }
       }
       if (testedCeph) {
-        mData.esbl.total++;
-        if (isResistant) mData.esbl.R++;
-        else if (hasInterm) mData.esbl.I++;
-        else mData.esbl.S++;
+        const outcome = isResistant ? 'R' : (hasInterm ? 'I' : 'S');
+        recordOutcome(mData.esbl, locKey, outcome);
       }
     }
 
@@ -921,8 +945,7 @@ export function calculateAmrTrends(isolates, options = {}) {
     if (orgCode === 'aba' || orgCode === 'ac-') {
       const memInterp = abxInterps['MEM'] || abxInterps['IPM'];
       if (memInterp) {
-        mData.crab.total++;
-        mData.crab[memInterp]++;
+        recordOutcome(mData.crab, locKey, memInterp);
       }
     }
 
@@ -930,8 +953,7 @@ export function calculateAmrTrends(isolates, options = {}) {
     if (orgCode === 'pae') {
       const memInterp = abxInterps['MEM'] || abxInterps['IPM'];
       if (memInterp) {
-        mData.crpa.total++;
-        mData.crpa[memInterp]++;
+        recordOutcome(mData.crpa, locKey, memInterp);
       }
     }
 
@@ -939,8 +961,7 @@ export function calculateAmrTrends(isolates, options = {}) {
     if (orgCode === 'efa' || orgCode === 'efm' || orgCode === 'enc') {
       const vanInterp = abxInterps['VAN'];
       if (vanInterp) {
-        mData.vre.total++;
-        mData.vre[vanInterp]++;
+        recordOutcome(mData.vre, locKey, vanInterp);
       }
     }
 
@@ -948,8 +969,7 @@ export function calculateAmrTrends(isolates, options = {}) {
     if (ENTEROBACTERALES.has(orgCode) || orgCode === 'aba' || orgCode === 'pae') {
       const fqInterp = abxInterps['CIP'] || abxInterps['LVX'];
       if (fqInterp) {
-        mData.fq_gn.total++;
-        mData.fq_gn[fqInterp]++;
+        recordOutcome(mData.fq_gn, locKey, fqInterp);
       }
     }
 
@@ -957,10 +977,9 @@ export function calculateAmrTrends(isolates, options = {}) {
     for (const [abxCode, interp] of Object.entries(abxInterps)) {
       const pairKey = `${orgCode}:${abxCode}`;
       if (!mData.pairs[pairKey]) {
-        mData.pairs[pairKey] = { total: 0, R: 0, S: 0, I: 0 };
+        mData.pairs[pairKey] = createIndicatorBucket();
       }
-      mData.pairs[pairKey].total++;
-      mData.pairs[pairKey][interp]++;
+      recordOutcome(mData.pairs[pairKey], locKey, interp);
     }
   }
 
@@ -968,8 +987,10 @@ export function calculateAmrTrends(isolates, options = {}) {
 
   const monthlyList = sortedMonths.map(mKey => {
     const d = monthMap.get(mKey);
-    const computePct = (st) => {
-      if (!st || st.total === 0) return { pctR: null, pctS: null, pctI: null, total: 0, R: 0, S: 0, I: 0 };
+    const computeCounts = (st) => {
+      if (!st || st.total === 0) {
+        return { pctR: null, pctS: null, pctI: null, total: 0, R: 0, S: 0, I: 0 };
+      }
       return {
         total: st.total,
         R: st.R,
@@ -980,6 +1001,23 @@ export function calculateAmrTrends(isolates, options = {}) {
         pctI: Math.round((st.I / st.total) * 100)
       };
     };
+
+    const computePct = (st) => {
+      const base = computeCounts(st);
+      if (st?.byLoc) {
+        base.byLoc = {
+          icu: computeCounts(st.byLoc.icu),
+          inpatient: computeCounts(st.byLoc.inpatient),
+          outpatient: computeCounts(st.byLoc.outpatient)
+        };
+      }
+      return base;
+    };
+
+    const serializedPairs = {};
+    for (const [pk, pb] of Object.entries(d.pairs)) {
+      serializedPairs[pk] = computePct(pb);
+    }
 
     return {
       month: mKey,
@@ -998,7 +1036,7 @@ export function calculateAmrTrends(isolates, options = {}) {
         outpatient: d.locations.outpatient.total > 0 ? Math.round((d.locations.outpatient.resistant / d.locations.outpatient.total) * 100) : null,
         outpatientTotal: d.locations.outpatient.total
       },
-      pairs: d.pairs
+      pairs: serializedPairs
     };
   });
 
@@ -1021,6 +1059,7 @@ export function calculateAmrTrends(isolates, options = {}) {
  */
 export function calculateLocationStratification(isolates, options = {}) {
   const customLabConfig = options.customLabConfig || null;
+  const astCache = options._astCache || null;
   const combinedIntrinsic = { ...intrinsicMap, ...(customLabConfig?.resourceIntrinsicMap || {}) };
 
   const byOrg = {};
@@ -1069,31 +1108,15 @@ export function calculateLocationStratification(isolates, options = {}) {
     else if (locKey === 'outpatient') orgEntry.outpatientCount++;
     else orgEntry.inpatientCount++;
 
-    const rowIsUrine = isUrineSpecimen(row.SPEC_TYPE);
-    const abxEntriesThisRow = {};
-
-    for (const [col, val] of Object.entries(row)) {
-      if (/(_ND\d+|_NM|_NE\d+|_ED\d+|_EE\d+)$/.test(col) && !isBlankAstValue(val)) {
-        const abxCode = col.split('_')[0].toUpperCase();
-        if (URINE_SPECIFIC_ANTIBIOTICS.has(abxCode) && !rowIsUrine) continue;
-
-        const interp = interpretAstValue(orgCode, col, val, customLabConfig);
-        if (interp) {
-          const isMic = col.endsWith('_NM') || col.endsWith('_NE') || col.endsWith('_EM') || col.endsWith('_EE');
-          if (!abxEntriesThisRow[abxCode] || isMic) {
-            abxEntriesThisRow[abxCode] = interp;
-          }
-        }
-      }
-    }
+    const abxEntriesThisRow = extractIsolateAbxInterpretations(row, orgCode, customLabConfig, astCache);
 
     const locTested = orgEntry.tested[locKey];
-    for (const [abxCode, interp] of Object.entries(abxEntriesThisRow)) {
+    for (const [abxCode, entry] of Object.entries(abxEntriesThisRow)) {
       if (!locTested[abxCode]) {
         locTested[abxCode] = { total: 0, S: 0, I: 0, R: 0, intrinsic: false };
       }
       locTested[abxCode].total++;
-      locTested[abxCode][interp]++;
+      locTested[abxCode][entry.interp]++;
     }
   }
 

@@ -6,16 +6,22 @@
 import { state } from '../state/store.js';
 import { wasmSelect, wasmRun, normaliseSchema } from '../db/wasm.js';
 import { deduplicateFirstIsolates, calculateCumulativeAntibiogram } from '../utils/antibiogram-engine.js';
-
-// Single source of truth for editable fields (mirrors server.js EDITABLE_FIELDS)
-const EDITABLE_FIELDS = [
-  'SPEC_NUM', 'PATIENT_ID', 'SPEC_DATE', 'SPEC_TYPE', 'ORGANISM',
-  'FULL_NAME', 'SEX', 'AGE', 'WARD', 'DEPARTMENT', 'INSTITUT',
-  'DATE_ADMIS', 'DATE_DATA', 'COMMENT', 'ESBL', 'CARBAPENEM',
-  'MRSA', 'URINECOUNT', 'SEROTYPE', 'BETA_LACT', 'INDUC_CLI'
-];
-
-const WASM_CUSTOM_SQL_ROW_LIMIT = 10000;
+import {
+  CUSTOM_SQL_ROW_LIMIT,
+  classifySqlStatement,
+  buildIsolatesQuery,
+  buildDuplicatesQuery,
+  buildChartDataQuery,
+  buildDeleteDuplicatesQuery,
+  buildUpdateFieldQuery,
+  buildUpdateRowQuery,
+  buildDateProfileQueries,
+  buildAntibiogramDateExclusionQuery
+} from '../db/query-core.js';
+import {
+  analyzeDateProfile,
+  suggestSurveillancePeriods
+} from '../utils/date-profile.js';
 
 export function handleWasmApi(path, options = {}) {
   try {
@@ -60,11 +66,29 @@ export function handleWasmApi(path, options = {}) {
       const specimens = cols.includes('SPEC_TYPE')
         ? wasmSelect("SELECT DISTINCT SPEC_TYPE FROM Isolates WHERE SPEC_TYPE IS NOT NULL AND SPEC_TYPE != '' ORDER BY SPEC_TYPE").map(r => r.SPEC_TYPE)
         : [];
-      const months = cols.includes('SPEC_DATE')
-        ? wasmSelect("SELECT DISTINCT SUBSTR(SPEC_DATE, 1, 7) as ym FROM Isolates WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7 AND SUBSTR(SPEC_DATE, 1, 7) GLOB '[1-2][0-9][0-9][0-9]-[0-1][0-9]' AND SUBSTR(SPEC_DATE, 6, 2) BETWEEN '01' AND '12' ORDER BY ym DESC").map(r => r.ym)
+      const dpQueries = buildDateProfileQueries(cols);
+      const auditRow = wasmSelect(dpQueries.auditSql)[0] || {};
+      const monthRows = dpQueries.monthCountsSql ? wasmSelect(dpQueries.monthCountsSql) : [];
+      const anomalySamples = dpQueries.anomalySamplesSql
+        ? wasmSelect(dpQueries.anomalySamplesSql, dpQueries.anomalyParams)
         : [];
 
-      return { total, dupRows, dupGroups, dupPtRows, dupPtGroups, organisms, wards, wardTypes, specimens, months };
+      const dateProfile = analyzeDateProfile({
+        totalRows: auditRow.totalRows ?? total,
+        missingCount: auditRow.missingCount ?? 0,
+        malformedCount: auditRow.malformedCount ?? 0,
+        monthRows,
+        anomalySamples,
+      });
+      const suggestedPeriods = suggestSurveillancePeriods(dateProfile);
+
+      const plausibleMonths = dateProfile.monthCounts.filter((m) => m.isPlausible).map((m) => m.ym);
+      const months = plausibleMonths.length > 0
+        ? plausibleMonths
+        : dateProfile.monthCounts.map((m) => m.ym);
+      const maxDate = dateProfile.maxValidDate || null;
+
+      return { total, dupRows, dupGroups, dupPtRows, dupPtGroups, organisms, wards, wardTypes, specimens, months, maxDate, dateProfile, suggestedPeriods };
     }
 
     if (pathname === '/api/schema') {
@@ -81,211 +105,41 @@ export function handleWasmApi(path, options = {}) {
     }
 
     if (pathname === '/api/isolates') {
-      const page = parseInt(url.searchParams.get('page') || '1', 10);
-      const pageSize = parseInt(url.searchParams.get('pageSize') || '25', 10);
-      const search = (url.searchParams.get('search') || '').trim();
-      const organism = (url.searchParams.get('organism') || '').trim();
-      const ward = (url.searchParams.get('ward') || '').trim();
-      const month = (url.searchParams.get('month') || '').trim();
-      const specimen = (url.searchParams.get('specimen') || url.searchParams.get('specType') || '').trim();
-      const offset = (page - 1) * pageSize;
-
-      const ALLOWED_ISOLATE_COLS = {
-        ROW_IDX: 'ROW_IDX',
-        SPEC_NUM: 'SPEC_NUM',
-        SPEC_DATE: 'SPEC_DATE',
-        SPEC_TYPE: 'SPEC_TYPE',
-        ORGANISM: 'ORGANISM',
-        FULL_NAME: 'FULL_NAME',
-        SEX: 'SEX',
-        AGE: 'AGE',
-        WARD: 'WARD',
-        DEPARTMENT: 'DEPARTMENT',
-        ESBL: 'ESBL',
-        CARBAPENEM: 'CARBAPENEM',
-        MRSA: 'MRSA'
-      };
-      const rawSortCol = (url.searchParams.get('sortCol') || 'ROW_IDX').toUpperCase();
-      const sortCol = ALLOWED_ISOLATE_COLS[rawSortCol] || 'ROW_IDX';
-      const rawSortDir = (url.searchParams.get('sortDir') || 'DESC').toUpperCase();
-      const sortDir = rawSortDir === 'ASC' ? 'ASC' : 'DESC';
-
-      const orderClause = sortCol === 'ROW_IDX'
-        ? `ORDER BY ROW_IDX ${sortDir}`
-        : `ORDER BY CASE WHEN ${sortCol} IS NULL OR ${sortCol} = '' THEN 1 ELSE 0 END, NATURAL_KEY(${sortCol}) ${sortDir}, ROW_IDX DESC`;
-
       const cols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
-      const upperCols = cols.map(c => c.toUpperCase());
-      const colExpr = (name, fallback = "NULL") => cols.includes(name) ? name : `${fallback} AS ${name}`;
-
-      let whereClauses = [];
-      let params = [];
-      if (search) {
-        const searchParts = [];
-        if (upperCols.includes('SPEC_NUM')) searchParts.push('UPPER(SPEC_NUM) LIKE ?');
-        if (upperCols.includes('PATIENT_ID')) searchParts.push('UPPER(PATIENT_ID) LIKE ?');
-        if (upperCols.includes('FULL_NAME')) searchParts.push('UPPER(FULL_NAME) LIKE ?');
-        if (searchParts.length) {
-          whereClauses.push(`(${searchParts.join(' OR ')})`);
-          const s = `%${search.toUpperCase()}%`;
-          for (let i = 0; i < searchParts.length; i++) params.push(s);
-        }
-      }
-      if (organism && upperCols.includes('ORGANISM')) {
-        whereClauses.push("ORGANISM = ?");
-        params.push(organism);
-      }
-      if (ward && upperCols.includes('WARD')) {
-        whereClauses.push("WARD = ?");
-        params.push(ward);
-      }
-      if (month && upperCols.includes('SPEC_DATE')) {
-        whereClauses.push("SUBSTR(SPEC_DATE, 1, 7) = ?");
-        params.push(month);
-      }
-      if (specimen && upperCols.includes('SPEC_TYPE')) {
-        whereClauses.push("LOWER(SPEC_TYPE) = LOWER(?)");
-        params.push(specimen);
-      }
-      const whereSql = whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : '';
-
-      const countSql = `SELECT COUNT(*) as c FROM Isolates ${whereSql}`;
-      const totalCount = wasmSelect(countSql, params)[0]?.c || 0;
-
-      const rowsSql = `
-        SELECT ${colExpr('ROW_IDX', 'rowid')},
-               ${colExpr('PATIENT_ID', "''")},
-               ${colExpr('SPEC_NUM', "''")},
-               ${colExpr('SPEC_DATE', "''")},
-               ${colExpr('SPEC_TYPE', "''")},
-               ${colExpr('ORGANISM', "''")},
-               ${colExpr('FULL_NAME', "''")},
-               ${colExpr('SEX', "''")},
-               ${colExpr('AGE', "''")},
-               ${colExpr('WARD', "''")},
-               ${colExpr('DEPARTMENT', "''")},
-               ${colExpr('ESBL')},
-               ${colExpr('CARBAPENEM')},
-               ${colExpr('MRSA')}
-        FROM Isolates
-        ${whereSql}
-        ${orderClause}
-        LIMIT ${pageSize} OFFSET ${offset}
-      `;
-      const rows = wasmSelect(rowsSql, params);
-      return { rows, totalCount, page, pageSize, sortCol, sortDir };
+      const q = buildIsolatesQuery({
+        cols,
+        page: parseInt(url.searchParams.get('page') || '1', 10),
+        pageSize: parseInt(url.searchParams.get('pageSize') || '25', 10),
+        search: url.searchParams.get('search') || '',
+        organism: url.searchParams.get('organism') || '',
+        ward: url.searchParams.get('ward') || '',
+        month: url.searchParams.get('month') || '',
+        specimen: url.searchParams.get('specimen') || url.searchParams.get('specType') || '',
+        sortCol: url.searchParams.get('sortCol') || 'ROW_IDX',
+        sortDir: url.searchParams.get('sortDir') || 'DESC'
+      });
+      const totalCount = wasmSelect(q.countSql, q.params)[0]?.c || 0;
+      const rows = wasmSelect(q.rowsSql, q.params);
+      return { rows, totalCount, page: q.page, pageSize: q.pageSize, sortCol: q.sortCol, sortDir: q.sortDir };
     }
 
     if (pathname === '/api/duplicates') {
-      const page = parseInt(url.searchParams.get('page') || '1', 10);
-      const pageSize = parseInt(url.searchParams.get('pageSize') || '50', 10);
-      const mode = (url.searchParams.get('mode') || 'spec').toLowerCase();
-      const search = (url.searchParams.get('search') || '').trim();
-      const offset = (page - 1) * pageSize;
-
       const dupCols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
-      const upperCols = dupCols.map(c => c.toUpperCase());
-      const hasSpecNum = upperCols.includes('SPEC_NUM');
-      const hasPatientId = upperCols.includes('PATIENT_ID');
-      const hasFullName = upperCols.includes('FULL_NAME');
-      const hasRowIdx = upperCols.includes('ROW_IDX');
-      const rowIdxExpr = hasRowIdx ? 'ROW_IDX' : 'rowid';
-
-      const groupCol = mode === 'patient'
-        ? (hasPatientId ? 'UPPER(PATIENT_ID)' : "''")
-        : (hasSpecNum ? 'UPPER(SPEC_NUM)' : "''");
-      const notEmptyCond = mode === 'patient'
-        ? (hasPatientId ? "PATIENT_ID IS NOT NULL AND PATIENT_ID != ''" : "0")
-        : (hasSpecNum ? "SPEC_NUM IS NOT NULL AND SPEC_NUM != ''" : "0");
-
-      let searchCond = '';
-      let params = [];
-      if (search) {
-        if (hasFullName) {
-          searchCond = `AND (${groupCol} LIKE ? OR UPPER(FULL_NAME) LIKE ?)`;
-          params.push(`%${search.toUpperCase()}%`, `%${search.toUpperCase()}%`);
-        } else {
-          searchCond = `AND (${groupCol} LIKE ?)`;
-          params.push(`%${search.toUpperCase()}%`);
-        }
-      }
-
-      const ALLOWED_DUP_COLS = {
-        ROW_IDX: rowIdxExpr,
-        MATCHED: groupCol,
-        OTHER: mode === 'patient'
-          ? (hasSpecNum ? 'UPPER(SPEC_NUM)' : "''")
-          : (hasPatientId ? 'UPPER(PATIENT_ID)' : "''"),
-        SPEC_NUM: hasSpecNum ? 'SPEC_NUM' : "''",
-        PATIENT_ID: hasPatientId ? 'PATIENT_ID' : "''",
-        FULL_NAME: hasFullName ? 'FULL_NAME' : "''",
-        SPEC_DATE: upperCols.includes('SPEC_DATE') ? 'SPEC_DATE' : "''",
-        SPEC_TYPE: upperCols.includes('SPEC_TYPE') ? 'SPEC_TYPE' : "''",
-        ORGANISM: upperCols.includes('ORGANISM') ? 'ORGANISM' : "''",
-        SEX: upperCols.includes('SEX') ? 'SEX' : "''",
-        AGE: upperCols.includes('AGE') ? 'AGE' : "''",
-        WARD: upperCols.includes('WARD') ? 'WARD' : "''"
-      };
-      const rawDupSort = url.searchParams.get('sortCol')?.toUpperCase();
-      const dupSortExpr = ALLOWED_DUP_COLS[rawDupSort] || null;
-      const rawDupDir = (url.searchParams.get('sortDir') || 'ASC').toUpperCase();
-      const dupSortDir = rawDupDir === 'DESC' ? 'DESC' : 'ASC';
-
-      let orderClause = `ORDER BY NATURAL_KEY(${groupCol}), row_num`;
-      if (dupSortExpr) {
-        if (rawDupSort === 'MATCHED') {
-          orderClause = `ORDER BY NATURAL_KEY(${groupCol}) ${dupSortDir}, row_num`;
-        } else {
-          const clusterAgg = dupSortDir === 'DESC' ? 'MAX' : 'MIN';
-          const clusterValExpr = `${clusterAgg}(NATURAL_KEY(${dupSortExpr})) OVER (PARTITION BY ${groupCol})`;
-          orderClause = `ORDER BY 
-            CASE WHEN ${clusterValExpr} IS NULL OR ${clusterValExpr} = '' THEN 1 ELSE 0 END,
-            ${clusterValExpr} ${dupSortDir},
-            NATURAL_KEY(${groupCol}),
-            CASE WHEN ${dupSortExpr} IS NULL OR ${dupSortExpr} = '' THEN 1 ELSE 0 END,
-            NATURAL_KEY(${dupSortExpr}) ${dupSortDir},
-            row_num`;
-        }
-      }
-
-      const dupColExpr = (name, fallback = "NULL") => dupCols.includes(name) ? name : `${fallback} AS ${name}`;
-
-      const dupSql = `
-        WITH RankedIsolates AS (
-          SELECT *,
-                 ROW_NUMBER() OVER (PARTITION BY ${groupCol} ORDER BY ${rowIdxExpr}) AS row_num,
-                 COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
-          FROM Isolates
-          WHERE ${notEmptyCond}
-        )
-        SELECT ${dupColExpr('ROW_IDX', 'rowid')},
-               ${dupColExpr('PATIENT_ID', "''")},
-               ${dupColExpr('SPEC_DATE', "''")},
-               ${dupColExpr('SPEC_NUM', "''")},
-               ${dupColExpr('SPEC_TYPE', "''")},
-               ${dupColExpr('ORGANISM', "''")},
-               ${dupColExpr('FULL_NAME', "''")},
-               ${dupColExpr('SEX', "''")},
-               ${dupColExpr('AGE', "''")},
-               ${dupColExpr('WARD', "''")},
-               ${dupColExpr('DEPARTMENT', "''")},
-               row_num, total_duplicates
-        FROM RankedIsolates
-        WHERE total_duplicates > 1 ${searchCond}
-        ${orderClause}
-        LIMIT ${pageSize} OFFSET ${offset}
-      `;
-      const rows = wasmSelect(dupSql, params);
-
-      const countSql = `
-        SELECT COUNT(*) as c FROM (
-          SELECT ${rowIdxExpr}, COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
-          FROM Isolates
-          WHERE ${notEmptyCond}
-        ) WHERE total_duplicates > 1 ${searchCond}
-      `;
-      const totalCount = wasmSelect(countSql, params)[0]?.c || 0;
-      return { rows, totalCount, page, pageSize, mode };
+      const q = buildDuplicatesQuery({
+        cols: dupCols,
+        page: parseInt(url.searchParams.get('page') || '1', 10),
+        pageSize: parseInt(url.searchParams.get('pageSize') || '50', 10),
+        mode: url.searchParams.get('mode') || 'spec',
+        search: url.searchParams.get('search') || '',
+        sortCol: url.searchParams.get('sortCol') || '',
+        sortDir: url.searchParams.get('sortDir') || 'ASC'
+      });
+      const rows = wasmSelect(q.rowsSql, q.params);
+      const totalCount = wasmSelect(q.countSql, q.params)[0]?.c || 0;
+      const hasMixedCaseSpecNum = q.mixedCaseSql
+        ? (wasmSelect(q.mixedCaseSql)[0]?.c || 0) > 0
+        : false;
+      return { rows, totalCount, page: q.page, pageSize: q.pageSize, mode: q.mode, hasMixedCaseSpecNum };
     }
 
     if (pathname.startsWith('/api/isolate/')) {
@@ -317,35 +171,10 @@ export function handleWasmApi(path, options = {}) {
 
     if (pathname === '/api/delete-duplicates') {
       const { spec_num, patient_id, mode } = body;
-      const dupCols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name.toUpperCase());
-      const hasSpecNum = dupCols.includes('SPEC_NUM');
-      const hasPatientId = dupCols.includes('PATIENT_ID');
-      const hasRowIdx = dupCols.includes('ROW_IDX');
-      const rowIdxCol = hasRowIdx ? 'ROW_IDX' : 'rowid';
-
-      let sql = '';
-      if (mode === 'patient' && hasPatientId) {
-        sql = `DELETE FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' AND ${rowIdxCol} NOT IN (
-          SELECT MIN(${rowIdxCol}) FROM Isolates WHERE PATIENT_ID IS NOT NULL AND PATIENT_ID != '' GROUP BY UPPER(PATIENT_ID)
-        )`;
-      } else if (patient_id && hasPatientId) {
-        const safe = patient_id.replace(/'/g, "''");
-        sql = `DELETE FROM Isolates WHERE ${rowIdxCol} NOT IN (
-          SELECT MIN(${rowIdxCol}) FROM Isolates WHERE UPPER(PATIENT_ID) = UPPER('${safe}')
-        ) AND UPPER(PATIENT_ID) = UPPER('${safe}')`;
-      } else if (spec_num && hasSpecNum) {
-        const safe = spec_num.replace(/'/g, "''");
-        sql = `DELETE FROM Isolates WHERE ${rowIdxCol} NOT IN (
-          SELECT MIN(${rowIdxCol}) FROM Isolates WHERE UPPER(SPEC_NUM) = UPPER('${safe}')
-        ) AND UPPER(SPEC_NUM) = UPPER('${safe}')`;
-      } else if (hasSpecNum) {
-        sql = `DELETE FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' AND ${rowIdxCol} NOT IN (
-          SELECT MIN(${rowIdxCol}) FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' GROUP BY UPPER(SPEC_NUM)
-        )`;
-      } else {
-        return { ok: true, changes: 0 };
-      }
-      const res = wasmRun(sql);
+      const dupCols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
+      const q = buildDeleteDuplicatesQuery({ cols: dupCols, spec_num, patient_id, mode });
+      if (q.noop) return { ok: true, changes: 0 };
+      const res = wasmRun(q.sql, q.params);
       return { ok: true, changes: res.changes };
     }
 
@@ -400,42 +229,40 @@ export function handleWasmApi(path, options = {}) {
 
     if (pathname === '/api/update-field') {
       const { row_idx, field, value } = body;
-      if (!EDITABLE_FIELDS.includes(field)) return { error: 'Field not editable' };
-      const res = wasmRun(`UPDATE Isolates SET ${field} = ? WHERE ROW_IDX = ?`, [value, row_idx]);
+      const tableCols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
+      const q = buildUpdateFieldQuery({ tableCols, rowIdx: row_idx, field, value });
+      if (q.error) return { error: q.error };
+      const res = wasmRun(q.sql, q.params);
       return { ok: true, changes: res.changes };
     }
 
     if (pathname === '/api/update-row') {
       const { row_idx, fields } = body;
-      if (!row_idx || !fields) return { error: 'Missing row_idx or fields' };
-      const updates = [];
-      const params = [];
-      for (const [key, val] of Object.entries(fields)) {
-        if (EDITABLE_FIELDS.includes(key)) {
-          updates.push(`${key} = ?`);
-          params.push(val);
-        }
-      }
-      if (!updates.length) return { ok: true, changes: 0 };
-      params.push(row_idx);
-      const res = wasmRun(`UPDATE Isolates SET ${updates.join(', ')} WHERE ROW_IDX = ?`, params);
+      const tableCols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
+      const q = buildUpdateRowQuery({ tableCols, rowIdx: row_idx, fields });
+      if (q.error) return { error: q.error };
+      if (q.noop) return { ok: true, changes: 0 };
+      const res = wasmRun(q.sql, q.params);
       return { ok: true, changes: res.changes };
     }
 
     if (pathname === '/api/custom-sql') {
       const { sql } = body;
-      if (!sql || !sql.trim()) return { error: 'Empty SQL' };
-      const trimmed = sql.trim().toUpperCase();
-      if (trimmed.startsWith('SELECT') || trimmed.startsWith('WITH')) {
+      if (!sql || !String(sql).trim()) return { error: 'Empty SQL' };
+      const info = classifySqlStatement(sql);
+      if (!info.stripped) return { error: 'Empty SQL' };
+      if (info.hasMultipleStatements) {
+        return { error: 'Only a single SQL statement is allowed per execution' };
+      }
+      if (info.isReadOnly) {
         const rows = wasmSelect(sql);
-        const truncated = rows.length >= WASM_CUSTOM_SQL_ROW_LIMIT;
-        const limited = truncated ? rows.slice(0, WASM_CUSTOM_SQL_ROW_LIMIT) : rows;
+        const truncated = rows.length > CUSTOM_SQL_ROW_LIMIT;
+        const limited = truncated ? rows.slice(0, CUSTOM_SQL_ROW_LIMIT) : rows;
         const columns = limited.length > 0 ? Object.keys(limited[0]) : [];
         return { type: 'select', rows: limited, columns, count: limited.length, truncated };
-      } else {
-        const res = wasmRun(sql);
-        return { type: 'update', changes: res.changes };
       }
+      const res = wasmRun(sql);
+      return { type: 'update', changes: res.changes };
     }
 
     if (pathname === '/api/monthly-amr') {
@@ -531,77 +358,30 @@ export function handleWasmApi(path, options = {}) {
     }
 
     if (pathname === '/api/chart-data') {
-      const param = (url.searchParams.get('param') || 'ORGANISM').toUpperCase();
+      const param = url.searchParams.get('param') || 'ORGANISM';
       const period = url.searchParams.get('period') || 'all';
       const startDate = url.searchParams.get('startDate') || '';
       const endDate = url.searchParams.get('endDate') || '';
 
-      const whereClauses = [];
-      const params = [];
+      const cols = wasmSelect("PRAGMA table_info(Isolates)").map(c => c.name);
+      const maxDateRow = (!startDate && !endDate && period !== 'all')
+        ? wasmSelect("SELECT MAX(SPEC_DATE) as m FROM Isolates WHERE SPEC_DATE IS NOT NULL AND SPEC_DATE != ''")[0]
+        : null;
 
-      if (startDate) {
-        whereClauses.push("SPEC_DATE >= ?");
-        params.push(startDate);
-      }
-      if (endDate) {
-        whereClauses.push("SPEC_DATE <= ?");
-        params.push(endDate);
-      }
-
-      if (!startDate && !endDate && period !== 'all') {
-        const maxDateRow = wasmSelect("SELECT MAX(SPEC_DATE) as m FROM Isolates WHERE SPEC_DATE IS NOT NULL AND SPEC_DATE != ''")[0];
-        if (maxDateRow && maxDateRow.m) {
-          const maxD = new Date(maxDateRow.m.substring(0, 10));
-          if (!isNaN(maxD.getTime())) {
-            let monthsBack = 3;
-            if (period === '6m') monthsBack = 6;
-            if (period === '12m') monthsBack = 12;
-            const cutoff = new Date(maxD);
-            cutoff.setMonth(cutoff.getMonth() - monthsBack);
-            const cutoffStr = cutoff.toISOString().substring(0, 10);
-            whereClauses.push("SPEC_DATE >= ?");
-            params.push(cutoffStr);
-          }
-        }
-      }
-
-      let selectExpr = param;
-      if (param === 'AGE_GROUP') {
-        selectExpr = `
-          CASE
-            WHEN CAST(AGE AS INTEGER) < 1 THEN '<1 yr'
-            WHEN CAST(AGE AS INTEGER) BETWEEN 1 AND 12 THEN '1-12 yrs'
-            WHEN CAST(AGE AS INTEGER) BETWEEN 13 AND 25 THEN '13-25 yrs'
-            WHEN CAST(AGE AS INTEGER) BETWEEN 26 AND 45 THEN '26-45 yrs'
-            WHEN CAST(AGE AS INTEGER) BETWEEN 46 AND 65 THEN '46-65 yrs'
-            WHEN CAST(AGE AS INTEGER) > 65 THEN '>65 yrs'
-            ELSE 'Unknown'
-          END
-        `;
-      }
-
-      const whereSql = whereClauses.length
-        ? `WHERE ${selectExpr} IS NOT NULL AND ${selectExpr} != '' AND ` + whereClauses.join(' AND ')
-        : `WHERE ${selectExpr} IS NOT NULL AND ${selectExpr} != ''`;
-
-      const querySql = `
-        SELECT ${selectExpr} as label, COUNT(*) as count
-        FROM Isolates
-        ${whereSql}
-        GROUP BY label
-        ORDER BY count DESC
-        LIMIT 15
-      `;
-
-      const rows = wasmSelect(querySql, params);
-      const totalFiltered = wasmSelect(`SELECT COUNT(*) as c FROM Isolates ${whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : ''}`, params)[0]?.c || 0;
-
-      return {
+      const q = buildChartDataQuery({
         param,
         period,
-        totalFiltered,
-        rows
-      };
+        startDate,
+        endDate,
+        maxDate: maxDateRow?.m || null,
+        cols
+      });
+      if (q.error) return { error: q.error };
+      if (q.empty) return { param: q.param, period: q.period, totalFiltered: 0, rows: [] };
+
+      const rows = wasmSelect(q.querySql, q.params);
+      const totalFiltered = wasmSelect(q.totalSql, q.params)[0]?.c || 0;
+      return { param: q.param, period: q.period, totalFiltered, rows };
     }
 
     if (pathname === '/api/antibiogram') {
@@ -641,20 +421,41 @@ export function handleWasmApi(path, options = {}) {
         where.push('LOWER(SPEC_TYPE) = LOWER(?)');
         params.push(specFilter);
       }
-      if (startDate) {
-        where.push("SUBSTR(COALESCE(SPEC_DATE, DATE_DATA, ''), 1, 10) >= ?");
-        params.push(startDate);
-      }
-      if (endDate) {
-        where.push("SUBSTR(COALESCE(SPEC_DATE, DATE_DATA, ''), 1, 10) <= ?");
-        params.push(endDate);
-      }
-
       // Exclude negative culture / non-pathogen / no growth results (e.g. 'xxx', 'xpa', 'xxp')
       where.push("LOWER(COALESCE(ORGANISM, '')) NOT LIKE 'x%' AND COALESCE(ORGANISM, '') != ''");
 
+      const nonDateWhereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+      const nonDateParams = [...params];
+
+      if (startDate) {
+        where.push("SUBSTR(TRIM(COALESCE(SPEC_DATE, DATE_DATA, '')), 1, 10) >= ?");
+        params.push(startDate);
+      }
+      if (endDate) {
+        where.push("SUBSTR(TRIM(COALESCE(SPEC_DATE, DATE_DATA, '')), 1, 10) <= ?");
+        params.push(endDate);
+      }
+
       const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
       const rawIsolates = wasmSelect(`SELECT * FROM Isolates ${whereClause}`, params);
+
+      let excludedUndated = 0;
+      let excludedOutsideRange = 0;
+      if (startDate || endDate) {
+        const tableCols = wasmSelect('PRAGMA table_info(Isolates)').map((c) => c.name);
+        const exclQ = buildAntibiogramDateExclusionQuery({
+          cols: tableCols,
+          nonDateWhereClause,
+          nonDateParams,
+          startDate,
+          endDate,
+        });
+        if (exclQ) {
+          const exclRow = wasmSelect(exclQ.sql, exclQ.params)[0] || {};
+          excludedUndated = Number(exclRow.excludedUndated) || 0;
+          excludedOutsideRange = Number(exclRow.excludedOutsideRange) || 0;
+        }
+      }
 
       const filteredIsolates = deduplicateFirstIsolates(rawIsolates, {
         mode: dedupMode,
@@ -674,6 +475,8 @@ export function handleWasmApi(path, options = {}) {
       report.totalRawIsolates = rawIsolates.length;
       report.startDate = startDate || null;
       report.endDate = endDate || null;
+      report.excludedUndated = excludedUndated;
+      report.excludedOutsideRange = excludedOutsideRange;
 
       return report;
     }

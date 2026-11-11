@@ -53,21 +53,24 @@ export async function viewDetail(rowIdx) {
       <div class="detail-grid">
         ${fields.map(([key, label]) => {
           const editable = EDITABLE.includes(key);
-          let valDisplay = r[key] || '<span style="color:var(--text3)">—</span>';
-          if (key === 'ORGANISM' && r[key]) {
-            const orgName = getOrganismName(r[key]);
+          const rawVal = r[key];
+          let valDisplay = (rawVal !== null && rawVal !== undefined && rawVal !== '')
+            ? escapeHtml(rawVal)
+            : '<span style="color:var(--text3)">—</span>';
+          if (key === 'ORGANISM' && rawVal) {
+            const orgName = getOrganismName(rawVal);
             if (orgName) {
-              valDisplay = `${r[key]} <span style="font-size:12px;color:var(--text3);font-weight:normal">(${orgName})</span>`;
+              valDisplay = `${escapeHtml(rawVal)} <span style="font-size:12px;color:var(--text3);font-weight:normal">(${escapeHtml(orgName)})</span>`;
             }
           }
-          if (key === 'SPEC_TYPE' && r[key]) {
-            const specName = getSpecimenName(r[key]);
+          if (key === 'SPEC_TYPE' && rawVal) {
+            const specName = getSpecimenName(rawVal);
             if (specName) {
-              valDisplay = `${r[key]} <span style="font-size:12px;color:var(--text3);font-weight:normal">(${specName})</span>`;
+              valDisplay = `${escapeHtml(rawVal)} <span style="font-size:12px;color:var(--text3);font-weight:normal">(${escapeHtml(specName)})</span>`;
             }
           }
           return `<div class="detail-field ${editable ? 'editable' : ''}">
-            <label>${label}</label>
+            <label>${escapeHtml(label)}</label>
             ${editable
               ? `<div class="field-val" id="fv-${rowIdx}-${key}" onclick="startEdit(${rowIdx},'${key}')">${valDisplay}</div>`
               : `<div class="field-val">${valDisplay}</div>`}
@@ -75,10 +78,10 @@ export async function viewDetail(rowIdx) {
         }).join('')}
       </div>
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;">
-        <button class="btn btn-ghost btn-sm" onclick="closeModal();openEditModal(${r.ROW_IDX})">
+        <button class="btn btn-ghost btn-sm" onclick="closeModal();openEditModal(${parseInt(r.ROW_IDX, 10)})">
           <i class="fa-solid fa-pen-to-square"></i> Edit All Fields
         </button>
-        <button class="btn btn-danger btn-sm" onclick="confirmDeleteRow(${r.ROW_IDX}, ${escapeHtml(JSON.stringify(r.SPEC_NUM || ''))});closeModal()">
+        <button class="btn btn-danger btn-sm" onclick="confirmDeleteRow(${parseInt(r.ROW_IDX, 10)}, ${escapeHtml(JSON.stringify(r.SPEC_NUM || ''))});closeModal()">
           Delete This Record
         </button>
       </div>
@@ -127,9 +130,9 @@ export async function saveEdit(rowIdx, field) {
   const el = document.getElementById(`fv-${rowIdx}-${field}`);
   if (data.error) {
     toast(data.error, 'error');
-    if (el) el.innerHTML = value || '<span style="color:var(--text3)">—</span>';
+    if (el) el.innerHTML = value ? escapeHtml(value) : '<span style="color:var(--text3)">—</span>';
   } else {
-    if (el) el.innerHTML = value || '<span style="color:var(--text3)">—</span>';
+    if (el) el.innerHTML = value ? escapeHtml(value) : '<span style="color:var(--text3)">—</span>';
     toast(`${field} updated`, 'success');
     notifyDataMutated('single-field');
   }
@@ -186,8 +189,8 @@ export function closeEditModal() {
 export async function saveEditModal(e) {
   if (e && e.preventDefault) e.preventDefault();
   const rowIdxEl = document.getElementById('edit-row-idx');
-  const rowIdx = rowIdxEl ? parseInt(rowIdxEl.value, 10) : 0;
-  if (!rowIdx) return;
+  const rowIdx = rowIdxEl && rowIdxEl.value !== '' ? parseInt(rowIdxEl.value, 10) : NaN;
+  if (isNaN(rowIdx)) return;
 
   const saveBtn = document.getElementById('edit-save-btn');
   if (saveBtn) saveBtn.disabled = true;

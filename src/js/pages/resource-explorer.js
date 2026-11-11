@@ -60,9 +60,8 @@ export async function initResourceExplorer() {
   resState.isLoading = true;
 
   try {
-    const timestamp = Date.now();
-    // 1. Fetch metadata & lookup tables
-    const metaRes = await fetch(`/resources/metadata.json?v=${timestamp}`, { cache: 'no-cache' });
+    // 1. Fetch metadata & lookup tables (relying on normal browser/server HTTP caching)
+    const metaRes = await fetch('/resources/metadata.json');
     if (!metaRes.ok) throw new Error('Failed to load metadata.json');
     resState.metadata = await metaRes.json();
 
@@ -71,9 +70,9 @@ export async function initResourceExplorer() {
 
     // 2. Fetch Expert Rules, Intrinsic Rules, and Breakpoints
     const [expRes, intRes, bpRes] = await Promise.all([
-      fetch(`/resources/expert-rules.json?v=${timestamp}`, { cache: 'no-cache' }),
-      fetch(`/resources/intrinsic-rules.json?v=${timestamp}`, { cache: 'no-cache' }),
-      fetch(`/resources/breakpoints.json?v=${timestamp}`, { cache: 'no-cache' })
+      fetch('/resources/expert-rules.json'),
+      fetch('/resources/intrinsic-rules.json'),
+      fetch('/resources/breakpoints.json')
     ]);
 
     if (!expRes.ok || !intRes.ok || !bpRes.ok) {

@@ -1,6 +1,7 @@
 /**
  * Table Rendering & Pagination UI Helpers
  */
+import { escapeHtml } from '../utils/formatters.js';
 
 /**
  * Generates an HTML sortable table header (<th>).
@@ -32,9 +33,11 @@ export function renderSortHeader(label, column, activeCol, activeDir, onClickFnN
     extraClass = ' ' + classMatch[1];
     cleanedAttrs = extraThAttrs.replace(/class=["'][^"']+["']/i, '').trim();
   }
-  return `<th scope="col" role="columnheader" aria-sort="${ariaSort}" tabindex="0" class="sortable${sortedClass}${extraClass}" onclick="${onClickFnName}('${column}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${onClickFnName}('${column}');}" title="Click to sort by ${label} (${nextDir})" ${cleanedAttrs}>
+  const safeColArg = escapeHtml(JSON.stringify(String(column)));
+  const safeLabel = escapeHtml(label);
+  return `<th scope="col" role="columnheader" aria-sort="${ariaSort}" tabindex="0" class="sortable${sortedClass}${extraClass}" onclick="${onClickFnName}(${safeColArg})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${onClickFnName}(${safeColArg});}" title="Click to sort by ${safeLabel} (${nextDir})" ${cleanedAttrs}>
     <div class="th-sort-content">
-      <span>${label}</span>
+      <span>${safeLabel}</span>
       ${iconHtml}
     </div>
   </th>`;

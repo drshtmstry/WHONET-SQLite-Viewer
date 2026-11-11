@@ -140,30 +140,31 @@ export function renderIsolatesTable(rows) {
     ${rows.map(r => {
       const fullName = (r.FULL_NAME || '').trim() || '—';
       const safeFullName = escapeHtml(fullName);
-      const safeSpecNum = escapeHtml(JSON.stringify(r.SPEC_NUM || ''));
       const safeSpecNumAttr = escapeHtml(r.SPEC_NUM || '');
-      const ageSex = formatAgeSex(r.AGE, r.SEX);
+      const safeAgeSex = escapeHtml(formatAgeSex(r.AGE, r.SEX));
+      const safeDate = escapeHtml(fmtDate(r.SPEC_DATE));
+      const rowIdxNum = parseInt(r.ROW_IDX, 10);
       return `<tr>
-      <td class="mono">${r.ROW_IDX}</td>
+      <td class="mono">${rowIdxNum}</td>
       <td class="mono">${escapeHtml(r.SPEC_NUM || '—')}</td>
       <td class="pt-name col-name" title="${safeFullName}"><span class="cell-truncate">${safeFullName}</span></td>
-      <td class="col-agesex">${ageSex}</td>
-      <td>${fmtDate(r.SPEC_DATE)}</td>
+      <td class="col-agesex">${safeAgeSex}</td>
+      <td>${safeDate}</td>
       <td>${renderSpecimenBadge(r.SPEC_TYPE)}</td>
       <td>${renderOrgBadge(r.ORGANISM)}</td>
       <td>${escapeHtml(r.WARD || '—')}</td>
-      ${showEsbl ? `<td>${r.ESBL ? `<span class="badge badge-${r.ESBL === '+' ? 'r' : 's'}">${r.ESBL}</span>` : '—'}</td>` : ''}
-      ${showCarba ? `<td>${r.CARBAPENEM ? `<span class="badge badge-${r.CARBAPENEM === '+' ? 'r' : 's'}">${r.CARBAPENEM}</span>` : '—'}</td>` : ''}
-      ${showMrsa ? `<td>${r.MRSA ? `<span class="badge badge-${r.MRSA === '+' ? 'r' : 's'}">${r.MRSA}</span>` : '—'}</td>` : ''}
+      ${showEsbl ? `<td>${r.ESBL ? `<span class="badge badge-${r.ESBL === '+' ? 'r' : 's'}">${escapeHtml(r.ESBL)}</span>` : '—'}</td>` : ''}
+      ${showCarba ? `<td>${r.CARBAPENEM ? `<span class="badge badge-${r.CARBAPENEM === '+' ? 'r' : 's'}">${escapeHtml(r.CARBAPENEM)}</span>` : '—'}</td>` : ''}
+      ${showMrsa ? `<td>${r.MRSA ? `<span class="badge badge-${r.MRSA === '+' ? 'r' : 's'}">${escapeHtml(r.MRSA)}</span>` : '—'}</td>` : ''}
       <td class="col-actions">
         <div class="row-actions-group">
-          <button type="button" class="btn btn-ghost btn-icon-sm" data-action="edit" data-row-idx="${r.ROW_IDX}" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
+          <button type="button" class="btn btn-ghost btn-icon-sm" data-action="edit" data-row-idx="${rowIdxNum}" title="Edit / correct this isolate" aria-label="Edit isolate">
             <i class="fa-solid fa-pen-to-square"></i>
           </button>
-          <button type="button" class="btn btn-ghost btn-icon-sm" data-action="view" data-row-idx="${r.ROW_IDX}" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
+          <button type="button" class="btn btn-ghost btn-icon-sm" data-action="view" data-row-idx="${rowIdxNum}" title="View isolate details" aria-label="View isolate details">
             <i class="fa-solid fa-eye"></i>
           </button>
-          <button type="button" class="btn btn-danger btn-icon-sm" data-action="delete" data-row-idx="${r.ROW_IDX}" data-spec-num="${safeSpecNumAttr}" onclick="confirmDeleteRow(${r.ROW_IDX}, ${safeSpecNum})" title="Delete this isolate" aria-label="Delete isolate">
+          <button type="button" class="btn btn-danger btn-icon-sm" data-action="delete" data-row-idx="${rowIdxNum}" data-spec-num="${safeSpecNumAttr}" title="Delete this isolate" aria-label="Delete isolate">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </div>

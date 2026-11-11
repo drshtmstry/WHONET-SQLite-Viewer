@@ -86,7 +86,7 @@ export function getCaretPixelPos(textarea, caretIndex) {
 
   document.body.appendChild(mirror);
   const top = span.offsetTop - textarea.scrollTop;
-  const left = span.offsetLeft - textarea.scrollTop;
+  const left = span.offsetLeft - textarea.scrollLeft;
   document.body.removeChild(mirror);
 
   return { top, left };
@@ -365,7 +365,7 @@ export function renderSqlResultTable() {
 
   tableEl.innerHTML = `<table>
     <thead><tr>
-      ${columns.map(c => renderSortHeader(escapeHtml(c), c.replace(/'/g, "\\'"), sortCol, sortDir, 'sortSqlTable')).join('')}
+      ${columns.map(c => renderSortHeader(c, c, sortCol, sortDir, 'sortSqlTable')).join('')}
     </tr></thead>
     <tbody>${rows.slice(0, 500).map(r =>
       `<tr>${columns.map(c => `<td>${escapeHtml(r[c] !== null && r[c] !== undefined ? String(r[c]) : '—')}</td>`).join('')}</tr>`

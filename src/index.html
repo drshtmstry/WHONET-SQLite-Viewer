@@ -62,13 +62,7 @@
     <!-- WHONET Specimen Code Dictionary -->
     <script src="/specimens.js"></script>
     <!-- Chart.js for dynamic surveillance analytics -->
-    <script
-      src="/chart.umd.min.js"
-      onerror="
-        this.onerror = null;
-        this.src = '/chart.umd.min.js';
-      "
-    ></script>
+    <script src="/chart.umd.min.js"></script>
   </head>
 
   <body>
@@ -1728,6 +1722,25 @@
                       title="Filter by Specimen Type"
                     >
                       <option value="" selected>All Specimens</option>
+                    </select>
+                  </div>
+
+                  <!-- Dataset-Aware Surveillance Period Selector -->
+                  <div class="chart-control-group" style="margin: 0">
+                    <select
+                      id="abx-toolbar-period-select"
+                      class="chart-filter-select"
+                      onchange="setAntibiogramPeriodPreset(this.value)"
+                      style="
+                        min-width: 185px;
+                        max-width: 260px;
+                        height: 32px;
+                        font-size: 12px;
+                        padding: 0 28px 0 10px;
+                      "
+                      title="Surveillance Period (auto-suggested from dataset dates: Annual, Semi-Annual H1/H2, Quarterly)"
+                    >
+                      <option value="all" selected>Entire File (All Dates)</option>
                     </select>
                   </div>
                 </div>
@@ -3858,7 +3871,7 @@
                       color: var(--text2);
                       margin-bottom: 4px;
                     "
-                    >Preset Range</label
+                    >Preset Range (Auto-Suggested)</label
                   >
                   <select
                     id="abx-modal-period-preset"
@@ -3866,13 +3879,23 @@
                     style="width: 100%; height: 32px"
                     onchange="handleModalPeriodPreset(this.value)"
                   >
-                    <option value="all" selected>All Surveillance Dates</option>
-                    <option value="1y">Last 1 Year (CLSI M39)</option>
-                    <option value="6m">Last 6 Months</option>
-                    <option value="90d">Last 90 Days</option>
-                    <option value="30d">Last 30 Days</option>
+                    <option value="all" selected>Entire File (All Dates)</option>
+                    <option value="custom">Custom Date Range</option>
                   </select>
                 </div>
+                <div
+                  id="abx-modal-date-insight"
+                  style="
+                    display: none;
+                    font-size: 11px;
+                    line-height: 1.4;
+                    padding: 6px 9px;
+                    border-radius: 5px;
+                    background: var(--bg3);
+                    border: 1px solid var(--border);
+                    color: var(--text2);
+                  "
+                ></div>
                 <div
                   style="
                     display: grid;
@@ -3896,6 +3919,7 @@
                       type="date"
                       id="abx-modal-start-date"
                       class="chart-filter-select"
+                      onchange="handleModalDateInputChange()"
                       style="
                         width: 100%;
                         height: 32px;
@@ -3920,6 +3944,7 @@
                       type="date"
                       id="abx-modal-end-date"
                       class="chart-filter-select"
+                      onchange="handleModalDateInputChange()"
                       style="
                         width: 100%;
                         height: 32px;
@@ -4588,7 +4613,6 @@
       </div>
     </div>
 
-    <script src="/organisms.js"></script>
     <script type="module" src="js/main.js"></script>
     <script>
       // Register Service Worker for PWA (Vercel / web deployments)

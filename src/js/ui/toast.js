@@ -1,6 +1,7 @@
 /**
  * Toast Notification System
  */
+import { escapeHtml } from '../utils/formatters.js';
 
 const ICONS = {
   success: '<i class="fa-solid fa-check"></i>',
@@ -17,7 +18,7 @@ const ICONS = {
 export function toast(msg, type = 'info') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.innerHTML = `<span>${ICONS[type] || ICONS.info}</span> ${msg}`;
+  el.innerHTML = `<span>${ICONS[type] || ICONS.info}</span> ${escapeHtml(msg)}`;
   
   const container = document.getElementById('toast-container');
   if (container) {

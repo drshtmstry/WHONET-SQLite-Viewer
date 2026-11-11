@@ -79,32 +79,10 @@ export async function loadDuplicates(page = 1) {
   const sortCol = state.dupSortCol || "";
   const sortDir = state.dupSortDir || "asc";
 
-  // Check for mixed-case SPEC_NUMs and show/hide warning banner
+  // Hide casing warning while reloading
   if (casingBanner) casingBanner.style.display = "none";
   if (dupBody) {
     dupBody.innerHTML = '<div class="loading"><div class="spinner"></div>Finding duplicate records…</div>';
-  }
-
-  let hasMixedCase = false;
-  try {
-    const casingCheck = await api("/api/custom-sql", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sql: "SELECT COUNT(*) as c FROM Isolates WHERE SPEC_NUM != UPPER(SPEC_NUM) AND SPEC_NUM != ''",
-      }),
-    });
-    if (!casingCheck?.error) {
-      hasMixedCase = (casingCheck?.rows?.[0]?.c || 0) > 0;
-    }
-  } catch (_) {}
-
-  if (datasetVersion !== state.datasetVersion || databaseName !== state.currentDb || !state.currentDb) {
-    if (casingBanner) casingBanner.style.display = "none";
-    return;
-  }
-  if (casingBanner) {
-    casingBanner.style.display = (hasMixedCase && state.currentDb) ? "flex" : "none";
   }
 
   const data = await api(
@@ -112,6 +90,10 @@ export async function loadDuplicates(page = 1) {
   );
   if (datasetVersion !== state.datasetVersion || databaseName !== state.currentDb) return;
   if (data.error) return toast(data.error, "error");
+
+  if (casingBanner) {
+    casingBanner.style.display = (data.hasMixedCaseSpecNum && state.currentDb) ? "flex" : "none";
+  }
 
   const modeLabel = mode === "patient" ? "Patient ID" : "Specimen ID";
   const groupCount = Object.keys(groupRows(data.rows, mode)).length;
@@ -211,12 +193,13 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
               mode === "patient" ? r.PATIENT_ID || "—" : r.SPEC_NUM || "—";
             const otherVal =
               mode === "patient" ? r.SPEC_NUM || "—" : r.PATIENT_ID || "—";
-            const safeSpecNum = escapeHtml(JSON.stringify(r.SPEC_NUM || ''));
             const safeSpecNumAttr = escapeHtml(r.SPEC_NUM || '');
             const fullName = r.FULL_NAME || '—';
             const specType = r.SPEC_TYPE || '—';
             const ward = r.WARD || '—';
-            const ageSex = formatAgeSex(r.AGE, r.SEX);
+            const safeAgeSex = escapeHtml(formatAgeSex(r.AGE, r.SEX));
+            const safeDate = escapeHtml(fmtDate(r.SPEC_DATE));
+            const rowIdxNum = parseInt(r.ROW_IDX, 10);
 
             const safeMatchedVal = escapeHtml(matchedVal);
             const safeOtherVal = escapeHtml(otherVal);
@@ -227,26 +210,26 @@ export function renderDuplicatesTable(rows, mode = state.dupMode) {
             return `
             <tr class="dup-row ${clusterClass} ${startClass}">
               <td class="col-check" style="text-align: center;">
-                <input type="checkbox" class="dup-row-check" value="${r.ROW_IDX}" onchange="updateDupSelectedState()" />
+                <input type="checkbox" class="dup-row-check" value="${rowIdxNum}" onchange="updateDupSelectedState()" />
               </td>
-              <td class="mono col-row" style="color:var(--text3);font-size:11px">#${r.ROW_IDX}</td>
+              <td class="mono col-row" style="color:var(--text3);font-size:11px">#${rowIdxNum}</td>
               <td class="mono col-matched" style="font-size:11.5px;font-weight:700;color:var(--accent)" title="${safeMatchedVal}"><span class="cell-truncate">${safeMatchedVal}</span></td>
               <td class="mono col-other" style="font-size:11.5px;color:var(--text2)" title="${safeOtherVal}"><span class="cell-truncate">${safeOtherVal}</span></td>
               <td class="pt-name col-name" title="${safeFullName}"><span class="cell-truncate">${safeFullName}</span></td>
-              <td class="col-agesex">${ageSex}</td>
-              <td class="col-date" style="white-space:nowrap;font-size:11.5px">${fmtDate(r.SPEC_DATE)}</td>
+              <td class="col-agesex">${safeAgeSex}</td>
+              <td class="col-date" style="white-space:nowrap;font-size:11.5px">${safeDate}</td>
               <td class="col-type" title="${safeSpecType}"><span class="cell-truncate">${safeSpecType}</span></td>
               <td class="col-org">${renderOrgBadge(r.ORGANISM)}</td>
               <td class="col-ward" title="${safeWard}"><span class="cell-truncate">${safeWard}</span></td>
               <td class="col-actions" style="text-align: right; white-space: nowrap;">
                 <div class="dup-actions-group row-actions-group">
-                  <button type="button" class="btn btn-ghost btn-icon-sm" data-action="edit" data-row-idx="${r.ROW_IDX}" onclick="openEditModal(${r.ROW_IDX})" title="Edit / correct this isolate" aria-label="Edit isolate">
+                  <button type="button" class="btn btn-ghost btn-icon-sm" data-action="edit" data-row-idx="${rowIdxNum}" title="Edit / correct this isolate" aria-label="Edit isolate">
                     <i class="fa-solid fa-pen-to-square"></i>
                   </button>
-                  <button type="button" class="btn btn-ghost btn-icon-sm" data-action="view" data-row-idx="${r.ROW_IDX}" onclick="viewDetail(${r.ROW_IDX})" title="View isolate details" aria-label="View isolate details">
+                  <button type="button" class="btn btn-ghost btn-icon-sm" data-action="view" data-row-idx="${rowIdxNum}" title="View isolate details" aria-label="View isolate details">
                     <i class="fa-solid fa-eye"></i>
                   </button>
-                  <button type="button" class="btn btn-danger btn-icon-sm" data-action="delete" data-row-idx="${r.ROW_IDX}" data-spec-num="${safeSpecNumAttr}" onclick="confirmDeleteRow(${r.ROW_IDX}, ${safeSpecNum})" title="Delete this isolate" aria-label="Delete isolate">
+                  <button type="button" class="btn btn-danger btn-icon-sm" data-action="delete" data-row-idx="${rowIdxNum}" data-spec-num="${safeSpecNumAttr}" title="Delete this isolate" aria-label="Delete isolate">
                     <i class="fa-solid fa-trash-can"></i>
                   </button>
                 </div>

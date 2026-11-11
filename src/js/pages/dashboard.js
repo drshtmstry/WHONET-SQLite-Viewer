@@ -2,6 +2,7 @@ import {
   state,
   setRuntimeBadge,
   updateCurrentFileDisplay,
+  resetModified,
 } from "../state/store.js";
 import { api, API_BASE } from "../api/client.js";
 import { toast } from "../ui/toast.js";
@@ -13,10 +14,23 @@ import {
   escapeHtml,
 } from "../utils/formatters.js";
 import { getSqlJs, wasmSelect, normaliseSchema } from "../db/wasm.js";
+import { refreshAntibiogramPeriodControls } from "./antibiogram.js";
 
 let barChartInstance = null;
 let pieChartInstance = null;
 let currentChartDisplayMode = "both";
+
+function closeActiveWasmDb() {
+  if (state.wasmDb) {
+    try {
+      state.wasmDb.close();
+    } catch (_) {}
+  }
+  state.wasmDb = null;
+  state.activeFileHandle = null;
+  state._schemaNormalised = false;
+  resetModified();
+}
 
 function markDatabaseActivated() {
   state.datasetVersion += 1;
@@ -70,7 +84,7 @@ export async function loadStats() {
         .map((o) => {
           const name = getOrganismName(o);
           const label = name ? `${o} — ${name}` : o;
-          return `<option value="${o}">${label}</option>`;
+          return `<option value="${escapeHtml(o)}">${escapeHtml(label)}</option>`;
         })
         .join("");
   }
@@ -79,7 +93,7 @@ export async function loadStats() {
   if (wardFilter && data.wards) {
     wardFilter.innerHTML =
       '<option value="">All Wards</option>' +
-      data.wards.map((w) => `<option value="${w}">${w}</option>`).join("");
+      data.wards.map((w) => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join("");
   }
 
   const isoSpecFilter = document.getElementById("isolates-spec-filter");
@@ -91,7 +105,7 @@ export async function loadStats() {
         .map((s) => {
           const name = getSpecimenName(s);
           const label = name ? `${name} (${s})` : s;
-          return `<option value="${s}">${label}</option>`;
+          return `<option value="${escapeHtml(s)}">${escapeHtml(label)}</option>`;
         })
         .join("");
     if (currentVal && data.specimens.includes(currentVal)) {
@@ -108,7 +122,7 @@ export async function loadStats() {
         .map((s) => {
           const name = getSpecimenName(s);
           const label = name ? `${name} (${s})` : s;
-          return `<option value="${s}">${label}</option>`;
+          return `<option value="${escapeHtml(s)}">${escapeHtml(label)}</option>`;
         })
         .join("");
     if (currentVal && data.specimens.includes(currentVal)) {
@@ -124,7 +138,7 @@ export async function loadStats() {
       data.wardTypes
         .map((wt) => {
           const label = formatWardTypeLabel(wt);
-          return `<option value="${escapeHtml(wt)}">${label}</option>`;
+          return `<option value="${escapeHtml(wt)}">${escapeHtml(label)}</option>`;
         })
         .join("");
     if (currentVal && data.wardTypes.includes(currentVal)) {
@@ -144,12 +158,15 @@ export async function loadStats() {
     monthFilter.innerHTML =
       '<option value="">All Months</option>' +
       validMonths
-        .map((m) => `<option value="${m}">${formatAmrMonthLabel(m)}</option>`)
+        .map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(formatAmrMonthLabel(m))}</option>`)
         .join("");
     if (currentVal && validMonths.includes(currentVal)) {
       monthFilter.value = currentVal;
     }
   }
+
+  // Sync dataset-aware Antibiogram period presets (Annual / H1 / H2 / Q1-Q4)
+  refreshAntibiogramPeriodControls();
 
   // Organisms list — built with createElement to avoid XSS from organism codes
   const orgListEl = document.getElementById("org-list");
@@ -485,7 +502,7 @@ export function renderDbSelector() {
     `<option value="" ${!state.currentDb ? "selected disabled" : ""}>Select file</option>`,
     ...state.databases.map(
       (db) =>
-        `<option value="${db}" ${db === state.currentDb ? "selected" : ""}>${db}</option>`,
+        `<option value="${escapeHtml(db)}" ${db === state.currentDb ? "selected" : ""}>${escapeHtml(db)}</option>`,
     ),
   ];
   sel.innerHTML = options.join("");
@@ -509,17 +526,9 @@ export async function closeCurrentDatabase() {
     if (result.error)
       return toast(`Could not close database: ${result.error}`, "error");
   }
-  if (state.wasmDb) {
-    try {
-      state.wasmDb.close();
-    } catch (_) {}
-  }
+  closeActiveWasmDb();
   state.datasetVersion += 1;
   state.currentDb = null;
-  state.wasmDb = null;
-  state.activeFileHandle = null;
-  state.isModified = false;
-  state._schemaNormalised = false;
   state.stats = {};
   const saveBtn = document.getElementById("btn-save-file");
   if (saveBtn) saveBtn.style.display = "none";
@@ -608,14 +617,9 @@ export async function loadSampleDatabase(sampleFilename) {
     }
 
     const candidateUrls = [
-      new URL(
-        `../../sample-data/${encodeURIComponent(sampleFilename)}`,
-        import.meta.url,
-      ).href,
       `/sample-data/${encodeURIComponent(sampleFilename)}`,
       `sample-data/${encodeURIComponent(sampleFilename)}`,
       `/public/sample-data/${encodeURIComponent(sampleFilename)}`,
-      `/src/sample-data/${encodeURIComponent(sampleFilename)}`,
     ];
 
     let res = null;
@@ -644,10 +648,10 @@ export async function loadSampleDatabase(sampleFilename) {
     const SQL = await getSqlJs();
     const db = new SQL.Database(uInt8Array);
 
+    closeActiveWasmDb();
     state.isWasmMode = true;
     state.wasmDb = db;
     state.currentDb = sampleFilename;
-    state._schemaNormalised = false; // Reset so normaliseSchema runs on the new DB
     markDatabaseActivated();
     if (!state.databases.includes(sampleFilename)) {
       state.databases.push(sampleFilename);
@@ -655,6 +659,8 @@ export async function loadSampleDatabase(sampleFilename) {
 
     setRuntimeBadge("In-Browser Engine (Client-side)", false);
 
+    const saveBtn = document.getElementById("btn-save-file");
+    if (saveBtn) saveBtn.style.display = "none";
     const dlBtn = document.getElementById("btn-download-db");
     if (dlBtn) dlBtn.style.display = "inline-flex";
 
@@ -729,14 +735,13 @@ export async function handleFileUpload(file, fileHandle = null) {
     const uInt8Array = new Uint8Array(arrayBuffer);
     const db = new SQL.Database(uInt8Array);
 
+    closeActiveWasmDb();
     state.isWasmMode = true;
     state.wasmDb = db;
     state.currentDb = file.name;
-    state._schemaNormalised = false; // Reset so normaliseSchema runs on the new DB
     markDatabaseActivated();
     state.activeFileHandle = fileHandle;
     state.fileHandles[file.name] = fileHandle || file;
-    state.isModified = false;
     state._lastFileMtime = file.lastModified || Date.now();
 
     if (!state.databases.includes(file.name)) {

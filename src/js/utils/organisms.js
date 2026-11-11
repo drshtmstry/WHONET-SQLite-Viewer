@@ -2,6 +2,8 @@
  * Organism Dictionary & Badge Rendering Utilities
  */
 
+import { escapeHtml } from './formatters.js';
+
 /**
  * Looks up full scientific name for a WHONET organism code.
  * @param {string|number|null|undefined} code 
@@ -29,7 +31,7 @@ export function renderOrgBadge(code, extraStyle = '') {
   const cleanCode = String(code).trim();
   const name = getOrganismName(cleanCode);
   const rawTitle = name ? `${name} (${cleanCode})` : cleanCode;
-  const safeTitle = rawTitle.replace(/"/g, '&quot;');
-  const safeCode = cleanCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const safeTitle = escapeHtml(rawTitle);
+  const safeCode = escapeHtml(cleanCode);
   return `<span class="badge badge-org" title="${safeTitle}" style="${extraStyle}">${safeCode}</span>`;
 }

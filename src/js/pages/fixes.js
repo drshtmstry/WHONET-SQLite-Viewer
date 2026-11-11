@@ -1,6 +1,7 @@
 import { api } from '../api/client.js';
 import { toast } from '../ui/toast.js';
 import { state } from '../state/store.js';
+import { escapeHtml } from '../utils/formatters.js';
 
 export async function bulkFix(op) {
   const data = await api('/api/bulk-fix', {
@@ -19,10 +20,10 @@ export async function bulkFix(op) {
     item.innerHTML = `
       <span style="color:var(--green);font-size:16px"><i class="fa-solid fa-check"></i></span>
       <div style="flex:1">
-        <div style="font-weight:600;font-size:13.5px">${data.description}</div>
-        <div style="font-size:12px;color:var(--text3)">${data.changes} rows affected · ${new Date().toLocaleTimeString()}</div>
+        <div style="font-weight:600;font-size:13.5px">${escapeHtml(data.description)}</div>
+        <div style="font-size:12px;color:var(--text3)">${escapeHtml(data.changes)} rows affected · ${escapeHtml(new Date().toLocaleTimeString())}</div>
       </div>
-      <span style="font-family:JetBrains Mono,monospace;font-size:12px;color:var(--accent2)">op: ${op}</span>
+      <span style="font-family:JetBrains Mono,monospace;font-size:12px;color:var(--accent2)">op: ${escapeHtml(op)}</span>
     `;
     if (histEl.querySelector('.empty')) histEl.innerHTML = '';
     histEl.prepend(item);

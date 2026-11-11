@@ -3,8 +3,13 @@
  */
 import { escapeHtml } from '../utils/formatters.js';
 
-export const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-export const API_BASE = isLocalHost && (window.location.port === '7890' || window.location.port === '') ? '' : 'http://localhost:7890';
+export const isLocalHost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+export const API_BASE =
+  isLocalHost && (window.location.port === '7890' || window.location.port === '')
+    ? ''
+    : 'http://localhost:7890';
 
 export const state = {
   currentDb: null,
