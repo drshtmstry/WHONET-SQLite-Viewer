@@ -39,21 +39,24 @@ WHONET SQLite Viewer utilizes a **hybrid execution model** designed to function 
 
 ## 2. Directory Schema & File Layout
 
-The codebase separates static public assets, frontend modules, and backend execution:
+The codebase separates static public assets, frontend modules, automated tests, and backend execution:
 
 ```
 ├── public/                     # Static root & PWA assets (copied to /dist on build)
+│   ├── resources/              # Compiled AMRIE breakpoint, expert rule & intrinsic JSON
+│   ├── sample-data/            # Bundled WHO sample SQLite databases
 │   ├── manifest.json           # Web App Manifest for PWA installation
 │   ├── sw.js                   # Zero-cache Service Worker (instant update delivery)
 │   ├── favicon.ico / .png      # WHONET official icons
 │   ├── apple-touch-icon.png    # iOS / Safari mobile icon
 │   └── vendor/                 # sql.js WASM binaries (sql-wasm.js, sql-wasm.wasm)
 │
+├── scripts/
+│   └── build-resources.js      # AMRIE resource compiler (Breakpoints, Expert & Intrinsic rules)
+│
 ├── src/                        # Application source code
 │   ├── index.html              # HTML5 UI shell, navigation & modals
 │   ├── styles.css              # Clinical design system, dark/light themes, mobile layouts
-│   ├── organisms.js            # WHONET organism dictionary mapping
-│   ├── sample-data/            # Bundled WHO sample SQLite databases
 │   └── js/                     # Native ES Module architecture
 │       ├── main.js             # Application entry point & backward-compat window bridge
 │       │
@@ -66,16 +69,19 @@ The codebase separates static public assets, frontend modules, and backend execu
 │       │
 │       ├── db/
 │       │   ├── wasm.js         # sql.js loader, schema normalization & export
-│       │   └── filesystem.js   # File System Access API, IndexedDB folder persistence
+│       │   ├── filesystem.js   # File System Access API, IndexedDB folder persistence
+│       │   └── query-core.js   # Pure-ESM shared SQL builders & parameter validation
 │       │
 │       ├── ui/
 │       │   ├── table.js        # renderSortHeader(), renderPagination()
 │       │   ├── toast.js        # Toast alerts with semantic icons
-│       │   └── modal.js        # Detail view, edit form, and confirm dialogs
+│       │   └── modal.js        # Detail view, edit forms, chart spectrum, and confirm dialogs
 │       │
 │       ├── utils/
 │       │   ├── antibiogram-engine.js  # CLSI M39 deduplication & %S/%R matrix calculation
 │       │   ├── antibiogram-rules.json # CLSI Appendix E antibiotic class groupings
+│       │   ├── date-profile.js        # Dataset date profiling & suggested surveillance periods
+│       │   ├── analytics.js           # Safe client-side telemetry wrapper (@vercel/analytics)
 │       │   ├── specimens.js           # 180+ specimen code to clinical name mappings
 │       │   ├── natural-sort.js        # naturalKey() & naturalCompare() algorithms
 │       │   ├── formatters.js          # Date formatters (locale), formatAgeSex(), HTML sanitization, debouncing
@@ -90,6 +96,13 @@ The codebase separates static public assets, frontend modules, and backend execu
 │           ├── resource-explorer.js # AMRIE Breakpoint, Expert & Intrinsic rule explorer
 │           ├── sql-workspace.js# SQL query console & contextual autocomplete
 │           └── fixes.js        # Bulk data cleansing operations
+│
+├── tests/                      # Automated test suite (node:test)
+│   ├── antibiogram-engine.test.js # CLSI M39 calculation & deduplication tests
+│   ├── date-profile.test.js       # Surveillance period suggestion & date quality checks
+│   ├── query-core.test.js         # Query builders, comment stripping & input sanitization
+│   ├── server-security.test.js    # Path traversal, CORS, binary upload & custom-sql limits
+│   └── wasm-parity.test.js        # Node.js vs sql.js query result parity
 │
 ├── server.js                   # Local Node.js server (native node:sqlite & auto-sync)
 ├── start.bat                   # Windows 1-click launcher for lab machines

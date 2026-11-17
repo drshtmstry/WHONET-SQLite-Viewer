@@ -63,6 +63,8 @@
 - **In-Place Record Corrections** — Clean, inline field editing and full-record correction modals with immediate database sync.
 - **Bulk Data Cleansing** — One-click uppercase specimen normalization and whitespace sanitation.
 - **Intelligent SQL Console** — Built-in query editor with schema-aware autocomplete, keyboard shortcuts, and instant result table sorting.
+- **Dataset-Aware Surveillance Periods & Date Quality Checks** — Antibiogram periods are suggested from populated collection dates (annual, half-year, and quarter). Missing, malformed, impossible, future, pre-1990, and stray-year dates can be inspected without modifying records; users can scope results by year.
+- **Safer Database Switching and Queries** — Database handles are cleaned up when switching files, uploaded SQLite files are read as binary, writable fields are schema-validated, and SQL query classification is shared by the Node and browser engines.
 - **Dual Runtime Architecture** — Runs either completely client-side in the browser via the In-Browser Engine (`sql.js`), or locally via Node.js native `DatabaseSync` (`node:sqlite`).
 
 ---
@@ -97,6 +99,14 @@ npm run web:build      # compile production bundle for Vercel (/dist)
 npm run web:preview    # preview production build locally
 ```
 
+### Running Automated Tests
+
+Run the built-in Node test suite (`node:test`) covering SQL builders, query parity between Node SQLite and sql.js WASM, CLSI M39 antibiogram calculations, date quality checks, and server security controls:
+
+```bash
+npm test               # execute unit, parity, and security test suites
+```
+
 ---
 
 ## Project Structure & Modular Schema
@@ -105,9 +115,11 @@ The codebase is organized into a dual-runtime architecture supporting both local
 
 ```
 ├── docs/
-│   └── modular-schema.md   # Architectural specification & schema guide
-├── public/                 # Static assets & PWA files
-│   ├── resources/          # AMRIE breakpoint, expert rule & intrinsic JSON resources
+│   ├── modular-schema.md   # Architectural specification & schema guide
+│   └── antibiogram_implementation_plan.md # CLSI M39 antibiogram design & requirements
+├── public/                 # Static assets, PWA files & reference data (served as web root)
+│   ├── resources/          # Compiled AMRIE breakpoint, expert rule & intrinsic JSON
+│   ├── sample-data/        # Bundled WHO sample SQLite databases
 │   ├── manifest.json       # Web App Manifest for PWA installation
 │   ├── sw.js               # Zero-cache Service Worker for instant updates
 │   ├── favicon.ico / .png  # Official WHONET icons & touch assets
@@ -117,23 +129,31 @@ The codebase is organized into a dual-runtime architecture supporting both local
 ├── src/                    # Application source code
 │   ├── index.html          # Application UI layout & modals
 │   ├── styles.css          # Design system, themes & responsive layouts
-│   ├── organisms.js        # WHONET organism dictionary
-│   ├── sample-data/        # Bundled sample SQLite databases
 │   └── js/                 # Modular ES Module architecture
 │       ├── main.js         # ES Module entry point & global event bridge
-│       ├── state/store.js  # Reactive application state
-│       ├── api/            # Local Node REST dispatcher & live-reload client
-│       ├── db/             # WebAssembly database & File System Access API
-│       ├── ui/             # Table rendering, modals, and toasts
-│       ├── utils/          # Antibiogram engine, natural sort, specimens, analytics & formatters
+│       ├── state/
+│       │   └── store.js    # Reactive application state & observers
+│       ├── api/
+│       │   ├── client.js   # Unified hybrid API dispatcher (Node fetch vs. WASM emulator)
+│       │   └── wasm-emulator.js # Client-side route emulator for browser WASM execution
+│       ├── db/
+│       │   ├── wasm.js     # sql.js loader, schema normalization & export
+│       │   ├── filesystem.js # File System Access API, IndexedDB folder persistence
+│       │   └── query-core.js # Pure-ESM shared SQL builders & parameter validation
+│       ├── ui/
+│       │   ├── table.js    # Accessible sortable table headers & pagination controls
+│       │   ├── toast.js    # Toast notifications with semantic alert icons
+│       │   └── modal.js    # Detail view, edit forms, chart spectrum & confirm dialogs
+│       ├── utils/
 │       │   ├── antibiogram-engine.js  # CLSI M39 deduplication & %S/%R matrix calculation
 │       │   ├── antibiogram-rules.json # CLSI Appendix E antibiotic class groupings
-│       │   ├── analytics.js           # Safe client-side telemetry wrapper
+│       │   ├── date-profile.js        # Dataset date profiling & suggested surveillance periods
+│       │   ├── analytics.js           # Safe client-side telemetry wrapper (@vercel/analytics)
 │       │   ├── specimens.js           # 180+ specimen code to clinical name mappings
-│       │   ├── natural-sort.js        # Alphanumeric specimen # sorting algorithm
-│       │   ├── formatters.js          # Locale dates, Age/Sex merged formatting & escaping
-│       │   └── organisms.js           # Taxonomical badge rendering & scientific names
-│       └── pages/          # Dashboard, Isolates, Antibiogram, Duplicates, AMR, SQL, Fixes, Resource Explorer
+│       │   ├── organisms.js           # Taxonomical badge rendering & scientific names
+│       │   ├── natural-sort.js        # Alphanumeric specimen # sorting algorithm (NATURAL_KEY)
+│       │   └── formatters.js          # Locale dates, Age/Sex merged formatting & HTML escaping
+│       └── pages/
 │           ├── dashboard.js   # Summary KPIs & Chart.js visual analytics
 │           ├── isolates.js    # All Isolates table & column configurations
 │           ├── antibiogram.js # CLSI M39 cumulative antibiogram view & exports
@@ -142,9 +162,15 @@ The codebase is organized into a dual-runtime architecture supporting both local
 │           ├── resource-explorer.js # AMRIE Breakpoint, Expert & Intrinsic rule explorer
 │           ├── sql-workspace.js # Interactive SQL query runner with autocomplete
 │           └── fixes.js       # Bulk specimen normalization & whitespace trim
+├── tests/                  # Automated test suite (node:test)
+│   ├── antibiogram-engine.test.js # CLSI M39 calculation & deduplication tests
+│   ├── date-profile.test.js       # Surveillance period suggestion & date quality checks
+│   ├── query-core.test.js         # Query builders, comment stripping & input sanitization
+│   ├── server-security.test.js    # Path traversal, CORS, binary upload & custom-sql limits
+│   └── wasm-parity.test.js        # Node.js vs sql.js query result parity
 ├── server.js               # Local Node.js server (native node:sqlite & auto-sync)
 ├── start.bat               # Windows 1-click launcher for lab machines
-├── vite.config.js          # Vite configuration for production builds
+├── vite.config.js          # Vite configuration for production builds (/dist)
 ├── vercel.json             # Vercel deployment routing & static build config
 └── package.json            # Project dependencies & operational scripts
 ```
