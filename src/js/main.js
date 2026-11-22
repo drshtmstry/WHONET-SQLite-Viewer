@@ -528,7 +528,12 @@ export async function init() {
 
   if (isLocalHost) {
     try {
-      const res = await fetch(API_BASE + "/api/databases");
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      const res = await fetch(API_BASE + "/api/databases", {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (data && Array.isArray(data.databases)) {
         state.isWasmMode = false;

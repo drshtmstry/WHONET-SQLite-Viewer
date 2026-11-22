@@ -87,6 +87,15 @@ export async function scanWhonetFolder(dirHandle, showToast = true) {
   async function scanDirectoryForDbs(handle) {
     for await (const entry of handle.values()) {
       if (entry.kind === "file") {
+        const lowerName = entry.name.toLowerCase();
+        if (
+          lowerName === "baclinklog.sqlite" ||
+          lowerName === "whonet.sqlite" ||
+          lowerName === "translations.sqlite" ||
+          lowerName.startsWith("backup")
+        ) {
+          continue;
+        }
         if (isSqliteDatabase(entry.name)) {
           state.fileHandles[entry.name] = entry;
           if (!foundFiles.includes(entry.name)) foundFiles.push(entry.name);
@@ -158,10 +167,14 @@ export async function restoreWhonetFolder() {
   try {
     const permission = await dirHandle.queryPermission({ mode: "readwrite" });
     if (permission === "granted") {
+      state.isWasmMode = true;
       await scanWhonetFolder(dirHandle, false);
     } else {
       const readPerm = await dirHandle.queryPermission({ mode: "read" });
-      if (readPerm === "granted") await scanWhonetFolder(dirHandle, false);
+      if (readPerm === "granted") {
+        state.isWasmMode = true;
+        await scanWhonetFolder(dirHandle, false);
+      }
     }
   } catch (err) {
     console.info("Saved folder is no longer available:", err.message);
@@ -175,17 +188,28 @@ export async function chooseWhonetFolder() {
       // which freezes Windows File Explorer if OneDrive is offline/syncing).
       // Do not pass id to avoid stale/corrupted path cache lookups in Chromium.
       const dirHandle = await window.showDirectoryPicker();
+      state.isWasmMode = true;
       await saveWhonetFolderHandle(dirHandle);
       await scanWhonetFolder(dirHandle);
     } catch (err) {
       if (err.name === "AbortError") {
         return;
       }
-      console.warn("showDirectoryPicker failed, falling back to standard input:", err);
-      toast(`Native folder picker failed (${err.message}). Opening standard folder selector…`, "info");
+      console.warn(
+        "showDirectoryPicker failed, falling back to standard input:",
+        err,
+      );
+      const fallbackBtn = document.getElementById("btn-pick-folder-fallback");
+      if (fallbackBtn) fallbackBtn.style.display = "inline-block";
+      toast(
+        `Native folder picker failed (${err.message}). Opening standard folder selector…`,
+        "info",
+      );
       triggerStandardFolderPicker();
     }
   } else {
+    const fallbackBtn = document.getElementById("btn-pick-folder-fallback");
+    if (fallbackBtn) fallbackBtn.style.display = "inline-block";
     triggerStandardFolderPicker();
   }
 }
@@ -200,6 +224,7 @@ export function triggerStandardFolderPicker() {
 
 export async function handleFolderSelected(files) {
   if (!files || !files.length) return;
+  state.isWasmMode = true;
   const foundFiles = [];
   state.fileHandles = {};
   let foundLabFile = null;
@@ -226,8 +251,17 @@ export async function handleFolderSelected(files) {
       continue;
     }
 
+    const lowerName = file.name.toLowerCase();
+    if (
+      lowerName === "baclinklog.sqlite" ||
+      lowerName === "whonet.sqlite" ||
+      lowerName === "translations.sqlite" ||
+      lowerName.startsWith("backup")
+    ) {
+      continue;
+    }
+
     if (isSqliteDatabase(file.name)) {
-      if (/^whonet\.(sqlite|sqlite3)/i.test(file.name)) continue;
       state.fileHandles[file.name] = file;
       if (!foundFiles.includes(file.name)) foundFiles.push(file.name);
     } else if (/^LAB/i.test(file.name) && !foundLabFile) {
@@ -286,9 +320,24 @@ export function renderLaunchDbSelect() {
         : "Select the WHONET data folder";
     }
 
-    const btnPickFolderFallback = document.getElementById("btn-pick-folder-fallback");
+    const hasDirectoryPicker = "showDirectoryPicker" in window;
+    const btnPickFolderFallback = document.getElementById(
+      "btn-pick-folder-fallback",
+    );
     if (btnPickFolderFallback) {
-      btnPickFolderFallback.style.display = "inline-block";
+      btnPickFolderFallback.style.display = hasDirectoryPicker
+        ? "none"
+        : "inline-block";
+    }
+
+    const hasOpenFilePicker = "showOpenFilePicker" in window;
+    const btnBrowseFileFallback = document.getElementById(
+      "btn-browse-file-fallback",
+    );
+    if (btnBrowseFileFallback) {
+      btnBrowseFileFallback.style.display = hasOpenFilePicker
+        ? "none"
+        : "inline-block";
     }
 
     const localDbs = state.databases || [];
@@ -337,7 +386,7 @@ export function renderLaunchDbSelect() {
   if (!localDbs.length) {
     if (descEl) {
       descEl.innerHTML =
-        'Connected to local Node.js server. No <code>.sqlite</code> files found in <code>C:\\WHONET</code>.';
+        "Connected to local Node.js server. No <code>.sqlite</code> files found in <code>C:\\WHONET</code>.";
     }
     sel.innerHTML =
       '<option value="">No laboratory .sqlite files found in C:\\WHONET</option>';
@@ -345,8 +394,7 @@ export function renderLaunchDbSelect() {
     return;
   }
   if (descEl) {
-    descEl.innerHTML =
-      `Auto-connected to <code>C:\\WHONET</code>. Found <strong>${localDbs.length} database file(s)</strong> in <code>Data/</code>:`;
+    descEl.innerHTML = `Auto-connected to <code>C:\\WHONET</code>.<br>Found <strong>${localDbs.length} database file(s).`;
   }
   const localOptions = [
     `<option value="" ${!state.currentDb ? "selected disabled" : ""}>Select file</option>`,
@@ -397,17 +445,19 @@ export async function selectFromLaunchList() {
   const filename = sel ? sel.value : "";
   if (!filename) return toast("Please select a file from the list", "error");
 
-  if (state.isWasmMode) {
-    const handleOrFile = state.fileHandles[filename];
-    if (handleOrFile) {
-      if (typeof handleOrFile.getFile === "function") {
-        const file = await handleOrFile.getFile();
-        await window.handleFileUpload(file, handleOrFile);
-      } else {
-        await window.handleFileUpload(handleOrFile, null);
-      }
-      return;
+  const handleOrFile = state.fileHandles[filename];
+  if (handleOrFile) {
+    state.isWasmMode = true;
+    if (typeof handleOrFile.getFile === "function") {
+      const file = await handleOrFile.getFile();
+      await window.handleFileUpload(file, handleOrFile);
+    } else {
+      await window.handleFileUpload(handleOrFile, null);
     }
+    return;
+  }
+
+  if (state.isWasmMode) {
     return toast("Please select your .sqlite file", "info");
   }
 
@@ -430,9 +480,11 @@ export async function triggerBrowseFile() {
       const [fileHandle] = await window.showOpenFilePicker({
         types: [
           {
-            description: "WHONET SQLite Database (*.sqlite)",
+            description: "WHONET SQLite Database (*.sqlite, *.sqlite3)",
             accept: {
-              "*/*": [".sqlite", ".sqlite3"],
+              "application/vnd.sqlite3": [".sqlite", ".sqlite3"],
+              "application/x-sqlite3": [".sqlite", ".sqlite3"],
+              "application/octet-stream": [".sqlite", ".sqlite3"],
             },
           },
         ],
@@ -447,11 +499,21 @@ export async function triggerBrowseFile() {
       if (err.name === "AbortError") {
         return;
       }
-      console.warn("showOpenFilePicker failed, falling back to standard input:", err);
-      toast(`Native file picker failed (${err.message}). Opening standard file selector…`, "info");
+      console.warn(
+        "showOpenFilePicker failed, falling back to standard input:",
+        err,
+      );
+      const fallbackBtn = document.getElementById("btn-browse-file-fallback");
+      if (fallbackBtn) fallbackBtn.style.display = "inline-block";
+      toast(
+        `Native file picker failed (${err.message}). Opening standard file selector…`,
+        "info",
+      );
       triggerStandardFilePicker();
     }
   } else {
+    const fallbackBtn = document.getElementById("btn-browse-file-fallback");
+    if (fallbackBtn) fallbackBtn.style.display = "inline-block";
     triggerStandardFilePicker();
   }
 }

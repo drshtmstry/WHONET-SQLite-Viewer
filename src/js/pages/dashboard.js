@@ -553,41 +553,15 @@ export async function closeCurrentDatabase() {
 export async function switchDb(filename) {
   if (!filename || filename === state.currentDb) return;
 
-  if (state.isWasmMode) {
-    const handleOrFile = state.fileHandles[filename];
-    if (handleOrFile) {
-      if (typeof handleOrFile.getFile === "function") {
-        const file = await handleOrFile.getFile();
-        await handleFileUpload(file, handleOrFile);
-      } else if (handleOrFile instanceof File || handleOrFile instanceof Blob) {
-        await handleFileUpload(handleOrFile, null);
-      }
-      return;
+  const handleOrFile = state.fileHandles[filename];
+  if (handleOrFile) {
+    state.isWasmMode = true;
+    if (typeof handleOrFile.getFile === "function") {
+      const file = await handleOrFile.getFile();
+      await handleFileUpload(file, handleOrFile);
+    } else if (handleOrFile instanceof File || handleOrFile instanceof Blob) {
+      await handleFileUpload(handleOrFile, null);
     }
-    const data = await api("/api/open-database", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename }),
-    });
-    if (data.error) return toast(`Cannot switch: ${data.error}`, "error");
-    state.isWasmMode = false;
-    state.wasmDb = null;
-    state.activeFileHandle = null;
-    state.isModified = false;
-    state.currentDb = filename;
-    markDatabaseActivated();
-    setRuntimeBadge("Local SQLite Server (Node.js)", true);
-    const saveBtn = document.getElementById("btn-save-file");
-    if (saveBtn) saveBtn.style.display = "none";
-    renderDbSelector();
-    toast(
-      `Switched to ${filename} (${data.count.toLocaleString()} records)`,
-      "success",
-    );
-    loadStats();
-    refreshActiveDataPage();
-    if (typeof window.refreshSqlSchema === "function")
-      window.refreshSqlSchema();
     return;
   }
 
@@ -596,9 +570,16 @@ export async function switchDb(filename) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename }),
   });
-  if (data.error) return toast(data.error, "error");
+  if (data.error) return toast(`Cannot switch: ${data.error}`, "error");
+  state.isWasmMode = false;
+  state.wasmDb = null;
+  state.activeFileHandle = null;
+  state.isModified = false;
   state.currentDb = filename;
   markDatabaseActivated();
+  setRuntimeBadge("Local SQLite Server (Node.js)", true);
+  const saveBtn = document.getElementById("btn-save-file");
+  if (saveBtn) saveBtn.style.display = "none";
   renderDbSelector();
   toast(
     `Switched to ${filename} (${data.count.toLocaleString()} records)`,
@@ -606,7 +587,8 @@ export async function switchDb(filename) {
   );
   loadStats();
   refreshActiveDataPage();
-  if (typeof window.refreshSqlSchema === "function") window.refreshSqlSchema();
+  if (typeof window.refreshSqlSchema === "function")
+    window.refreshSqlSchema();
 }
 
 export async function loadSampleDatabase(sampleFilename) {
@@ -692,8 +674,12 @@ export async function handleFileUpload(file, fileHandle = null) {
 
   toast(`Reading ${file.name}…`, "info");
 
-  if (!state.isWasmMode) {
+  // Only attempt server upload if explicitly in Node server mode (!state.isWasmMode)
+  // AND no fileHandle or client-side file exists in state.fileHandles.
+  if (!state.isWasmMode && !fileHandle && !state.fileHandles[file.name]) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
       const res = await fetch(
         API_BASE +
           "/api/upload-database?filename=" +
@@ -701,8 +687,10 @@ export async function handleFileUpload(file, fileHandle = null) {
         {
           method: "POST",
           body: file,
+          signal: controller.signal,
         },
       );
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (data.error) return toast(data.error, "error");
 
@@ -721,7 +709,7 @@ export async function handleFileUpload(file, fileHandle = null) {
       return;
     } catch (err) {
       console.warn(
-        "Local upload failed, falling back to client-side WASM engine:",
+        "Local upload failed or timed out, falling back to client-side WASM engine:",
         err.message,
       );
     }
@@ -764,7 +752,12 @@ export async function handleFileUpload(file, fileHandle = null) {
 
     normaliseSchema();
     renderDbSelector();
-    const count = wasmSelect("SELECT COUNT(*) as c FROM Isolates")[0]?.c || 0;
+    let count = 0;
+    try {
+      count = wasmSelect("SELECT COUNT(*) as c FROM Isolates")[0]?.c || 0;
+    } catch (err) {
+      console.warn("Could not query Isolates table:", err.message);
+    }
     toast(
       `Successfully loaded ${file.name} into browser (${count.toLocaleString()} records)`,
       "success",

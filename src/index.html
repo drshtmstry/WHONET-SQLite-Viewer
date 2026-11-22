@@ -183,6 +183,19 @@
         >
           <i class="fa-solid fa-moon" aria-hidden="true"></i>
         </button>
+
+        <!-- GitHub Repository Link -->
+        <a
+          href="https://github.com/drshtmstry/WHONET-SQLite-Viewer"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="github-link-btn"
+          id="github-repo-link"
+          title="View GitHub Repository"
+          aria-label="GitHub Repository"
+        >
+          <i class="fa-brands fa-github" aria-hidden="true"></i>
+        </a>
       </div>
     </header>
 
@@ -451,8 +464,8 @@
               <h1 class="guided-hub-title">Select WHONET Database to Open</h1>
               <p class="guided-hub-sub">
                 Choose how you would like to load your WHONET laboratory
-                database. All processing runs privately in your local browser
-                runtime.
+                database.<br />All processing runs privately in your local
+                browser runtime.
               </p>
             </div>
 
@@ -495,7 +508,12 @@
                   </div>
                   <div
                     id="launch-dir-actions"
-                    style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px"
+                    style="
+                      margin-top: 10px;
+                      display: flex;
+                      flex-direction: column;
+                      gap: 6px;
+                    "
                   >
                     <button
                       type="button"
@@ -529,7 +547,8 @@
                       "
                       title="If native folder dialog does not open, click here to use standard browser folder selector"
                     >
-                      <i class="fa-regular fa-folder"></i> Standard Folder Selector (Fallback)
+                      <i class="fa-regular fa-folder"></i> Standard Folder
+                      Selector (Fallback)
                     </button>
                     <input
                       type="file"
@@ -599,11 +618,12 @@
                       cursor: pointer;
                       padding: 4px 0 0 0;
                       margin: 4px auto 0 auto;
-                      display: inline-block;
+                      display: none;
                     "
                     title="If file dialog does not open, click here to use standard browser file selector"
                   >
-                    <i class="fa-regular fa-file"></i> Standard File Selector (Fallback)
+                    <i class="fa-regular fa-file"></i> Standard File Selector
+                    (Fallback)
                   </button>
                   <div class="guided-drop-hint" style="margin-top: 6px">
                     <i class="fa-solid fa-arrow-down"></i> Or drop your file
@@ -649,6 +669,50 @@
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- GitHub Documentation, Source Code & Issues Card -->
+            <div class="guided-github-card">
+              <div class="guided-github-left">
+                <div class="guided-github-icon">
+                  <i class="fa-brands fa-github"></i>
+                </div>
+                <div class="guided-github-info">
+                  <div class="guided-github-title">Open Source on GitHub</div>
+                  <div class="guided-github-desc">
+                    Explore user documentation &amp; guides, inspect source code, or report issues and feature suggestions.
+                  </div>
+                </div>
+              </div>
+              <div class="guided-github-actions">
+                <a
+                  href="https://github.com/drshtmstry/WHONET-SQLite-Viewer#readme"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-sm btn-ghost guided-github-btn"
+                  title="Read documentation &amp; guides"
+                >
+                  <i class="fa-solid fa-book-open"></i> Documentation
+                </a>
+                <a
+                  href="https://github.com/drshtmstry/WHONET-SQLite-Viewer"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-sm btn-ghost guided-github-btn"
+                  title="View source repository"
+                >
+                  <i class="fa-solid fa-code"></i> Source Code
+                </a>
+                <a
+                  href="https://github.com/drshtmstry/WHONET-SQLite-Viewer/issues"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-sm btn-outline guided-github-btn"
+                  title="Submit an issue or suggest a feature"
+                >
+                  <i class="fa-solid fa-circle-exclamation"></i> Issues &amp; Suggestions
+                </a>
               </div>
             </div>
           </div>
@@ -3043,7 +3107,9 @@
                   id="res-filter-lab-config"
                   onchange="onResourceLabConfigFilterChange(this.checked)"
                 />
-                <span id="res-lab-config-filter-label">Available in Lab Config</span>
+                <span id="res-lab-config-filter-label"
+                  >Available in Lab Config</span
+                >
               </label>
 
               <!-- Result Count Message -->
