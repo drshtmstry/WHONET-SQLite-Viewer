@@ -25,10 +25,13 @@
   - **% Susceptible (%S) vs % Resistant (%R) Views**: Toggle between susceptibility rates for empiric therapy guidance and resistance rates for infection control.
   - **Urinary Tract Specific Restriction (CLSI M39 §5.3)**: Urinary tract agents (Nitrofurantoin, Norfloxacin, etc.) are strictly calculated from urine specimens only.
   - **Intrinsic Resistance Annotations**: Automatically displays intrinsic resistance markers (e.g., Ampicillin in _Klebsiella_, Vancomycin in Gram-negatives) based on CLSI M100 / EUCAST / WHONET rules.
-  - **Export & Clipboard Integration**: One-click **Copy Table** (formatted TSV + HTML) for instant pasting into Excel, Word, or Google Sheets.
+  - **Export & Clipboard Integration**: One-click **Copy Data** (formatted TSV + HTML) with automatic hyperlink stripping for clean, instant pasting into Excel, Word, or Google Sheets.
+  - **Streamlined Presentation**: Clean status banner with isolate and qualified species counters (`Isolates: X analyzed / Y raw`, `Species: A/B qualified`), and immediate inline access to Antibiogram Options.
 - **Organism Susceptibility Spectrum Visualizer** — Interactive modal chart visualizer for any organism:
-  - **Horizontal Bar & Vertical Column Layouts**: Toggle between bar and column views.
+  - **Horizontal Bar & Vertical Column Layouts**: Instant switching between horizontal bar and vertical column presentations.
   - **Custom Metric Filters**: View full spectrum (%S, %I, %R), **%S Only**, or **%R Only** with auto-adjusting legends and intrinsic resistance flags.
+  - **Antibiogram-Matched Color Thresholds**: In `%S Only` and `%R Only` modes, each antibiotic bar is individually color-coded matching the Antibiogram table (≥80% green, 50-79% yellow, <50% red, intrinsic dark red) with an adaptive legend.
+  - **Streamlined 2-Row Modal Controls**: Top row arranges Metric, Orientation, and Sort dropdowns; bottom row positions the "Hide untested" toggle alongside action buttons on the same line.
   - **Native Excel Chart Integration**: One-click **Copy Data** places formatted tabular series into the clipboard; paste into Excel (`Ctrl + V`) and hit `Alt + F1` for an instant 100% native, fully editable Excel chart.
   - **Direct Image Clipboard Copy**: Copy high-resolution chart PNG directly to the OS clipboard (paste into Word/PowerPoint with `Ctrl + V`), or download as PNG.
 - **Location-Wise Care Stratification (CLSI M39-A4 §6.4)** — Cross-setting antimicrobial susceptibility analysis:
@@ -50,16 +53,17 @@
   - **Breakpoints**: Inspect over 51,000 published clinical breakpoints across CLSI, EUCAST, and SFM guidelines spanning 20+ revision years (2026 to 1998).
   - **Expert Interpretation Rules**: Clinical expert rules for ESBL confirmation, AmpC phenotypes, Methicillin resistance (MRS/MRSA), Macrolide-Lincosamide inducible resistance (ICR / MLS-DTest), and BLNAR *H. influenzae*.
   - **Intrinsic Resistance Phenotypes**: Over 1,020 intrinsic resistance profiles for CLSI and EUCAST.
+  - **Lab Config Filter ("Available in Lab Config")**: Filter rules and breakpoints directly by antibiotics configured in an active WHONET lab configuration file (`.cfg`) or detected in the current SQLite database AST columns.
   - **Real-Time Multi-Parameter Filtering**: Instant search across organism codes and scientific names, generic antibiotic names and 3-letter codes; filter by Guideline (CLSI, EUCAST, SFM), Test Method (Disk, MIC), Type (Human, Animal, ECOFF), and Revision Year.
   - **Standardized $R$ / $S$ Display Formatting**: Method-aware boundary operators ($\le$ for Disk mm, $\ge$ for MIC mg/L for $R$; $\ge$ for Disk, $\le$ for MIC for $S$) with clinical color highlights.
-  - **Data Exports**: One-click **Copy TSV** for Excel/Google Sheets and **Export CSV** download.
+  - **Data Exports**: One-click **Copy Table** (plain TSV) for spreadsheet pasting and **Export CSV** download.
 - **Specimen & Organism Dictionary Translation** — Resolves cryptic WHONET 2-to-4 letter specimen codes (e.g. `ur`, `bl`, `sp`, `csf`) into standard clinical descriptions across 180+ specimen mappings, and provides full scientific binomial names from WHONET organism taxonomies.
 - **Deduplication** — Identify and resolve duplicate isolates clustered by `SPEC_NUM` (Specimen #) or `PATIENT_ID` with batch selection and deletion.
 - **Natural Column Sorting** — Interactive click-to-sort headers with intelligent alphanumeric ordering for specimen numbers (e.g. `CSR-1`, `CSR-2`, `CSR-10`, `CSR-151`, `-1/-2`, `-A/-B` suffixes) across Isolates, Duplicates, Antibiograms, and SQL Workspace.
 - **Customizable Clinical Tables** — Patient Full Name display, combined `Age/Sex` formatting (`19/f`), locale-aware dates, compact action icons, and user-configurable resistance phenotype columns (ESBL, Carbapenem, MRSA) with browser persistence.
-- **Monthly AMR Surveillance Report (SAPCAR-G)** — Standard Gujarat State Action Plan for Containment of Antimicrobial Resistance (SAPCAR-G) Culture & Sensitivity (C&S) reporting data (OPD / IPD / ICU × specimen types) with instant TSV clipboard copy and CSV export.
+- **Monthly AMR Surveillance Report (SAPCAR-G)** — Standard Gujarat State Action Plan for Containment of Antimicrobial Resistance (SAPCAR-G) Culture & Sensitivity (C&S) reporting data (OPD / IPD / ICU × specimen types) with **Copy Data** (rich HTML + TSV with stripped hyperlinks for clean pasting) and CSV export.
 - **Interactive Visual Analytics** — Real-time Chart.js distribution charts (Organisms, Specimen Types, Wards, Age Groups, Gender, AMR Phenotypes) with dynamic date range filtering and single/dual view toggles.
-- **Unified Persistent Navigation** — Persistent active database file pill with quick Refresh and Close database controls in the top header, accessible from any view on desktop and mobile.
+- **Collapsible Sidebar & Unified Navigation** — Space-saving collapsible sidebar with toggle button, persistent state saved to `localStorage`, accessible floating tooltips when collapsed, smooth CSS transition, mobile backdrop overlay, and persistent active database file pill with quick Refresh and Close database controls in the top header.
 - **In-Place Record Corrections** — Clean, inline field editing and full-record correction modals with immediate database sync.
 - **Bulk Data Cleansing** — One-click uppercase specimen normalization and whitespace sanitation.
 - **Intelligent SQL Console** — Built-in query editor with schema-aware autocomplete, keyboard shortcuts, and instant result table sorting.
@@ -101,10 +105,10 @@ npm run web:preview    # preview production build locally
 
 ### Running Automated Tests
 
-Run the built-in Node test suite (`node:test`) covering SQL builders, query parity between Node SQLite and sql.js WASM, CLSI M39 antibiogram calculations, date quality checks, and server security controls:
+Run the built-in Node test suite (`node:test`) covering SQL builders, query parity between Node SQLite and sql.js WASM, CLSI M39 antibiogram calculations, date quality checks, server security controls, formatted clipboard copying, lab configuration filtering, and responsive sidebar behavior:
 
 ```bash
-npm test               # execute unit, parity, and security test suites
+npm test               # execute unit, parity, and security test suites (21 tests)
 ```
 
 ---
@@ -145,14 +149,14 @@ The codebase is organized into a dual-runtime architecture supporting both local
 │       │   ├── toast.js    # Toast notifications with semantic alert icons
 │       │   └── modal.js    # Detail view, edit forms, chart spectrum & confirm dialogs
 │       ├── utils/
-│       │   ├── antibiogram-engine.js  # CLSI M39 deduplication & %S/%R matrix calculation
+│       │   ├── antibiogram-engine.js  # CLSI M39 deduplication, lab config & %S/%R matrix calculation
 │       │   ├── antibiogram-rules.json # CLSI Appendix E antibiotic class groupings
 │       │   ├── date-profile.js        # Dataset date profiling & suggested surveillance periods
 │       │   ├── analytics.js           # Safe client-side telemetry wrapper (@vercel/analytics)
 │       │   ├── specimens.js           # 180+ specimen code to clinical name mappings
 │       │   ├── organisms.js           # Taxonomical badge rendering & scientific names
 │       │   ├── natural-sort.js        # Alphanumeric specimen # sorting algorithm (NATURAL_KEY)
-│       │   └── formatters.js          # Locale dates, Age/Sex merged formatting & HTML escaping
+│       │   └── formatters.js          # Locale dates, Age/Sex merged formatting, HTML/TSV clipboard helper
 │       └── pages/
 │           ├── dashboard.js   # Summary KPIs & Chart.js visual analytics
 │           ├── isolates.js    # All Isolates table & column configurations
@@ -163,11 +167,14 @@ The codebase is organized into a dual-runtime architecture supporting both local
 │           ├── sql-workspace.js # Interactive SQL query runner with autocomplete
 │           └── fixes.js       # Bulk specimen normalization & whitespace trim
 ├── tests/                  # Automated test suite (node:test)
-│   ├── antibiogram-engine.test.js # CLSI M39 calculation & deduplication tests
-│   ├── date-profile.test.js       # Surveillance period suggestion & date quality checks
-│   ├── query-core.test.js         # Query builders, comment stripping & input sanitization
-│   ├── server-security.test.js    # Path traversal, CORS, binary upload & custom-sql limits
-│   └── wasm-parity.test.js        # Node.js vs sql.js query result parity
+│   ├── antibiogram-engine.test.js        # CLSI M39 calculation & deduplication tests
+│   ├── copy-formatted.test.js            # Clipboard HTML/TSV dual payload & link stripping
+│   ├── date-profile.test.js              # Surveillance period suggestion & date quality checks
+│   ├── query-core.test.js                # Query builders, comment stripping & input sanitization
+│   ├── resource-explorer-lab-config.test.js # Lab config parsing & schema AST column fallback
+│   ├── server-security.test.js           # Path traversal, CORS, binary upload & custom-sql limits
+│   ├── sidebar.test.js                   # Collapsible sidebar toggle, ARIA & persistence
+│   └── wasm-parity.test.js               # Node.js vs sql.js query result parity
 ├── server.js               # Local Node.js server (native node:sqlite & auto-sync)
 ├── start.bat               # Windows 1-click launcher for lab machines
 ├── vite.config.js          # Vite configuration for production builds (/dist)

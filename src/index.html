@@ -68,6 +68,21 @@
   <body>
     <!-- Header Architecture -->
     <header class="header">
+      <div class="header-sidebar-slot">
+        <button
+          type="button"
+          class="sidebar-toggle-btn mobile-nav-toggle"
+          id="sidebar-toggle-btn"
+          onclick="toggleSidebar()"
+          title="Toggle sidebar (Ctrl+B)"
+          aria-label="Toggle sidebar"
+          aria-controls="app-sidebar"
+          aria-expanded="true"
+        >
+          <i class="fa-solid fa-bars"></i>
+        </button>
+      </div>
+
       <div
         class="header-logo"
         onclick="showPage('dashboard')"
@@ -93,18 +108,6 @@
           </div>
         </div>
       </div>
-
-      <button
-        type="button"
-        class="mobile-nav-toggle"
-        onclick="toggleMobileSidebar()"
-        title="Open navigation"
-        aria-label="Open navigation"
-        aria-controls="app-sidebar"
-        aria-expanded="false"
-      >
-        <i class="fa-solid fa-bars"></i>
-      </button>
 
       <div class="db-selector" id="db-selector">
         <span id="runtime-badge" class="connection-badge">Connecting…</span>
@@ -193,6 +196,7 @@
           class="nav-item active"
           onclick="showPage('dashboard')"
           id="nav-dashboard"
+          title="Dashboard"
         >
           <svg
             width="18"
@@ -209,7 +213,7 @@
             <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
             <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
           </svg>
-          Dashboard
+          <span class="nav-label">Dashboard</span>
         </button>
 
         <div class="nav-section">View and Analyze Data</div>
@@ -218,6 +222,7 @@
           class="nav-item"
           onclick="showPage('isolates')"
           id="nav-isolates"
+          title="All Isolates"
         >
           <svg
             width="18"
@@ -237,7 +242,7 @@
             <line x1="16" y1="17" x2="8" y2="17"></line>
             <polyline points="10 9 9 9 8 9"></polyline>
           </svg>
-          All Isolates
+          <span class="nav-label">All Isolates</span>
         </button>
 
         <button
@@ -245,6 +250,7 @@
           class="nav-item"
           onclick="showPage('duplicates')"
           id="nav-duplicates"
+          title="Duplicates"
         >
           <svg
             width="18"
@@ -262,7 +268,7 @@
             <line x1="12" y1="9" x2="12" y2="13"></line>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          Duplicates
+          <span class="nav-label">Duplicates</span>
           <span class="nav-badge" id="dup-badge">—</span>
         </button>
 
@@ -271,6 +277,7 @@
           class="nav-item"
           onclick="showPage('monthly-amr')"
           id="nav-monthly-amr"
+          title="Monthly AMR Data"
         >
           <svg
             width="18"
@@ -286,7 +293,7 @@
             <line x1="12" y1="20" x2="12" y2="4"></line>
             <line x1="6" y1="20" x2="6" y2="14"></line>
           </svg>
-          Monthly AMR Data
+          <span class="nav-label">Monthly AMR Data</span>
         </button>
 
         <button
@@ -294,6 +301,7 @@
           class="nav-item"
           onclick="showPage('antibiogram')"
           id="nav-antibiogram"
+          title="Antibiogram"
         >
           <svg
             width="18"
@@ -311,7 +319,7 @@
             <line x1="4" y1="10" x2="20" y2="10"></line>
             <line x1="10" y1="4" x2="10" y2="20"></line>
           </svg>
-          Antibiogram
+          <span class="nav-label">Antibiogram</span>
         </button>
 
         <div class="nav-section">Reference &amp; Guidelines</div>
@@ -320,6 +328,7 @@
           class="nav-item"
           onclick="showPage('resource-explorer')"
           id="nav-resource-explorer"
+          title="Resource Explorer"
         >
           <svg
             width="18"
@@ -336,7 +345,7 @@
               d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
             ></path>
           </svg>
-          Resource Explorer
+          <span class="nav-label">Resource Explorer</span>
         </button>
 
         <div class="nav-section">Data Quality</div>
@@ -345,6 +354,7 @@
           class="nav-item"
           onclick="showPage('fixes')"
           id="nav-fixes"
+          title="Bulk Fixes"
         >
           <svg
             width="18"
@@ -360,7 +370,7 @@
               d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
             ></path>
           </svg>
-          Bulk Fixes
+          <span class="nav-label">Bulk Fixes</span>
         </button>
 
         <button
@@ -368,6 +378,7 @@
           class="nav-item"
           onclick="showPage('sql')"
           id="nav-sql"
+          title="SQL Console"
         >
           <svg
             width="18"
@@ -382,7 +393,7 @@
             <polyline points="4 17 10 11 4 5"></polyline>
             <line x1="12" y1="19" x2="20" y2="19"></line>
           </svg>
-          SQL Console
+          <span class="nav-label">SQL Console</span>
         </button>
 
         <div class="sidebar-footer">
@@ -1346,14 +1357,25 @@
             <div
               style="
                 display: flex;
-                gap: 12px;
+                gap: 8px;
                 align-items: center;
                 margin-left: auto;
                 flex-wrap: wrap;
               "
             >
-              <button class="btn btn-ghost btn-sm" onclick="copyAmrTableTsv()">
-                <i class="fa-regular fa-copy"></i> Copy
+              <button
+                class="btn btn-ghost btn-sm"
+                onclick="copyAmrTableTsv()"
+                title="Copy AMR Data as Plain TSV"
+              >
+                <i class="fa-regular fa-copy"></i> Copy Data
+              </button>
+              <button
+                class="btn btn-ghost btn-sm"
+                onclick="copyAmrTableFormatted()"
+                title="Copy AMR Table with cell colors and text formatting for Excel, Word, or Sheets"
+              >
+                <i class="fa-solid fa-paintbrush"></i> Copy Data with Formatting
               </button>
             </div>
           </div>
@@ -1534,12 +1556,7 @@
           <div class="section-header">
             <div>
               <div class="section-title">
-                <i class="fa-solid fa-table"></i> Cumulative Antibiogram (CLSI
-                M39-A4)
-              </div>
-              <div class="section-sub">
-                First-isolate per patient deduplication with AMRIE
-                susceptibility interpretation
+                <i class="fa-solid fa-table"></i> Cumulative Antibiogram
               </div>
             </div>
             <div
@@ -1560,7 +1577,7 @@
                   title="CLSI M39 Cumulative Antibiogram Table"
                   style="padding: 5px 12px; font-size: 12px"
                 >
-                  <i class="fa-solid fa-table-cells"></i> Antibiogram Table
+                  <i class="fa-solid fa-table-cells"></i> Antibiogram
                 </button>
                 <button
                   class="seg-btn"
@@ -1586,9 +1603,17 @@
                 class="btn btn-outline btn-sm"
                 id="btn-abx-copy-table"
                 onclick="copyAntibiogramTsv()"
-                title="Copy Antibiogram Table to Clipboard (ready to paste into Excel, Word, or Google Sheets)"
+                title="Copy Antibiogram Data as Plain TSV (ready to paste into Excel, Word, or Google Sheets)"
               >
-                <i class="fa-regular fa-copy"></i> Copy
+                <i class="fa-regular fa-copy"></i> Copy Data
+              </button>
+              <button
+                class="btn btn-outline btn-sm"
+                id="btn-abx-copy-formatted"
+                onclick="copyAntibiogramFormatted()"
+                title="Copy Antibiogram with cell colors and text formatting for Excel, Word, or Sheets"
+              >
+                <i class="fa-solid fa-paintbrush"></i> Copy Data with Formatting
               </button>
             </div>
           </div>
@@ -1608,9 +1633,40 @@
                   border-bottom: 1px solid var(--border);
                 "
               >
-                <div style="color: var(--text3); font-size: 13px">
-                  Load an active database to generate the cumulative antibiogram
-                  report.
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 10px;
+                  "
+                >
+                  <div style="color: var(--text3); font-size: 13px">
+                    Load an active database to generate the cumulative
+                    antibiogram report.
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-sm"
+                    onclick="openAntibiogramOptionsModal()"
+                    title="Configure CLSI M39 deduplication rule, surveillance window, and minimum isolate threshold"
+                    style="
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 6px;
+                      font-weight: 600;
+                      height: 26px;
+                      font-size: 11.5px;
+                      padding: 0 10px;
+                      white-space: nowrap;
+                    "
+                  >
+                    <i
+                      class="fa-solid fa-sliders"
+                      style="color: var(--accent)"
+                    ></i>
+                    <span>Options</span>
+                  </button>
                 </div>
               </div>
 
@@ -1740,35 +1796,11 @@
                       "
                       title="Surveillance Period (auto-suggested from dataset dates: Annual, Semi-Annual H1/H2, Quarterly)"
                     >
-                      <option value="all" selected>Entire File (All Dates)</option>
+                      <option value="all" selected>
+                        Entire File (All Dates)
+                      </option>
                     </select>
                   </div>
-                </div>
-
-                <!-- Options Window Trigger Button -->
-                <div>
-                  <button
-                    type="button"
-                    class="btn btn-outline btn-sm"
-                    onclick="openAntibiogramOptionsModal()"
-                    title="Configure CLSI M39 deduplication rule, surveillance window, and minimum isolate threshold"
-                    style="
-                      display: inline-flex;
-                      align-items: center;
-                      gap: 7px;
-                      font-weight: 600;
-                      height: 32px;
-                      font-size: 12px;
-                      padding: 0 12px;
-                      white-space: nowrap;
-                    "
-                  >
-                    <i
-                      class="fa-solid fa-sliders"
-                      style="color: var(--accent)"
-                    ></i>
-                    <span>Options</span>
-                  </button>
                 </div>
 
                 <!-- Hidden inputs to preserve compatibility with programmatic calls -->
@@ -2853,10 +2885,10 @@
                 class="btn btn-outline btn-sm"
                 id="btn-res-copy-table"
                 onclick="copyResourceTableTsv()"
-                title="Copy Table to Clipboard (ready to paste into Excel, Word, or Google Sheets)"
+                title="Copy Table to Clipboard as Plain TSV (ready to paste into Excel, Word, or Google Sheets)"
               >
                 <i class="fa-regular fa-copy"></i>
-                <span>Copy</span>
+                <span>Copy Table</span>
               </button>
             </div>
           </div>
@@ -2958,6 +2990,20 @@
                   onchange="onResourceHideEmptyBpChange(this.checked)"
                 />
                 <span>Hide without breakpoints</span>
+              </label>
+
+              <!-- Filter by Lab Config Checkbox -->
+              <label
+                class="filter-checkbox-label"
+                id="res-lab-config-filter-wrap"
+                title="Filter to display only antibiotics and breakpoints configured in your active laboratory configuration (.cfg) or dataset AST columns"
+              >
+                <input
+                  type="checkbox"
+                  id="res-filter-lab-config"
+                  onchange="onResourceLabConfigFilterChange(this.checked)"
+                />
+                <span id="res-lab-config-filter-label">Available in Lab Config</span>
               </label>
 
               <!-- Result Count Message -->
@@ -3879,7 +3925,9 @@
                     style="width: 100%; height: 32px"
                     onchange="handleModalPeriodPreset(this.value)"
                   >
-                    <option value="all" selected>Entire File (All Dates)</option>
+                    <option value="all" selected>
+                      Entire File (All Dates)
+                    </option>
                     <option value="custom">Custom Date Range</option>
                   </select>
                 </div>
@@ -4285,12 +4333,11 @@
             background: var(--bg3);
             border-bottom: 1px solid var(--border);
             display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
+            flex-direction: column;
             gap: 10px;
           "
         >
+          <!-- Row 1: Dropdown Filters -->
           <div
             style="
               display: flex;
@@ -4316,8 +4363,10 @@
                   min-width: 165px;
                 "
               >
-                <option value="all" selected>%S / %I / %R (Full)</option>
-                <option value="S">%S Only (Susceptible)</option>
+                <option value="S" selected>
+                  %S Only (Susceptible) (Recommended)
+                </option>
+                <option value="all">%S / %I / %R (Full)</option>
                 <option value="R">%R Only (Resistant)</option>
               </select>
             </div>
@@ -4339,8 +4388,8 @@
                   min-width: 120px;
                 "
               >
-                <option value="horizontal" selected>Horizontal</option>
-                <option value="vertical">Vertical</option>
+                <option value="vertical" selected>Vertical</option>
+                <option value="horizontal">Horizontal</option>
               </select>
             </div>
 
@@ -4370,7 +4419,18 @@
                 <option value="alpha">Alphabetical</option>
               </select>
             </div>
+          </div>
 
+          <!-- Row 2: Hide Untested & 3 Action Buttons in Same Line -->
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 10px;
+              flex-wrap: wrap;
+            "
+          >
             <!-- Hide Untested Checkbox -->
             <label
               style="
@@ -4395,63 +4455,70 @@
                   cursor: pointer;
                 "
               />
-              <span>Hide untested</span>
+              <span style="font-weight: 500">Hide untested</span>
             </label>
-          </div>
 
-          <!-- Actions: Copy Data, Copy Image & Download PNG -->
-          <div style="display: flex; align-items: center; gap: 8px">
-            <button
-              type="button"
-              class="btn btn-outline btn-sm"
-              onclick="copySpectrumChartData()"
-              title="Copy chart data table to clipboard (paste into Excel with Ctrl+V and press Alt+F1 for native editable chart)"
+            <!-- Actions: Copy Data, Copy Image & Download PNG -->
+            <div
               style="
-                height: 30px;
-                font-size: 12px;
-                padding: 0 10px;
-                display: inline-flex;
+                display: flex;
                 align-items: center;
-                gap: 6px;
+                gap: 8px;
+                flex-wrap: wrap;
               "
             >
-              <i class="fa-solid fa-table"></i>
-              <span>Copy Data</span>
-            </button>
-            <button
-              type="button"
-              class="btn btn-outline btn-sm"
-              onclick="copySpectrumChartImage()"
-              title="Copy chart image to clipboard (paste directly into Word, Excel, or PowerPoint with Ctrl+V)"
-              style="
-                height: 30px;
-                font-size: 12px;
-                padding: 0 10px;
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-              "
-            >
-              <i class="fa-regular fa-copy"></i>
-              <span>Copy Image</span>
-            </button>
-            <button
-              type="button"
-              class="btn btn-outline btn-sm"
-              onclick="downloadSpectrumChartPng()"
-              title="Download spectrum chart as high-resolution PNG image"
-              style="
-                height: 30px;
-                font-size: 12px;
-                padding: 0 10px;
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-              "
-            >
-              <i class="fa-solid fa-download"></i>
-              <span>Download PNG</span>
-            </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm"
+                onclick="copySpectrumChartData()"
+                title="Copy chart data table to clipboard (paste into Excel with Ctrl+V and press Alt+F1 for native editable chart)"
+                style="
+                  height: 30px;
+                  font-size: 12px;
+                  padding: 0 10px;
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 6px;
+                "
+              >
+                <i class="fa-solid fa-table"></i>
+                <span>Copy Data</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm"
+                onclick="copySpectrumChartImage()"
+                title="Copy chart image to clipboard (paste directly into Word, Excel, or PowerPoint with Ctrl+V)"
+                style="
+                  height: 30px;
+                  font-size: 12px;
+                  padding: 0 10px;
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 6px;
+                "
+              >
+                <i class="fa-regular fa-copy"></i>
+                <span>Copy Image</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm"
+                onclick="downloadSpectrumChartPng()"
+                title="Download spectrum chart as high-resolution PNG image"
+                style="
+                  height: 30px;
+                  font-size: 12px;
+                  padding: 0 10px;
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 6px;
+                "
+              >
+                <i class="fa-solid fa-download"></i>
+                <span>Download PNG</span>
+              </button>
+            </div>
           </div>
         </div>
 

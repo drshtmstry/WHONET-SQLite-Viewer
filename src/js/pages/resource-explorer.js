@@ -9,6 +9,8 @@ import { renderSortHeader, renderPagination } from '../ui/table.js';
 import { toast } from '../ui/toast.js';
 import { naturalCompare } from '../utils/natural-sort.js';
 import { escapeHtml, debounce } from '../utils/formatters.js';
+import { state } from '../state/store.js';
+import { sqlSchemaCache } from './sql-workspace.js';
 
 // ── Resource Explorer State ──
 export const resState = {
@@ -20,6 +22,7 @@ export const resState = {
   selectedYear: '2026',
   selectedOrganism: 'ALL', // 'ALL' or specific code e.g. 'eco', 'EBC', 'sau', 'STA'
   hideEmptyBreakpoints: false,
+  filterByLabConfig: false,
 
   page: 1,
   pageSize: 50,
@@ -352,10 +355,85 @@ export function resolveOrganismOrPanel(query) {
 }
 
 /**
+ * Resolves active laboratory configuration antibiotics and test codes
+ * from state.customLabConfig or active SQLite schema AST columns.
+ */
+export function getActiveLabConfigDetails() {
+  const labConfig = state.customLabConfig;
+  const drugCodes = new Set();
+  const testCodes = new Set();
+  let source = null;
+
+  if (labConfig) {
+    source = labConfig.filename || labConfig.metadata?.['Laboratory Name'] || 'Lab Config';
+    if (labConfig.testCodes && typeof labConfig.testCodes.forEach === 'function') {
+      labConfig.testCodes.forEach(tc => testCodes.add(tc.toUpperCase()));
+    }
+    if (labConfig.drugCodes && typeof labConfig.drugCodes.forEach === 'function') {
+      labConfig.drugCodes.forEach(dc => drugCodes.add(dc.toUpperCase()));
+    }
+    if (labConfig.generalBreakpoints) {
+      for (const tc of Object.keys(labConfig.generalBreakpoints)) {
+        testCodes.add(tc.toUpperCase());
+        drugCodes.add(tc.split('_')[0].toUpperCase());
+      }
+    }
+    if (labConfig.speciesBreakpoints) {
+      for (const tc of Object.keys(labConfig.speciesBreakpoints)) {
+        testCodes.add(tc.toUpperCase());
+        drugCodes.add(tc.split('_')[0].toUpperCase());
+      }
+    }
+  }
+
+  // Also extract from active dataset AST columns (e.g. AMK_ND30, CIP_ND5, CRO_NM)
+  const schemaCols = state.schema?.columns?.Isolates || sqlSchemaCache?.columns?.Isolates || [];
+  if (schemaCols.length) {
+    const astSuffixPattern = /_([A-Z]{2}\d*|[A-Z]+\d*)$/i;
+    for (const col of schemaCols) {
+      if (astSuffixPattern.test(col)) {
+        testCodes.add(col.toUpperCase());
+        drugCodes.add(col.split('_')[0].toUpperCase());
+        if (!source) source = state.currentDb || 'Active Dataset';
+      }
+    }
+  }
+
+  return {
+    isAvailable: drugCodes.size > 0 || testCodes.size > 0,
+    source,
+    drugCodes,
+    testCodes,
+    count: drugCodes.size
+  };
+}
+
+export function updateLabConfigFilterLabel(labDetails = null) {
+  const details = labDetails || getActiveLabConfigDetails();
+  const wrap = document.getElementById('res-lab-config-filter-wrap');
+  const label = document.getElementById('res-lab-config-filter-label');
+  if (!wrap || !label) return;
+
+  if (details.isAvailable) {
+    wrap.style.opacity = '1';
+    wrap.style.cursor = 'pointer';
+    wrap.title = `Filter by ${details.count} antibiotics configured in ${details.source}`;
+    label.textContent = 'Available in Lab Config';
+  } else {
+    wrap.style.opacity = '0.7';
+    wrap.title = 'No active lab config (.cfg) or dataset AST columns loaded. Open a WHONET folder or database with AST columns to enable.';
+    label.textContent = 'Available in Lab Config (No config/DB)';
+  }
+}
+
+/**
  * Applies active filters, sorts, and renders the current page
  */
 export function applyResourceFilters() {
   if (!resState.isLoaded) return;
+
+  const labDetails = getActiveLabConfigDetails();
+  updateLabConfigFilterLabel(labDetails);
 
   const q = resState.searchQuery.trim().toLowerCase();
   const guideline = resState.selectedGuideline;
@@ -378,6 +456,15 @@ export function applyResourceFilters() {
       if (method !== 'All Methods' && b.testMethod.toLowerCase() !== method.toLowerCase()) return false;
       if (type !== 'All Types' && b.breakpointType.toLowerCase() !== type.toLowerCase()) return false;
       if (targetYear !== null && b.year !== targetYear) return false;
+
+      // Filter by active Lab Config / Dataset AST columns
+      if (resState.filterByLabConfig && labDetails.isAvailable) {
+        const drugUpper = (b.abxCode || '').toUpperCase();
+        const testUpper = (b.whonetTest || '').toUpperCase();
+        const matchesDrug = drugUpper && labDetails.drugCodes.has(drugUpper);
+        const matchesTest = testUpper && labDetails.testCodes.has(testUpper);
+        if (!matchesDrug && !matchesTest) return false;
+      }
 
       // Filter out rows where all S/I/R/SDD breakpoints are not available (-)
       if (resState.hideEmptyBreakpoints) {
@@ -444,6 +531,20 @@ export function applyResourceFilters() {
         if (!matchesGuide) return false;
       }
 
+      // Filter by active Lab Config / Dataset AST columns
+      if (resState.filterByLabConfig && labDetails.isAvailable) {
+        const affUpper = (r.affectedAntibiotics || '').toUpperCase();
+        const ruleUpper = (r.ruleCode || '').toUpperCase();
+        let matches = false;
+        for (const d of labDetails.drugCodes) {
+          if (affUpper.includes(d) || ruleUpper.includes(d)) {
+            matches = true;
+            break;
+          }
+        }
+        if (!matches) return false;
+      }
+
       if (effectiveOrg) {
         const rOrgUpper = (r.organismCode || '').toUpperCase();
         const rOrgLower = (r.organismCode || '').toLowerCase();
@@ -483,6 +584,12 @@ export function applyResourceFilters() {
   } else if (resState.activeTab === 'intrinsic') {
     list = resState.allIntrinsicRules.filter(r => {
       if (guideline !== 'All Guidelines' && r.guideline.toLowerCase() !== guideline.toLowerCase()) return false;
+
+      // Filter by active Lab Config / Dataset AST columns
+      if (resState.filterByLabConfig && labDetails.isAvailable) {
+        const drugUpper = (r.abxCode || '').toUpperCase();
+        if (!drugUpper || !labDetails.drugCodes.has(drugUpper)) return false;
+      }
 
       if (effectiveOrg) {
         const rOrgUpper = (r.organismCode || '').toUpperCase();
@@ -833,6 +940,17 @@ export function onResourceYearChange() {
 
 export function onResourceHideEmptyBpChange(checked) {
   resState.hideEmptyBreakpoints = !!checked;
+  resState.page = 1;
+  applyResourceFilters();
+}
+
+export function onResourceLabConfigFilterChange(checked) {
+  resState.filterByLabConfig = !!checked;
+  const labDetails = getActiveLabConfigDetails();
+  if (checked && !labDetails.isAvailable) {
+    toast('No active lab config (.cfg) or dataset AST columns loaded. Open a WHONET folder or database to enable this filter.', 'warning');
+  }
+  resState.page = 1;
   applyResourceFilters();
 }
 

@@ -107,17 +107,21 @@ In accordance with WHONET and AMRIE, interpretations are performed dynamically o
 ---
 
 ## 6. Technical Execution Phases
-- **Phase 1: AMRIE Interpretation Engine & Config Reader**
-  - Reader for WHONET `.BMCRI` / `.TST` configuration files.
+- **Phase 1: AMRIE Interpretation Engine & Config Reader** `[Completed]`
+  - Reader for WHONET `.BMCRI` / `.TST` configuration files (`parseLabConfig`).
   - Bundled CLSI breakpoints lookup matrix and intrinsic resistance tables (from `Breakpoints.txt` & `ExpectedResistancePhenotypes.txt`).
   - Unit logic mapping disk diffusion mm and MIC to `S`, `I`, `R`.
-- **Phase 2: CLSI M39 De-duplication & Calculation Engine**
+- **Phase 2: CLSI M39 De-duplication & Calculation Engine** `[Completed]`
   - First-isolate deduplication algorithm with configurable episode windows (e.g. 365 days / 30 days).
-  - %S aggregation with $N \ge 30$ threshold filtering.
-- **Phase 3: Dual-Mode API / Client Engine**
+  - %S aggregation with $N \ge 30$ threshold filtering and intrinsic resistance overrides.
+- **Phase 3: Dual-Mode API / Client Engine** `[Completed]`
   - Server-side execution in `server.js` for desktop/local installation.
   - Client-side execution in `wasm-emulator.js` for standalone browser/PWA usage.
-- **Phase 4: Cumulative Antibiogram Table UI**
-  - Tabular view (`Appendix E1` & `Appendix E2`) with clinical badge indicators and export capabilities.
-- **Phase 5: Charts & Trend Visualizations**
-  - Chart.js longitudinal trend lines and empiric therapy heatmaps.
+- **Phase 4: Cumulative Antibiogram Table UI** `[Completed]`
+  - Tabular view (`Appendix E1` & `Appendix E2`) with clinical badge indicators and one-click formatted TSV/HTML export.
+- **Phase 5: Charts & Trend Visualizations** `[Completed]`
+  - Chart.js longitudinal trend lines and location-wise care stratification (ICU / Inpatient / Outpatient).
+- **Phase 6: Clinical Usability & Spectrum Visualizer Enhancements** `[Completed]`
+  - Organism Susceptibility Spectrum Visualizer with horizontal bar and vertical column presentations, dynamic orientation switching, and threshold-matched bar coloring (≥80% green, 50-79% yellow, <50% red, intrinsic dark red).
+  - Formatted clipboard copying with hyperlink stripping for clean spreadsheet / document pasting.
+  - Lab configuration filtering in the Resource Explorer for active lab drug panels.

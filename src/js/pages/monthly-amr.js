@@ -1,7 +1,7 @@
 import { state } from "../state/store.js";
 import { api } from "../api/client.js";
 import { toast } from "../ui/toast.js";
-import { formatAmrMonthLabel } from "../utils/formatters.js";
+import { formatAmrMonthLabel, copyTableHtmlAndTsv } from "../utils/formatters.js";
 
 export const AMR_HEADERS = [
   "Month, Year",
@@ -231,5 +231,109 @@ export function copyAmrTableTsv() {
       });
   } else {
     prompt("Copy this TSV table:", tsv);
+  }
+}
+
+export async function copyAmrTableFormatted() {
+  const table = document.querySelector(".amr-report-table");
+  const rows = getAmrRowsData();
+  if (!table || !rows.length) return toast("No AMR data loaded", "error");
+
+  const clone = table.cloneNode(true);
+
+  // Strip interactive links (e.g. Month links) and replace with clean text
+  clone.querySelectorAll("a").forEach((a) => {
+    a.replaceWith(a.textContent.trim());
+  });
+
+  clone.setAttribute("border", "1");
+  clone.setAttribute("cellpadding", "6");
+  clone.setAttribute("cellspacing", "0");
+  clone.style.borderCollapse = "collapse";
+  clone.style.fontFamily = "Calibri, Arial, sans-serif";
+  clone.style.fontSize = "10pt";
+  clone.style.width = "100%";
+
+  // Format headers
+  clone.querySelectorAll("thead tr").forEach((tr, rowIdx) => {
+    tr.querySelectorAll("th").forEach((th) => {
+      const cls = th.className || "";
+      let bg = "#f1f5f9";
+      let color = "#0f172a";
+
+      if (cls.includes("th-group-pos")) {
+        bg = "#d1fae5";
+        color = "#065f46";
+      } else if (cls.includes("th-total-col")) {
+        bg = "#e0f2fe";
+        color = "#0369a1";
+      } else if (cls.includes("th-total-pos-col")) {
+        bg = "#dcfce7";
+        color = "#15803d";
+      } else if (rowIdx === 1) {
+        bg = "#f8fafc";
+        color = "#334155";
+      }
+
+      th.style.backgroundColor = bg;
+      th.style.color = color;
+      th.style.fontWeight = "bold";
+      th.style.border = "1px solid #cbd5e1";
+      th.style.padding = "6px 8px";
+      th.style.textAlign = "center";
+      th.style.whiteSpace = "normal";
+      th.style.wordBreak = "break-word";
+    });
+  });
+
+  // Format body
+  clone.querySelectorAll("tbody tr").forEach((tr) => {
+    const isSummary = tr.classList.contains("amr-summary-row");
+    tr.querySelectorAll("td").forEach((td, colIdx) => {
+      const cls = td.className || "";
+      let bg = isSummary ? "#f1f5f9" : "#ffffff";
+      let color = isSummary ? "#0f172a" : "#1e293b";
+      let weight = isSummary ? "bold" : "normal";
+
+      if (cls.includes("td-summary-pos")) {
+        bg = "#bbf7d0";
+        color = "#16a34a";
+        weight = "bold";
+      } else if (cls.includes("td-summary-total")) {
+        bg = "#bae6fd";
+        color = "#0284c7";
+        weight = "bold";
+      } else if (cls.includes("td-total-pos")) {
+        bg = "#dcfce7";
+        color = "#15803d";
+        weight = "bold";
+      } else if (cls.includes("td-total")) {
+        bg = "#e0f2fe";
+        color = "#0369a1";
+        weight = "bold";
+      }
+
+      td.style.backgroundColor = bg;
+      td.style.color = color;
+      td.style.fontWeight = weight;
+      td.style.border = "1px solid #cbd5e1";
+      td.style.padding = "6px 8px";
+      td.style.textAlign = colIdx === 0 ? "left" : "center";
+      td.style.whiteSpace = "normal";
+      td.style.wordBreak = "break-word";
+    });
+  });
+
+  const allRows = [AMR_HEADERS, ...rows];
+  const tsv = allRows.map((r) => r.join("\t")).join("\n");
+
+  const success = await copyTableHtmlAndTsv(clone.outerHTML, tsv);
+  if (success) {
+    toast(
+      "Monthly AMR table copied with formatting! Ready for Excel, Word, or Sheets.",
+      "success",
+    );
+  } else {
+    toast("Could not copy table to clipboard", "error");
   }
 }

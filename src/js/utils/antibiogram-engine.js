@@ -32,7 +32,11 @@ export function parseLabConfig(configContent) {
     generalBreakpoints: {},
     speciesBreakpoints: {},
     wards: [],
-    institutions: []
+    institutions: [],
+    antibiotics: [],
+    drugCodes: new Set(),
+    testCodes: new Set(),
+    speciesCodes: new Set()
   };
 
   for (let line of lines) {
@@ -53,34 +57,50 @@ export function parseLabConfig(configContent) {
       }
     } else if (currentSection === 'Antibiotics') {
       const parts = line.split(',');
-      if (parts.length >= 3) {
+      if (parts.length >= 1) {
         const testCode = parts[0].trim();
-        const rVal = parseFloat(parts[2]?.trim());
-        const iVal = parts[3]?.trim();
-        const sVal = parseFloat(parts[4]?.trim());
-        if (!isNaN(rVal) || !isNaN(sVal)) {
-          config.generalBreakpoints[testCode] = {
-            r: isNaN(rVal) ? null : rVal,
-            i: iVal || null,
-            s: isNaN(sVal) ? null : sVal
-          };
+        if (testCode) {
+          config.testCodes.add(testCode);
+          const baseDrug = testCode.split('_')[0].toUpperCase();
+          if (baseDrug) config.drugCodes.add(baseDrug);
+          if (!config.antibiotics.includes(testCode)) config.antibiotics.push(testCode);
+        }
+        if (parts.length >= 3) {
+          const rVal = parseFloat(parts[2]?.trim());
+          const iVal = parts[3]?.trim();
+          const sVal = parseFloat(parts[4]?.trim());
+          if (!isNaN(rVal) || !isNaN(sVal)) {
+            config.generalBreakpoints[testCode] = {
+              r: isNaN(rVal) ? null : rVal,
+              i: iVal || null,
+              s: isNaN(sVal) ? null : sVal
+            };
+          }
         }
       }
     } else if (currentSection === 'Antibiotic Species-Specific Breakpoints') {
       const parts = line.split(',');
-      if (parts.length >= 4) {
+      if (parts.length >= 2) {
         const orgCode = parts[0].trim().toLowerCase();
         const testCode = parts[1].trim();
-        const rVal = parseFloat(parts[2]?.trim());
-        const sVal = parseFloat(parts[3]?.trim());
-        if (!isNaN(rVal) || !isNaN(sVal)) {
-          if (!config.speciesBreakpoints[testCode]) {
-            config.speciesBreakpoints[testCode] = {};
+        if (orgCode) config.speciesCodes.add(orgCode);
+        if (testCode) {
+          config.testCodes.add(testCode);
+          const baseDrug = testCode.split('_')[0].toUpperCase();
+          if (baseDrug) config.drugCodes.add(baseDrug);
+        }
+        if (parts.length >= 4) {
+          const rVal = parseFloat(parts[2]?.trim());
+          const sVal = parseFloat(parts[3]?.trim());
+          if (!isNaN(rVal) || !isNaN(sVal)) {
+            if (!config.speciesBreakpoints[testCode]) {
+              config.speciesBreakpoints[testCode] = {};
+            }
+            config.speciesBreakpoints[testCode][orgCode] = {
+              r: isNaN(rVal) ? null : rVal,
+              s: isNaN(sVal) ? null : sVal
+            };
           }
-          config.speciesBreakpoints[testCode][orgCode] = {
-            r: isNaN(rVal) ? null : rVal,
-            s: isNaN(sVal) ? null : sVal
-          };
         }
       }
     }

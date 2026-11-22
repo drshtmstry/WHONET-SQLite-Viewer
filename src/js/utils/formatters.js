@@ -141,3 +141,79 @@ export function formatWardTypeLabel(wt) {
   };
   return WARD_TYPE_NAMES[clean] || `${wt.toUpperCase()} (${wt})`;
 }
+
+/**
+ * Copies a table to the clipboard as both rich HTML (with inline cell colors,
+ * borders, font styles, and text-wrapping for Excel/Word/Sheets) and plain TSV.
+ *
+ * @param {string} htmlTableString - Fully styled <table> HTML markup
+ * @param {string} plainTsvString - Plain tab-separated text representation
+ * @returns {Promise<boolean>}
+ */
+export async function copyTableHtmlAndTsv(htmlTableString, plainTsvString) {
+  const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${htmlTableString}</body></html>`;
+
+  // 1. Try modern navigator.clipboard.write with ClipboardItem
+  if (
+    typeof navigator !== 'undefined' &&
+    navigator.clipboard &&
+    typeof navigator.clipboard.write === 'function' &&
+    typeof window !== 'undefined' &&
+    window.ClipboardItem
+  ) {
+    try {
+      const htmlBlob = new Blob([fullHtml], { type: 'text/html' });
+      const textBlob = new Blob([plainTsvString], { type: 'text/plain' });
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': htmlBlob,
+          'text/plain': textBlob
+        })
+      ]);
+      return true;
+    } catch (err) {
+      console.warn('navigator.clipboard.write failed, trying execCommand fallback:', err);
+    }
+  }
+
+  // 2. Fallback using document.execCommand('copy') with selected range
+  if (typeof document !== 'undefined') {
+    try {
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.opacity = '0';
+      container.innerHTML = fullHtml;
+      document.body.appendChild(container);
+
+      const range = document.createRange();
+      range.selectNode(container);
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+
+      const success = document.execCommand('copy');
+      if (sel) sel.removeAllRanges();
+      document.body.removeChild(container);
+
+      if (success) return true;
+    } catch (err) {
+      console.warn('execCommand copy fallback failed:', err);
+    }
+  }
+
+  // 3. Final fallback: plain text writeText
+  if (
+    typeof navigator !== 'undefined' &&
+    navigator.clipboard &&
+    typeof navigator.clipboard.writeText === 'function'
+  ) {
+    await navigator.clipboard.writeText(plainTsvString);
+    return true;
+  }
+
+  return false;
+}

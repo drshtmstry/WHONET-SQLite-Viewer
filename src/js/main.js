@@ -114,6 +114,7 @@ import {
   renderAmrTable,
   getAmrRowsData,
   copyAmrTableTsv,
+  copyAmrTableFormatted,
 } from "./pages/monthly-amr.js";
 import {
   loadAntibiogram,
@@ -132,6 +133,7 @@ import {
   applyAntibiogramOptions,
   exportAntibiogramCsv,
   copyAntibiogramTsv,
+  copyAntibiogramFormatted,
   setModalMinCutoff,
   handleModalMinCutoffChange,
   handleModalPeriodPreset,
@@ -182,6 +184,7 @@ import {
   onResourceTypeChange,
   onResourceYearChange,
   onResourceHideEmptyBpChange,
+  onResourceLabConfigFilterChange,
   copyResourceTableTsv,
 } from "./pages/resource-explorer.js";
 
@@ -256,6 +259,87 @@ export function updateThemeToggleBtn(theme) {
     if (label) label.textContent = isDark ? "Light Mode" : "Dark Mode";
     btn.title = isDark ? "Switch to Light Mode" : "Switch to Dark Mode";
     btn.setAttribute("aria-label", btn.title);
+  }
+}
+
+// ── Sidebar Management ──
+export function initSidebar() {
+  let saved = null;
+  try {
+    saved = localStorage.getItem("whonet-sidebar-collapsed");
+  } catch (e) {}
+
+  if (saved === "true" && window.innerWidth > 760) {
+    toggleSidebarCollapse(true, false);
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      const tag = e.target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) {
+        return;
+      }
+      e.preventDefault();
+      toggleSidebar();
+    }
+  });
+}
+
+export function toggleSidebarCollapse(force, animate = true) {
+  const sidebar = document.getElementById("app-sidebar");
+  const headerToggleBtn = document.getElementById("sidebar-toggle-btn");
+  if (!sidebar) return;
+
+  const isCollapsed =
+    typeof force === "boolean" ? force : !sidebar.classList.contains("collapsed");
+
+  if (!animate) {
+    const prevTransition = sidebar.style.transition;
+    sidebar.style.transition = "none";
+    sidebar.classList.toggle("collapsed", isCollapsed);
+    void sidebar.offsetWidth;
+    sidebar.style.transition = prevTransition;
+  } else {
+    sidebar.classList.toggle("collapsed", isCollapsed);
+  }
+
+  try {
+    localStorage.setItem("whonet-sidebar-collapsed", String(isCollapsed));
+  } catch (_) {}
+
+  if (headerToggleBtn) {
+    headerToggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+    const headerTitle = isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
+    headerToggleBtn.setAttribute("title", headerTitle);
+    headerToggleBtn.setAttribute("aria-label", headerTitle);
+  }
+
+  // Trigger chart and layout resize smoothly when transition finishes
+  if (animate) {
+    let triggered = false;
+    const triggerResize = () => {
+      if (triggered) return;
+      triggered = true;
+      window.dispatchEvent(new Event("resize"));
+    };
+    const onTransitionEnd = (e) => {
+      if (e.target === sidebar && e.propertyName === "width") {
+        sidebar.removeEventListener("transitionend", onTransitionEnd);
+        triggerResize();
+      }
+    };
+    sidebar.addEventListener("transitionend", onTransitionEnd);
+    setTimeout(triggerResize, 300);
+  } else {
+    window.dispatchEvent(new Event("resize"));
+  }
+}
+
+export function toggleSidebar() {
+  if (window.innerWidth <= 760) {
+    toggleMobileSidebar();
+  } else {
+    toggleSidebarCollapse();
   }
 }
 
@@ -437,6 +521,7 @@ window.addEventListener("focus", async () => {
 // ── App Initialization ──
 export async function init() {
   initTheme();
+  initSidebar();
   initSqlAutocomplete();
 
   if (isLocalHost) {
@@ -573,6 +658,9 @@ window.addEventListener("beforeunload", (e) => {
 Object.assign(window, {
   state,
   showPage,
+  initSidebar,
+  toggleSidebarCollapse,
+  toggleSidebar,
   toggleMobileSidebar,
   toggleTheme,
   switchDb,
@@ -613,6 +701,7 @@ Object.assign(window, {
   executeConfirm,
   loadMonthlyAmrData,
   copyAmrTableTsv,
+  copyAmrTableFormatted,
   loadAntibiogram,
   setAntibiogramGrouping,
   setAntibiogramMetric,
@@ -654,6 +743,7 @@ Object.assign(window, {
   copyLocationTableTsv,
   exportAntibiogramCsv,
   copyAntibiogramTsv,
+  copyAntibiogramFormatted,
   refreshSqlSchema,
   insertSQL,
   clearSQL,
@@ -673,6 +763,7 @@ Object.assign(window, {
   onResourceTypeChange,
   onResourceYearChange,
   onResourceHideEmptyBpChange,
+  onResourceLabConfigFilterChange,
   copyResourceTableTsv,
   chooseWhonetFolder,
   handleFolderSelected,

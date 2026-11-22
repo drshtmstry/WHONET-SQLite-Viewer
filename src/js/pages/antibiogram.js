@@ -2,7 +2,12 @@ import { state } from "../state/store.js";
 import { api } from "../api/client.js";
 import { toast } from "../ui/toast.js";
 import { getSpecimenName } from "../utils/specimens.js";
-import { escapeHtml, formatWardTypeLabel, formatAmrMonthLabel } from "../utils/formatters.js";
+import {
+  escapeHtml,
+  formatWardTypeLabel,
+  formatAmrMonthLabel,
+  copyTableHtmlAndTsv,
+} from "../utils/formatters.js";
 import { getAwareCategory } from "../utils/antibiogram-engine.js";
 import {
   resolveSurveillancePeriod,
@@ -532,6 +537,26 @@ function updateAntibiogramMetaHeader(data) {
         <span title="Deduplicated isolates analyzed vs total raw laboratory isolates">Isolates: <strong style="color:var(--text);">${data.totalFirstIsolates || 0}</strong> analyzed / <strong style="color:var(--text);">${data.totalRawIsolates || data.totalFirstIsolates || 0}</strong> raw</span>
         <span>•</span>
         <span title="${qualifiedCount} species meet the ≥${threshold} isolate cutoff for statistical validity (${orgCount} total species detected)">Species: <strong style="color:var(--text);">${qualifiedCount}</strong>/<strong style="color:var(--text);">${orgCount}</strong> qualified (&ge;${threshold})</span>
+        <button
+          type="button"
+          class="btn btn-outline btn-sm"
+          onclick="openAntibiogramOptionsModal()"
+          title="Configure CLSI M39 deduplication rule, surveillance window, and minimum isolate threshold"
+          style="
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+            height: 26px;
+            font-size: 11.5px;
+            padding: 0 10px;
+            margin-left: 6px;
+            white-space: nowrap;
+          "
+        >
+          <i class="fa-solid fa-sliders" style="color: var(--accent);"></i>
+          <span>Options</span>
+        </button>
       </div>
     </div>
     ${dateNoticeHtml}
@@ -1233,9 +1258,8 @@ export function exportAntibiogramCsv() {
   toast("Antibiogram CSV exported successfully!", "success");
 }
 
-export function copyAntibiogramTsv() {
-  if (!currentReportData || !currentReportData.organisms)
-    return toast("No antibiogram data to copy", "error");
+export function getAntibiogramTsv() {
+  if (!currentReportData || !currentReportData.organisms) return "";
 
   const { organisms, antibiotics } = currentReportData;
   const activeOrgs = organisms.filter((o) => o.meetsThreshold);
@@ -1341,8 +1365,15 @@ export function copyAntibiogramTsv() {
     rows.push(row.join("\t"));
   }
 
+  return rows.join("\n");
+}
+
+export function copyAntibiogramTsv() {
+  const tsv = getAntibiogramTsv();
+  if (!tsv) return toast("No antibiogram data to copy", "error");
+
   navigator.clipboard
-    .writeText(rows.join("\n"))
+    .writeText(tsv)
     .then(() =>
       toast(
         "Antibiogram table copied to clipboard (ready to paste into Excel or Word)",
@@ -1350,6 +1381,127 @@ export function copyAntibiogramTsv() {
       ),
     )
     .catch(() => toast("Could not copy to clipboard", "error"));
+}
+
+export async function copyAntibiogramFormatted() {
+  const table = document.querySelector("#antibiogram-table-container table");
+  if (!table || !currentReportData || !currentReportData.organisms) {
+    return toast("No antibiogram data to copy", "error");
+  }
+
+  const clone = table.cloneNode(true);
+
+  // Remove chart buttons, icon elements, and unwrap links
+  clone.querySelectorAll(".abx-chart-btn, i").forEach((el) => el.remove());
+  clone.querySelectorAll("a").forEach((a) => a.replaceWith(a.textContent.trim()));
+
+  // Set table attributes for MS Office and Google Sheets compatibility
+  clone.setAttribute("border", "1");
+  clone.setAttribute("cellpadding", "6");
+  clone.setAttribute("cellspacing", "0");
+  clone.style.borderCollapse = "collapse";
+  clone.style.fontFamily = "Calibri, Arial, sans-serif";
+  clone.style.fontSize = "10pt";
+  clone.style.width = "100%";
+
+  // Style header rows
+  clone.querySelectorAll("thead tr").forEach((tr) => {
+    tr.style.background = "#f8fafc";
+    tr.querySelectorAll("th").forEach((th) => {
+      const text = th.textContent.trim().toUpperCase();
+      let bg = "#f1f5f9";
+      let color = "#0f172a";
+
+      if (text.includes("WHO ACCESS")) {
+        bg = "#d1fae5";
+        color = "#065f46";
+      } else if (text.includes("WHO WATCH")) {
+        bg = "#fef3c7";
+        color = "#92400e";
+      } else if (text.includes("WHO RESERVE")) {
+        bg = "#fee2e2";
+        color = "#991b1b";
+      } else if (text.includes("OTHER / UNCLASSIFIED")) {
+        bg = "#f1f5f9";
+        color = "#475569";
+      }
+
+      th.style.backgroundColor = bg;
+      th.style.color = color;
+      th.style.fontWeight = "bold";
+      th.style.border = "1px solid #cbd5e1";
+      th.style.padding = "6px 8px";
+      th.style.textAlign = "center";
+      th.style.whiteSpace = "normal";
+      th.style.wordBreak = "break-word";
+      th.style.position = "static";
+    });
+  });
+
+  // Style body rows
+  clone.querySelectorAll("tbody tr").forEach((tr) => {
+    tr.style.background = "#ffffff";
+    const cells = tr.querySelectorAll("td");
+    cells.forEach((td, colIdx) => {
+      td.style.border = "1px solid #cbd5e1";
+      td.style.padding = "6px 8px";
+      td.style.whiteSpace = "normal";
+      td.style.wordBreak = "break-word";
+      td.style.position = "static";
+
+      if (colIdx === 0) {
+        // Organism name column
+        td.style.textAlign = "left";
+        td.style.fontWeight = "bold";
+        td.style.backgroundColor = "#ffffff";
+        td.style.color = "#0f172a";
+      } else if (colIdx === 1) {
+        // Total (N) column
+        td.style.textAlign = "center";
+        td.style.fontWeight = "bold";
+        td.style.backgroundColor = "#f8fafc";
+        td.style.color = "#0f172a";
+      } else {
+        // Drug columns
+        td.style.textAlign = "center";
+        const text = td.textContent.trim();
+        const originalStyle = td.getAttribute("style") || "";
+
+        if (
+          originalStyle.includes("var(--red-bg)") ||
+          text === "R" ||
+          text.startsWith("100% (R)") ||
+          originalStyle.includes("244, 63, 94")
+        ) {
+          td.style.backgroundColor = "#fee2e2";
+          td.style.color = "#b91c1c";
+          td.style.fontWeight = "bold";
+        } else if (originalStyle.includes("var(--green-bg)")) {
+          td.style.backgroundColor = "#dcfce7";
+          td.style.color = "#15803d";
+          td.style.fontWeight = "bold";
+        } else if (originalStyle.includes("var(--yellow-bg)")) {
+          td.style.backgroundColor = "#fef9c3";
+          td.style.color = "#a16207";
+          td.style.fontWeight = "bold";
+        } else {
+          td.style.backgroundColor = "#ffffff";
+          td.style.color = text === "—" ? "#94a3b8" : "#1e293b";
+        }
+      }
+    });
+  });
+
+  const tsv = getAntibiogramTsv();
+  const success = await copyTableHtmlAndTsv(clone.outerHTML, tsv);
+  if (success) {
+    toast(
+      "Antibiogram table copied with formatting! Ready for Excel, Word, or Sheets.",
+      "success",
+    );
+  } else {
+    toast("Could not copy table to clipboard", "error");
+  }
 }
 
 // ── Organism Susceptibility Spectrum Chart (%S / %I / %R) ──
@@ -1425,10 +1577,10 @@ export function renderOrganismSpectrumChart() {
   const hideUntested =
     document.getElementById("spectrum-hide-untested")?.checked ?? true;
   const metric =
-    document.getElementById("spectrum-metric-select")?.value || "all";
+    document.getElementById("spectrum-metric-select")?.value || "S";
   const orientation =
     document.getElementById("spectrum-orientation-select")?.value ||
-    "horizontal";
+    "vertical";
   const isVertical = orientation === "vertical";
 
   const allAntibiotics = currentReportData.antibiotics || [];
@@ -1449,16 +1601,50 @@ export function renderOrganismSpectrumChart() {
   const bI = document.getElementById("spectrum-badge-i");
   const bR = document.getElementById("spectrum-badge-r");
   const bIntr = document.getElementById("spectrum-badge-intrinsic");
-  if (bS)
-    bS.style.display =
-      metric === "all" || metric === "S" ? "inline-flex" : "none";
-  if (bI) bI.style.display = metric === "all" ? "inline-flex" : "none";
-  if (bR)
-    bR.style.display =
-      metric === "all" || metric === "R" ? "inline-flex" : "none";
-  if (bIntr)
-    bIntr.style.display =
-      metric === "all" || metric === "R" ? "inline-flex" : "none";
+
+  if (bS) {
+    bS.style.display = "inline-flex";
+    const textSpan = bS.querySelector("span:last-child");
+    if (textSpan) {
+      textSpan.textContent =
+        metric === "S"
+          ? "≥ 80% Susceptible"
+          : metric === "R"
+            ? "≤ 20% Resistant"
+            : "% Susceptible (%S)";
+    }
+  }
+  if (bI) {
+    bI.style.display = "inline-flex";
+    const textSpan = bI.querySelector("span:last-child");
+    if (textSpan) {
+      textSpan.textContent =
+        metric === "S"
+          ? "50% – 79% Susceptible"
+          : metric === "R"
+            ? "21% – 50% Resistant"
+            : "% Intermediate / SDD (%I)";
+    }
+  }
+  if (bR) {
+    bR.style.display = "inline-flex";
+    const textSpan = bR.querySelector("span:last-child");
+    if (textSpan) {
+      textSpan.textContent =
+        metric === "S"
+          ? "< 50% Susceptible"
+          : metric === "R"
+            ? "> 50% Resistant"
+            : "% Resistant (%R)";
+    }
+  }
+  if (bIntr) {
+    bIntr.style.display = "inline-flex";
+    const textSpan = bIntr.querySelector("span:last-child");
+    if (textSpan) {
+      textSpan.textContent = "Intrinsic Resistance (R)";
+    }
+  }
 
   // Build drug list for this organism
   let items = [];
@@ -1604,10 +1790,43 @@ export function renderOrganismSpectrumChart() {
 
   const ctx = canvas.getContext("2d");
 
-  const rBgColors = items.map((d) => (d.isIntrinsic ? "#991b1b" : "#ef4444"));
-  const rBorderColors = items.map((d) =>
-    d.isIntrinsic ? "#7f1d1d" : "#dc2626",
-  );
+  const sBgColors = items.map((d) => {
+    if (d.isIntrinsic) return "#991b1b";
+    if (d.pctS >= 80) return "#10b981";
+    if (d.pctS >= 50) return "#f59e0b";
+    return "#ef4444";
+  });
+  const sBorderColors = items.map((d) => {
+    if (d.isIntrinsic) return "#7f1d1d";
+    if (d.pctS >= 80) return "#059669";
+    if (d.pctS >= 50) return "#d97706";
+    return "#dc2626";
+  });
+  const sHoverBgColors = items.map((d) => {
+    if (d.isIntrinsic) return "#7f1d1d";
+    if (d.pctS >= 80) return "#059669";
+    if (d.pctS >= 50) return "#d97706";
+    return "#dc2626";
+  });
+
+  const rBgColors = items.map((d) => {
+    if (d.isIntrinsic) return "#991b1b";
+    if (d.pctR <= 20) return "#10b981";
+    if (d.pctR <= 50) return "#f59e0b";
+    return "#ef4444";
+  });
+  const rBorderColors = items.map((d) => {
+    if (d.isIntrinsic) return "#7f1d1d";
+    if (d.pctR <= 20) return "#059669";
+    if (d.pctR <= 50) return "#d97706";
+    return "#dc2626";
+  });
+  const rHoverBgColors = items.map((d) => {
+    if (d.isIntrinsic) return "#7f1d1d";
+    if (d.pctR <= 20) return "#059669";
+    if (d.pctR <= 50) return "#d97706";
+    return "#dc2626";
+  });
 
   // Spacing parameters: categoryPercentage & barPercentage ensure ~44% whitespace between bars
   const maxBarThick = isVertical ? 26 : 20;
@@ -1647,8 +1866,8 @@ export function renderOrganismSpectrumChart() {
       {
         label: "% Resistant (%R)",
         data: items.map((d) => d.pctR),
-        backgroundColor: rBgColors,
-        borderColor: rBorderColors,
+        backgroundColor: items.map((d) => (d.isIntrinsic ? "#991b1b" : "#ef4444")),
+        borderColor: items.map((d) => (d.isIntrinsic ? "#7f1d1d" : "#dc2626")),
         borderWidth: 1,
         hoverBackgroundColor: "#dc2626",
         maxBarThickness: maxBarThick,
@@ -1664,10 +1883,10 @@ export function renderOrganismSpectrumChart() {
       {
         label: "% Susceptible (%S)",
         data: items.map((d) => d.pctS),
-        backgroundColor: "#10b981",
-        borderColor: "#059669",
+        backgroundColor: sBgColors,
+        borderColor: sBorderColors,
         borderWidth: 1,
-        hoverBackgroundColor: "#059669",
+        hoverBackgroundColor: sHoverBgColors,
         maxBarThickness: maxBarThick,
         categoryPercentage: catPct,
         barPercentage: barPct,
@@ -1682,7 +1901,7 @@ export function renderOrganismSpectrumChart() {
         backgroundColor: rBgColors,
         borderColor: rBorderColors,
         borderWidth: 1,
-        hoverBackgroundColor: "#dc2626",
+        hoverBackgroundColor: rHoverBgColors,
         maxBarThickness: maxBarThick,
         categoryPercentage: catPct,
         barPercentage: barPct,
@@ -1874,7 +2093,7 @@ export function copySpectrumChartData() {
   const hideUntested =
     document.getElementById("spectrum-hide-untested")?.checked ?? true;
   const metric =
-    document.getElementById("spectrum-metric-select")?.value || "all";
+    document.getElementById("spectrum-metric-select")?.value || "S";
 
   const allAntibiotics = currentReportData.antibiotics || [];
   let items = [];
@@ -2063,7 +2282,7 @@ export function copySpectrumChartImage() {
     return toast("No spectrum chart to copy", "error");
   const canvas = document.getElementById("spectrum-chart-canvas");
   const metric =
-    document.getElementById("spectrum-metric-select")?.value || "all";
+    document.getElementById("spectrum-metric-select")?.value || "S";
   const metricTitle =
     metric === "S" ? "%S" : metric === "R" ? "%R" : "Spectrum";
   copyCanvasToClipboard(
@@ -2079,10 +2298,10 @@ export function downloadSpectrumChartPng() {
   if (!canvas) return;
 
   const metric =
-    document.getElementById("spectrum-metric-select")?.value || "all";
+    document.getElementById("spectrum-metric-select")?.value || "S";
   const orientation =
     document.getElementById("spectrum-orientation-select")?.value ||
-    "horizontal";
+    "vertical";
 
   const url = canvas.toDataURL("image/png", 1.0);
   const a = document.createElement("a");
