@@ -682,12 +682,9 @@ export async function loadSampleDatabase(sampleFilename) {
 
 export async function handleFileUpload(file, fileHandle = null) {
   if (!file) return;
-  if (
-    !file.name.toLowerCase().endsWith(".sqlite") &&
-    !file.name.toLowerCase().endsWith(".sqlite3")
-  ) {
+  if (!isSqliteDatabase(file.name)) {
     return toast(
-      "Please drop/upload a valid .sqlite or .sqlite3 file",
+      "Please drop/upload a valid .sqlite, .sqlite3, or .db file",
       "error",
     );
   }

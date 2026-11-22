@@ -59,44 +59,22 @@ export async function scanWhonetFolder(dirHandle, showToast = true) {
 
   const foundFiles = [];
   let foundLabFile = null;
-  let dataSubDirHandle = null;
 
-  // 1. Inspect the selected folder root:
-  // Look for any laboratory configuration file (LAB*.txt, LAB*.ini, etc.)
-  // and identify if there is a dedicated "Data" subfolder.
-  for await (const entry of dirHandle.values()) {
-    if (entry.kind === "file") {
-      if (/^LAB/i.test(entry.name) && !foundLabFile) {
-        foundLabFile = entry;
-      }
-    } else if (
-      entry.kind === "directory" &&
-      entry.name.toLowerCase() === "data"
-    ) {
-      dataSubDirHandle = entry;
-    }
-  }
-
-  // 2. WHONET main folder access is for lab configuration rules.
-  // Surveillance data files reside under the "Data" subfolder.
-  // If the selected folder has a "Data" subfolder, strictly scan under Data/
-  // and ignore non-data SQLite files (e.g. WHONET.sqlite, translations, backups) in the root.
-  // If the user picked the Data folder directly, scan dirHandle.
-  const targetDataDir = dataSubDirHandle || dirHandle;
-
-  async function scanDirectoryForDbs(handle) {
+  async function scanDirectoryForDbs(handle, depth = 0) {
     for await (const entry of handle.values()) {
       if (entry.kind === "file") {
         if (isSqliteDatabase(entry.name)) {
+          // Ignore WHONET internal software configuration databases
+          if (/^whonet\.(sqlite|db)/i.test(entry.name)) continue;
           state.fileHandles[entry.name] = entry;
           if (!foundFiles.includes(entry.name)) foundFiles.push(entry.name);
         } else if (/^LAB/i.test(entry.name) && !foundLabFile) {
           foundLabFile = entry;
         }
-      } else if (entry.kind === "directory") {
-        // Recurse into subdirectories inside the Data folder (e.g. Data/2024/, Data/ICU/, etc.)
+      } else if (entry.kind === "directory" && depth < 3) {
+        // Recurse into subdirectories (e.g. Data/, 2024/, ICU/, etc.)
         try {
-          await scanDirectoryForDbs(entry);
+          await scanDirectoryForDbs(entry, depth + 1);
         } catch (_) {}
       }
     }
@@ -104,9 +82,9 @@ export async function scanWhonetFolder(dirHandle, showToast = true) {
 
   // Reset fileHandles so databases from previous folders do not linger
   state.fileHandles = {};
-  await scanDirectoryForDbs(targetDataDir);
+  await scanDirectoryForDbs(dirHandle);
 
-  // 3. If a laboratory configuration file was discovered in the root or data folder, auto-parse it
+  // If a laboratory configuration file was discovered, auto-parse it
   if (foundLabFile) {
     try {
       const file = await foundLabFile.getFile();
@@ -127,26 +105,18 @@ export async function scanWhonetFolder(dirHandle, showToast = true) {
   foundFiles.sort();
   if (!foundFiles.length) {
     if (showToast) {
-      const folderNote = dataSubDirHandle
-        ? "under Data subfolder"
-        : "in selected folder";
-      toast(`No data .sqlite files found ${folderNote}.`, "error");
+      toast("No data .sqlite or .db files found in the selected folder.", "error");
     }
     return false;
   }
 
   state.databases = [...foundFiles];
-
   renderLaunchDbSelect();
   if (typeof window.renderDbSelector === "function") {
     window.renderDbSelector();
   }
   if (showToast) {
-    const locText = dataSubDirHandle ? "Data subfolder" : "folder";
-    toast(
-      `Found ${foundFiles.length} WHONET database(s) in ${locText}! Select one to open.`,
-      "success",
-    );
+    toast(`Found ${foundFiles.length} WHONET database(s)! Select one to open.`, "success");
   }
   return true;
 }
@@ -172,20 +142,30 @@ export async function restoreWhonetFolder() {
 export async function chooseWhonetFolder() {
   if ("showDirectoryPicker" in window) {
     try {
-      const dirHandle = await window.showDirectoryPicker({
-        id: "whonet_data_dir",
-        startIn: "documents",
-      });
+      // Do not pass startIn: "documents" (Windows redirects Documents to OneDrive,
+      // which freezes Windows File Explorer if OneDrive is offline/syncing).
+      // Do not pass id to avoid stale/corrupted path cache lookups in Chromium.
+      const dirHandle = await window.showDirectoryPicker();
       await saveWhonetFolderHandle(dirHandle);
       await scanWhonetFolder(dirHandle);
     } catch (err) {
-      if (err.name !== "AbortError") {
-        toast(`Failed to read folder: ${err.message}`, "error");
+      if (err.name === "AbortError") {
+        return;
       }
+      console.warn("showDirectoryPicker failed, falling back to standard input:", err);
+      toast(`Native folder picker failed (${err.message}). Opening standard folder selector…`, "info");
+      triggerStandardFolderPicker();
     }
   } else {
-    const input = document.getElementById("folder-input-fallback");
-    if (input) input.click();
+    triggerStandardFolderPicker();
+  }
+}
+
+export function triggerStandardFolderPicker() {
+  const input = document.getElementById("folder-input-fallback");
+  if (input) {
+    input.value = "";
+    input.click();
   }
 }
 
@@ -195,29 +175,9 @@ export async function handleFolderSelected(files) {
   state.fileHandles = {};
   let foundLabFile = null;
 
-  // Determine if files contain a "data" subfolder (e.g. WHONET/Data/...)
-  const hasDataFolder = Array.from(files).some((file) => {
-    const rel = (file.webkitRelativePath || "").replace(/\\/g, "/");
-    const parts = rel.split("/");
-    return parts.slice(0, -1).some((p) => p.toLowerCase() === "data");
-  });
-
   for (const file of files) {
-    const rel = (file.webkitRelativePath || "").replace(/\\/g, "/");
-    const parts = rel.split("/");
-    const inDataFolder = parts
-      .slice(0, -1)
-      .some((p) => p.toLowerCase() === "data");
-
-    // If a Data subfolder exists, only include .sqlite files that are under Data/
-    if (hasDataFolder && !inDataFolder) {
-      if (/^LAB/i.test(file.name) && !foundLabFile) {
-        foundLabFile = file;
-      }
-      continue;
-    }
-
     if (isSqliteDatabase(file.name)) {
+      if (/^whonet\.(sqlite|db)/i.test(file.name)) continue;
       state.fileHandles[file.name] = file;
       if (!foundFiles.includes(file.name)) foundFiles.push(file.name);
     } else if (/^LAB/i.test(file.name) && !foundLabFile) {
@@ -243,7 +203,7 @@ export async function handleFolderSelected(files) {
 
   foundFiles.sort();
   if (!foundFiles.length) {
-    return toast("No data .sqlite files found in the Data folder.", "error");
+    return toast("No data .sqlite or .db files found in the selected folder.", "error");
   }
 
   state.databases = [...foundFiles];
@@ -274,6 +234,11 @@ export function renderLaunchDbSelect() {
       btnPickFolder.title = folderConnected
         ? "Select a different WHONET data folder"
         : "Select the WHONET data folder";
+    }
+
+    const btnPickFolderFallback = document.getElementById("btn-pick-folder-fallback");
+    if (btnPickFolderFallback) {
+      btnPickFolderFallback.style.display = "inline-block";
     }
 
     const localDbs = state.databases || [];
@@ -401,14 +366,24 @@ export async function selectFromLaunchList() {
   }
 }
 
+export function triggerStandardFilePicker() {
+  const input = document.getElementById("file-upload-input");
+  if (input) {
+    input.value = "";
+    input.click();
+  }
+}
+
 export async function triggerBrowseFile() {
   if ("showOpenFilePicker" in window) {
     try {
       const [fileHandle] = await window.showOpenFilePicker({
         types: [
           {
-            description: "WHONET SQLite Database",
-            accept: { "application/x-sqlite3": [".sqlite"] },
+            description: "WHONET SQLite Database (*.sqlite, *.sqlite3, *.db)",
+            accept: {
+              "*/*": [".sqlite", ".sqlite3", ".db", ".db3"],
+            },
           },
         ],
         multiple: false,
@@ -419,13 +394,15 @@ export async function triggerBrowseFile() {
         await window.handleFileUpload(file, fileHandle);
       }
     } catch (err) {
-      if (err.name !== "AbortError") {
-        toast(`Failed to open file: ${err.message}`, "error");
+      if (err.name === "AbortError") {
+        return;
       }
+      console.warn("showOpenFilePicker failed, falling back to standard input:", err);
+      toast(`Native file picker failed (${err.message}). Opening standard file selector…`, "info");
+      triggerStandardFilePicker();
     }
   } else {
-    const input = document.getElementById("file-upload-input");
-    if (input) input.click();
+    triggerStandardFilePicker();
   }
 }
 

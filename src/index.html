@@ -167,7 +167,7 @@
         <input
           type="file"
           id="file-upload-input"
-          accept=".sqlite"
+          accept=".sqlite,.sqlite3,.db,.db3"
           style="display: none"
           onchange="handleFileUpload(this.files[0])"
         />
@@ -495,7 +495,7 @@
                   </div>
                   <div
                     id="launch-dir-actions"
-                    style="margin-top: 10px; display: flex; gap: 8px"
+                    style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px"
                   >
                     <button
                       type="button"
@@ -510,6 +510,26 @@
                     >
                       <i class="fa-solid fa-folder-tree"></i> Connect WHONET
                       Folder (C:\WHONET)
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-pick-folder-fallback"
+                      class="btn btn-link btn-xs"
+                      onclick="triggerStandardFolderPicker()"
+                      style="
+                        display: none;
+                        color: var(--text3);
+                        font-size: 11.5px;
+                        text-decoration: underline;
+                        background: none;
+                        border: none;
+                        cursor: pointer;
+                        padding: 2px 0;
+                        margin: 0 auto;
+                      "
+                      title="If native folder dialog does not open, click here to use standard browser folder selector"
+                    >
+                      <i class="fa-regular fa-folder"></i> Standard Folder Selector (Fallback)
                     </button>
                     <input
                       type="file"
@@ -546,7 +566,7 @@
                   </div>
                 </div>
                 <p class="guided-card-desc">
-                  Drag &amp; drop any <strong>.sqlite</strong> file here, or
+                  Drag &amp; drop any <strong>.sqlite</strong>, <strong>.sqlite3</strong>, or <strong>.db</strong> file here, or
                   select from any folder or USB drive. Modern browsers can save
                   changes directly back to that file.
                 </p>
@@ -565,7 +585,27 @@
                     <i class="fa-solid fa-file-circle-plus"></i> Browse &amp;
                     Open .sqlite File
                   </button>
-                  <div class="guided-drop-hint">
+                  <button
+                    type="button"
+                    id="btn-browse-file-fallback"
+                    class="btn btn-link btn-xs"
+                    onclick="triggerStandardFilePicker()"
+                    style="
+                      color: var(--text3);
+                      font-size: 11.5px;
+                      text-decoration: underline;
+                      background: none;
+                      border: none;
+                      cursor: pointer;
+                      padding: 4px 0 0 0;
+                      margin: 4px auto 0 auto;
+                      display: inline-block;
+                    "
+                    title="If file dialog does not open, click here to use standard browser file selector"
+                  >
+                    <i class="fa-regular fa-file"></i> Standard File Selector (Fallback)
+                  </button>
+                  <div class="guided-drop-hint" style="margin-top: 6px">
                     <i class="fa-solid fa-arrow-down"></i> Or drop your file
                     anywhere in this card
                   </div>
