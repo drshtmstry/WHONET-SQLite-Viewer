@@ -12,6 +12,7 @@ import {
   formatAmrMonthLabel,
   formatWardTypeLabel,
   escapeHtml,
+  isSqliteDatabase,
 } from "../utils/formatters.js";
 import { getSqlJs, wasmSelect, normaliseSchema } from "../db/wasm.js";
 import { refreshAntibiogramPeriodControls } from "./antibiogram.js";
@@ -684,7 +685,7 @@ export async function handleFileUpload(file, fileHandle = null) {
   if (!file) return;
   if (!isSqliteDatabase(file.name)) {
     return toast(
-      "Please drop/upload a valid .sqlite, .sqlite3, or .db file",
+      "Please drop/upload a valid .sqlite or .sqlite3 file",
       "error",
     );
   }
