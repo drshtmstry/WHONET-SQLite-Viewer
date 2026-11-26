@@ -10,6 +10,8 @@ export { API_BASE };
  */
 export async function api(path, options = {}) {
   if (state.isWasmMode) {
+    // Yield a tick so loading spinners and active navigation paint before synchronous WASM work
+    await new Promise((resolve) => setTimeout(resolve, 0));
     return handleWasmApi(path, options);
   }
 

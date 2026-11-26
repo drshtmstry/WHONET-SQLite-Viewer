@@ -380,12 +380,20 @@ export function buildDuplicatesQuery({
   const colExpr = (name, fallback = 'NULL') => (cols.includes(name) ? name : `${fallback} AS ${name}`);
 
   const rowsSql = `
-    WITH RankedIsolates AS (
-      SELECT *,
-             ROW_NUMBER() OVER (PARTITION BY ${groupCol} ORDER BY ${rowIdxExpr}) AS row_num,
-             COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
+    WITH DupKeys AS (
+      SELECT ${groupCol} AS gk, COUNT(*) AS total_duplicates
       FROM Isolates
       WHERE ${notEmptyCond}
+      GROUP BY ${groupCol}
+      HAVING COUNT(*) > 1
+    ),
+    RankedIsolates AS (
+      SELECT Isolates.*,
+             ROW_NUMBER() OVER (PARTITION BY ${groupCol} ORDER BY ${rowIdxExpr}) AS row_num,
+             DupKeys.total_duplicates
+      FROM Isolates
+      INNER JOIN DupKeys ON ${groupCol} = DupKeys.gk
+      WHERE ${notEmptyCond} ${searchCond}
     )
     SELECT ${colExpr('ROW_IDX', 'rowid')},
            ${colExpr('PATIENT_ID', "''")},
@@ -400,18 +408,33 @@ export function buildDuplicatesQuery({
            ${colExpr('DEPARTMENT', "''")},
            row_num, total_duplicates
     FROM RankedIsolates
-    WHERE total_duplicates > 1 ${searchCond}
     ${orderClause}
     LIMIT ${safePageSize} OFFSET ${offset}
   `;
 
-  const countSql = `
-    SELECT COUNT(*) as c FROM (
-      SELECT ${rowIdxExpr}, COUNT(*) OVER (PARTITION BY ${groupCol}) AS total_duplicates
+  const countSql = searchCond
+    ? `
+      WITH DupKeys AS (
+        SELECT ${groupCol} AS gk
+        FROM Isolates
+        WHERE ${notEmptyCond}
+        GROUP BY ${groupCol}
+        HAVING COUNT(*) > 1
+      )
+      SELECT COUNT(*) as c
       FROM Isolates
-      WHERE ${notEmptyCond}
-    ) WHERE total_duplicates > 1 ${searchCond}
-  `;
+      INNER JOIN DupKeys ON ${groupCol} = DupKeys.gk
+      WHERE ${notEmptyCond} ${searchCond}
+    `
+    : `
+      SELECT COALESCE(SUM(cnt), 0) as c FROM (
+        SELECT COUNT(*) as cnt
+        FROM Isolates
+        WHERE ${notEmptyCond}
+        GROUP BY ${groupCol}
+        HAVING COUNT(*) > 1
+      )
+    `;
 
   const mixedCaseSql = hasSpecNum
     ? "SELECT COUNT(*) as c FROM Isolates WHERE SPEC_NUM IS NOT NULL AND SPEC_NUM != '' AND SPEC_NUM != UPPER(SPEC_NUM)"

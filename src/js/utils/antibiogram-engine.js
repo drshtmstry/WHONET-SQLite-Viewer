@@ -248,27 +248,70 @@ const AST_COL_REGEX = /(_ND\d+|_NM|_NE\d*|_EM|_ED\d+|_EE\d*)$/i;
 const MIC_COL_REGEX = /(_NM|_NE\d*|_EM|_EE\d*)$/i;
 
 /**
+ * Precomputes AST column metadata once for a batch of isolate rows so inner
+ * loops avoid repeated Object.entries() + regex parsing per row.
+ */
+function getAstColumnMeta(isolates) {
+  if (!Array.isArray(isolates) || !isolates.length) return null;
+  const seenCols = new Set();
+  const meta = [];
+  for (let i = 0; i < isolates.length; i++) {
+    const row = isolates[i];
+    if (!row || typeof row !== 'object') continue;
+    for (const col of Object.keys(row)) {
+      if (seenCols.has(col)) continue;
+      seenCols.add(col);
+      if (AST_COL_REGEX.test(col)) {
+        const abxCode = col.split('_')[0].toUpperCase();
+        meta.push({
+          col,
+          abxCode,
+          isMic: MIC_COL_REGEX.test(col),
+          isUrineOnly: URINE_SPECIFIC_ANTIBIOTICS.has(abxCode)
+        });
+      }
+    }
+  }
+  return meta;
+}
+
+/**
  * Extracts and caches interpreted antibiotic results for a single isolate row
  * across cumulative antibiogram, trends, and location stratification passes.
  */
-function extractIsolateAbxInterpretations(row, orgCode, customLabConfig = null, cacheMap = null) {
+function extractIsolateAbxInterpretations(row, orgCode, customLabConfig = null, cacheMap = null, astColMeta = null) {
   if (cacheMap && cacheMap.has(row)) {
     return cacheMap.get(row);
   }
   const rowIsUrine = isUrineSpecimen(row.SPEC_TYPE);
   const abxEntries = {};
-  for (const [col, val] of Object.entries(row)) {
-    if (AST_COL_REGEX.test(col) && !isBlankAstValue(val)) {
-      const abxCode = col.split('_')[0].toUpperCase();
-      if (URINE_SPECIFIC_ANTIBIOTICS.has(abxCode) && !rowIsUrine) {
-        continue;
-      }
+  if (astColMeta) {
+    for (let i = 0; i < astColMeta.length; i++) {
+      const { col, abxCode, isMic, isUrineOnly } = astColMeta[i];
+      const val = row[col];
+      if (isBlankAstValue(val)) continue;
+      if (isUrineOnly && !rowIsUrine) continue;
       const interp = interpretAstValue(orgCode, col, val, customLabConfig);
       if (interp) {
-        const isMic = MIC_COL_REGEX.test(col);
-        // Prefer MIC over Disk if both present in the same isolate
         if (!abxEntries[abxCode] || isMic) {
           abxEntries[abxCode] = { interp, col, isMic };
+        }
+      }
+    }
+  } else {
+    for (const [col, val] of Object.entries(row)) {
+      if (AST_COL_REGEX.test(col) && !isBlankAstValue(val)) {
+        const abxCode = col.split('_')[0].toUpperCase();
+        if (URINE_SPECIFIC_ANTIBIOTICS.has(abxCode) && !rowIsUrine) {
+          continue;
+        }
+        const interp = interpretAstValue(orgCode, col, val, customLabConfig);
+        if (interp) {
+          const isMic = MIC_COL_REGEX.test(col);
+          // Prefer MIC over Disk if both present in the same isolate
+          if (!abxEntries[abxCode] || isMic) {
+            abxEntries[abxCode] = { interp, col, isMic };
+          }
         }
       }
     }
@@ -689,13 +732,18 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
   const customLabConfig = options.customLabConfig || null;
   const astCache = options._astCache || new Map();
 
+  const astColMeta = getAstColumnMeta(isolates);
   const testColsSet = new Set();
   const orgMap = {};
 
   for (const row of isolates) {
     const orgCode = (row.ORGANISM || '').trim().toLowerCase();
     if (!orgCode || isNegativeOrganismResult(orgCode)) continue;
-    if (!hasAstResults(row)) continue;
+
+    // Single-pass AST interpretation (cached across trends & location passes)
+    const abxEntriesThisRow = extractIsolateAbxInterpretations(row, orgCode, customLabConfig, astCache, astColMeta);
+    const abxEntriesList = Object.entries(abxEntriesThisRow);
+    if (!abxEntriesList.length && !hasAstResults(row)) continue;
 
     if (!orgMap[orgCode]) {
       const resolvedName = orgNames[orgCode] ||
@@ -711,11 +759,8 @@ export function calculateCumulativeAntibiogram(isolates, options = {}) {
     }
     orgMap[orgCode].totalCount++;
 
-    // Single-pass AST interpretation (cached across trends & location passes)
-    const abxEntriesThisRow = extractIsolateAbxInterpretations(row, orgCode, customLabConfig, astCache);
-
     // Record at most ONE test result per antibiotic per isolate
-    for (const [abxCode, entry] of Object.entries(abxEntriesThisRow)) {
+    for (const [abxCode, entry] of abxEntriesList) {
       testColsSet.add(entry.col);
       if (!orgMap[orgCode].tested[abxCode]) {
         orgMap[orgCode].tested[abxCode] = { total: 0, S: 0, I: 0, R: 0, intrinsic: false };
