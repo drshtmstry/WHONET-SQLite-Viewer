@@ -582,6 +582,9 @@ document.addEventListener("keydown", (e) => {
       if (topModal.id === "detail-modal") closeModal();
       else if (topModal.id === "confirm-modal") closeConfirm();
       else if (topModal.id === "edit-modal") closeEditModal();
+      else if (topModal.id === "disclaimer-modal") closeDisclaimerModal();
+      else if (topModal.id === "organism-spectrum-modal")
+        closeOrganismSpectrumModal();
       else if (topModal.id === "antibiogram-options-modal")
         closeAntibiogramOptionsModal();
     }

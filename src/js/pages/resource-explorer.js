@@ -44,6 +44,7 @@ export const resState = {
  * Initializes and loads resource data on first visit
  */
 export async function initResourceExplorer() {
+  if (resState.isLoading) return;
   if (resState.isLoaded) {
     applyResourceFilters();
     return;

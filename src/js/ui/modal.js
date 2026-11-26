@@ -28,7 +28,9 @@ export function notifyDataMutated(hint) {
 
 // ── Detail Modal ──
 export async function viewDetail(rowIdx) {
-  const data = await api(`/api/isolate/${rowIdx}`);
+  const numIdx = parseInt(rowIdx, 10);
+  if (isNaN(numIdx)) return toast('Invalid row index', 'error');
+  const data = await api(`/api/isolate/${numIdx}`);
   if (data.error) return toast(data.error, 'error');
   const r = data.row;
 
@@ -69,10 +71,11 @@ export async function viewDetail(rowIdx) {
               valDisplay = `${escapeHtml(rawVal)} <span style="font-size:12px;color:var(--text3);font-weight:normal">(${escapeHtml(specName)})</span>`;
             }
           }
+          const rawStr = rawVal !== null && rawVal !== undefined ? String(rawVal) : '';
           return `<div class="detail-field ${editable ? 'editable' : ''}">
             <label>${escapeHtml(label)}</label>
             ${editable
-              ? `<div class="field-val" id="fv-${rowIdx}-${key}" onclick="startEdit(${rowIdx},'${key}')">${valDisplay}</div>`
+              ? `<div class="field-val" id="fv-${numIdx}-${key}" data-raw="${escapeHtml(rawStr)}" onclick="startEdit(${numIdx},'${key}')">${valDisplay}</div>`
               : `<div class="field-val">${valDisplay}</div>`}
           </div>`;
         }).join('')}
@@ -100,8 +103,10 @@ export function closeModal() {
 export function startEdit(rowIdx, field) {
   const el = document.getElementById(`fv-${rowIdx}-${field}`);
   if (!el) return;
-  // Read current display text — use '' if the placeholder dash is shown
-  const current = el.textContent.trim() === '—' ? '' : el.textContent.trim();
+  // Read raw unformatted value from data-raw so display annotations (e.g. organism name) are never saved
+  const current = el.dataset.raw !== undefined
+    ? el.dataset.raw
+    : (el.textContent.trim() === '—' ? '' : el.textContent.trim());
 
   const input = document.createElement('input');
   input.className = 'field-input';
@@ -132,7 +137,10 @@ export async function saveEdit(rowIdx, field) {
     toast(data.error, 'error');
     if (el) el.innerHTML = value ? escapeHtml(value) : '<span style="color:var(--text3)">—</span>';
   } else {
-    if (el) el.innerHTML = value ? escapeHtml(value) : '<span style="color:var(--text3)">—</span>';
+    if (el) {
+      el.dataset.raw = value;
+      el.innerHTML = value ? escapeHtml(value) : '<span style="color:var(--text3)">—</span>';
+    }
     toast(`${field} updated`, 'success');
     notifyDataMutated('single-field');
   }

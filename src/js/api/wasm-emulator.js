@@ -8,6 +8,7 @@ import { wasmSelect, wasmRun, normaliseSchema } from '../db/wasm.js';
 import { deduplicateFirstIsolates, calculateCumulativeAntibiogram } from '../utils/antibiogram-engine.js';
 import {
   CUSTOM_SQL_ROW_LIMIT,
+  parseRowIdx,
   classifySqlStatement,
   buildIsolatesQuery,
   buildDuplicatesQuery,
@@ -16,8 +17,10 @@ import {
   buildUpdateFieldQuery,
   buildUpdateRowQuery,
   buildDateProfileQueries,
-  buildAntibiogramDateExclusionQuery
+  buildAntibiogramDateExclusionQuery,
+  buildAntibiogramIsolatesQuery
 } from '../db/query-core.js';
+import { aggregateMonthlyAmr } from '../utils/monthly-amr.js';
 import {
   analyzeDateProfile,
   suggestSurveillancePeriods
@@ -143,8 +146,11 @@ export function handleWasmApi(path, options = {}) {
     }
 
     if (pathname.startsWith('/api/isolate/')) {
-      const rowIdx = parseInt(pathname.split('/').pop(), 10);
-      const rows = wasmSelect('SELECT * FROM Isolates WHERE ROW_IDX = ?', [rowIdx]);
+      const rowIdx = parseRowIdx(pathname.split('/').pop());
+      if (rowIdx === null) return { error: 'Invalid row_idx' };
+      const cols = wasmSelect("PRAGMA table_info(Isolates)").map((c) => c.name.toUpperCase());
+      const rowIdxCol = cols.includes('ROW_IDX') ? 'ROW_IDX' : 'rowid';
+      const rows = wasmSelect(`SELECT * FROM Isolates WHERE ${rowIdxCol} = ?`, [rowIdx]);
       if (!rows.length) return { error: 'Not found' };
       return { row: rows[0] };
     }
@@ -254,6 +260,9 @@ export function handleWasmApi(path, options = {}) {
       if (info.hasMultipleStatements) {
         return { error: 'Only a single SQL statement is allowed per execution' };
       }
+      if (info.isRestricted) {
+        return { error: 'ATTACH and DETACH statements are not allowed' };
+      }
       if (info.isReadOnly) {
         const rows = wasmSelect(sql);
         const truncated = rows.length > CUSTOM_SQL_ROW_LIMIT;
@@ -282,79 +291,7 @@ export function handleWasmApi(path, options = {}) {
         WHERE SPEC_DATE IS NOT NULL AND LENGTH(SPEC_DATE) >= 7
       `) : [];
 
-      const monthMap = {};
-      const bloodNoGrowth = ['xxx', 'xpa', 'nor', 'scn', ''];
-      const othersNoGrowth = ['xxx', 'xpa', 'xep', 'xsg', 'nor', 'ora', 'vag', ''];
-
-      for (const r of rows) {
-        const ym = (r.SPEC_DATE || '').substring(0, 7);
-        if (!/^\d{4}-\d{2}$/.test(ym)) continue;
-
-        if (!monthMap[ym]) {
-          monthMap[ym] = {
-            month: ym,
-            totalRows: 0,
-            srcSamples: { opd: 0, ipd: 0, icu: 0, others: 0, total: 0 },
-            srcPositives: { opd: 0, ipd: 0, icu: 0, others: 0, total: 0 },
-            typeSamples: { blood: 0, pus: 0, sputum: 0, urine: 0, others: 0, total: 0 },
-            typePositives: { blood: 0, pus: 0, sputum: 0, urine: 0, others: 0, total: 0 }
-          };
-        }
-
-        const m = monthMap[ym];
-        m.totalRows++;
-
-        const wt = (r.WARD_TYPE || '').toLowerCase();
-        const st = (r.SPEC_TYPE || '').toLowerCase();
-        const org = (r.ORGANISM || '').toLowerCase().trim();
-
-        const isPos = st === 'bl'
-          ? !bloodNoGrowth.includes(org)
-          : !othersNoGrowth.includes(org);
-
-        if (wt === 'out') {
-          m.srcSamples.opd++;
-          if (isPos) m.srcPositives.opd++;
-        } else if (wt === 'in') {
-          m.srcSamples.ipd++;
-          if (isPos) m.srcPositives.ipd++;
-        } else if (wt === 'icu') {
-          m.srcSamples.icu++;
-          if (isPos) m.srcPositives.icu++;
-        } else {
-          m.srcSamples.others++;
-          if (isPos) m.srcPositives.others++;
-        }
-
-        if (st === 'bl') {
-          m.typeSamples.blood++;
-          if (isPos) m.typePositives.blood++;
-        } else if (st === 'ps') {
-          m.typeSamples.pus++;
-          if (isPos) m.typePositives.pus++;
-        } else if (st === 'sp') {
-          m.typeSamples.sputum++;
-          if (isPos) m.typePositives.sputum++;
-        } else if (st === 'ur') {
-          m.typeSamples.urine++;
-          if (isPos) m.typePositives.urine++;
-        } else {
-          m.typeSamples.others++;
-          if (isPos) m.typePositives.others++;
-        }
-      }
-
-      const sortedMonths = Object.keys(monthMap).sort((a, b) => a.localeCompare(b));
-      const monthlyData = sortedMonths.map(ym => {
-        const m = monthMap[ym];
-        m.srcSamples.total = m.srcSamples.opd + m.srcSamples.ipd + m.srcSamples.icu + m.srcSamples.others;
-        m.srcPositives.total = m.srcPositives.opd + m.srcPositives.ipd + m.srcPositives.icu + m.srcPositives.others;
-        m.typeSamples.total = m.typeSamples.blood + m.typeSamples.pus + m.typeSamples.sputum + m.typeSamples.urine + m.typeSamples.others;
-        m.typePositives.total = m.typePositives.blood + m.typePositives.pus + m.typePositives.sputum + m.typePositives.urine + m.typePositives.others;
-        return m;
-      });
-
-      return { months: sortedMonths, monthlyData };
+      return aggregateMonthlyAmr(rows);
     }
 
     if (pathname === '/api/chart-data') {
@@ -395,58 +332,25 @@ export function handleWasmApi(path, options = {}) {
       const dedupMode = (url.searchParams.get('dedupMode') || 'patient_first').trim();
       const episodeDays = parseInt(url.searchParams.get('episodeDays') || '30', 10);
 
-      const where = [];
-      const params = [];
-      if (orgFilter) {
-        where.push('LOWER(ORGANISM) = ?');
-        params.push(orgFilter);
-      }
-      if (locType) {
-        const lt = locType.toLowerCase();
-        if (lt === 'icu') {
-          where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%')");
-        } else if (lt === 'outpatient' || lt === 'out') {
-          where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')");
-        } else if (lt === 'inpatient' || lt === 'in') {
-          where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'in' OR (NOT (LOWER(COALESCE(WARD_TYPE, '')) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%') AND NOT (LOWER(COALESCE(WARD_TYPE, '')) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')))");
-        } else {
-          where.push("(LOWER(COALESCE(WARD_TYPE, '')) = ? OR (COALESCE(WARD_TYPE, '') = '' AND LOWER(COALESCE(WARD, '')) LIKE ?))");
-          params.push(lt, `%${lt}%`);
-        }
-      } else if (wardFilter) {
-        where.push('WARD = ?');
-        params.push(wardFilter);
-      }
-      if (specFilter) {
-        where.push('LOWER(SPEC_TYPE) = LOWER(?)');
-        params.push(specFilter);
-      }
-      // Exclude negative culture / non-pathogen / no growth results (e.g. 'xxx', 'xpa', 'xxp')
-      where.push("LOWER(COALESCE(ORGANISM, '')) NOT LIKE 'x%' AND COALESCE(ORGANISM, '') != ''");
-
-      const nonDateWhereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
-      const nonDateParams = [...params];
-
-      if (startDate) {
-        where.push("SUBSTR(TRIM(COALESCE(SPEC_DATE, DATE_DATA, '')), 1, 10) >= ?");
-        params.push(startDate);
-      }
-      if (endDate) {
-        where.push("SUBSTR(TRIM(COALESCE(SPEC_DATE, DATE_DATA, '')), 1, 10) <= ?");
-        params.push(endDate);
-      }
-
-      const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
-      const rawIsolates = wasmSelect(`SELECT * FROM Isolates ${whereClause}`, params);
+      const tableCols = wasmSelect('PRAGMA table_info(Isolates)').map((c) => c.name);
+      const abxQuery = buildAntibiogramIsolatesQuery({
+        cols: tableCols,
+        orgFilter,
+        wardFilter,
+        locType,
+        specFilter,
+        startDate,
+        endDate
+      });
+      const rawIsolates = wasmSelect(abxQuery.sql, abxQuery.params);
 
       let excludedUndated = 0;
       let excludedOutsideRange = 0;
       if (startDate || endDate) {
-        const tableCols = wasmSelect('PRAGMA table_info(Isolates)').map((c) => c.name);
         const exclQ = buildAntibiogramDateExclusionQuery({
           cols: tableCols,
-          nonDateWhereClause,
-          nonDateParams,
+          nonDateWhereClause: abxQuery.nonDateWhereClause,
+          nonDateParams: abxQuery.nonDateParams,
           startDate,
           endDate,
         });

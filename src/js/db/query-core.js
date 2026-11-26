@@ -174,10 +174,13 @@ export function classifySqlStatement(sql) {
     isReadOnly = !/^PRAGMA\s+[A-Za-z0-9_."]+\s*=/i.test(stripped);
   }
 
+  const isRestricted = leadingKeyword === 'ATTACH' || leadingKeyword === 'DETACH';
+
   return {
     stripped,
     leadingKeyword,
     isReadOnly,
+    isRestricted,
     hasMultipleStatements: statementCount > 1
   };
 }
@@ -715,4 +718,202 @@ export function buildAntibiogramDateExclusionQuery({
     `.trim(),
     params: [startDate, startDate, endDate, endDate, ...nonDateParams]
   };
+}
+
+/**
+ * Builds parameterized SQL query for /api/antibiogram raw isolate retrieval
+ * across both Node SQLite and In-Browser WASM.
+ */
+export function buildAntibiogramIsolatesQuery({
+  cols = [],
+  orgFilter = '',
+  wardFilter = '',
+  locType = '',
+  specFilter = '',
+  startDate = '',
+  endDate = ''
+} = {}) {
+  const colSet = new Set(cols.map((c) => String(c).toUpperCase()));
+  const hasSpec = colSet.size === 0 || colSet.has('SPEC_DATE');
+  const hasData = colSet.size === 0 || colSet.has('DATE_DATA');
+  let dateExpr = "''";
+  if (hasSpec && hasData) dateExpr = "COALESCE(SPEC_DATE, DATE_DATA, '')";
+  else if (hasSpec) dateExpr = "COALESCE(SPEC_DATE, '')";
+  else if (hasData) dateExpr = "COALESCE(DATE_DATA, '')";
+
+  const hasWardType = colSet.size === 0 || colSet.has('WARD_TYPE');
+  const wardTypeExpr = hasWardType ? "COALESCE(WARD_TYPE, '')" : "''";
+
+  const where = [];
+  const params = [];
+
+  if (orgFilter) {
+    where.push('LOWER(ORGANISM) = ?');
+    params.push(String(orgFilter).trim().toLowerCase());
+  }
+  if (locType) {
+    const lt = String(locType).trim().toLowerCase();
+    if (lt === 'icu') {
+      where.push(`(LOWER(${wardTypeExpr}) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%')`);
+    } else if (lt === 'outpatient' || lt === 'out') {
+      where.push(`(LOWER(${wardTypeExpr}) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')`);
+    } else if (lt === 'inpatient' || lt === 'in') {
+      where.push(`(LOWER(${wardTypeExpr}) = 'in' OR (NOT (LOWER(${wardTypeExpr}) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%') AND NOT (LOWER(${wardTypeExpr}) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')))`);
+    } else {
+      where.push(`(LOWER(${wardTypeExpr}) = ? OR (${wardTypeExpr} = '' AND LOWER(COALESCE(WARD, '')) LIKE ?))`);
+      params.push(lt, `%${lt}%`);
+    }
+  } else if (wardFilter) {
+    where.push('WARD = ?');
+    params.push(wardFilter);
+  }
+  if (specFilter) {
+    where.push('LOWER(SPEC_TYPE) = LOWER(?)');
+    params.push(specFilter);
+  }
+
+  // Exclude negative culture / non-pathogen / no growth results (e.g. 'xxx', 'xpa', 'xxp')
+  where.push("LOWER(COALESCE(ORGANISM, '')) NOT LIKE 'x%' AND COALESCE(ORGANISM, '') != ''");
+
+  const nonDateWhereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const nonDateParams = [...params];
+
+  if (startDate) {
+    where.push(`SUBSTR(TRIM(${dateExpr}), 1, 10) >= ?`);
+    params.push(startDate);
+  }
+  if (endDate) {
+    where.push(`SUBSTR(TRIM(${dateExpr}), 1, 10) <= ?`);
+    params.push(endDate);
+  }
+
+  const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  return {
+    sql: `SELECT * FROM Isolates ${whereClause}`,
+    whereClause,
+    params,
+    nonDateWhereClause,
+    nonDateParams
+  };
+}
+
+/**
+ * Normalises the Isolates table schema (aliasing non-standard table names and
+ * adding missing core WHONET columns) across Node SQLite and sql.js WASM.
+ *
+ * @param {{ getCols: () => string[], getUserTables: () => string[], exec: (sql: string) => void }} adapter
+ */
+export function normaliseIsolatesSchema({ getCols, getUserTables, exec }) {
+  try {
+    let rawCols = getCols();
+    if (!rawCols.length) {
+      const userTables = getUserTables();
+      const match = userTables.find((t) => /isolate/i.test(t)) || (userTables.length === 1 ? userTables[0] : null);
+      if (match && match.toLowerCase() !== 'isolates') {
+        try {
+          exec(`CREATE VIEW IF NOT EXISTS Isolates AS SELECT * FROM "${match.replace(/"/g, '""')}"`);
+          rawCols = getCols();
+        } catch (_) {}
+      }
+    }
+
+    if (!rawCols.length) return;
+
+    const cleanCol = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const colMap = new Map();
+    for (const col of rawCols) {
+      colMap.set(col.toUpperCase(), col);
+      colMap.set(cleanCol(col), col);
+    }
+
+    const findCandidate = (aliases) => {
+      for (const alias of aliases) {
+        const found = colMap.get(alias.toUpperCase()) || colMap.get(cleanCol(alias));
+        if (found) return found;
+      }
+      return null;
+    };
+
+    const ensureTextCol = (name, aliases) => {
+      if (colMap.has(name)) return;
+      const cand = findCandidate(aliases);
+      try {
+        exec(`ALTER TABLE Isolates ADD COLUMN ${name} TEXT DEFAULT ''`);
+        if (cand) {
+          const quoted = cand.replace(/"/g, '""');
+          exec(`UPDATE Isolates SET ${name} = COALESCE(TRIM(CAST("${quoted}" AS TEXT)), '') WHERE "${quoted}" IS NOT NULL`);
+        }
+        colMap.set(name, name);
+      } catch (_) {}
+    };
+
+    ensureTextCol('SPEC_NUM', [
+      'spec_no', 'specnum', 'specno', 'spec_id', 'specid', 'specimen_num',
+      'specimen_no', 'specimen_number', 'specimen_id', 'specimen',
+      'accession', 'accession_no', 'accession_num', 'accession_number',
+      'acc_no', 'acc_num', 'sample_id', 'sample_no', 'sample_num',
+      'sample_number', 'lab_no', 'lab_num', 'barcode'
+    ]);
+
+    ensureTextCol('PATIENT_ID', [
+      'pat_id', 'patientid', 'patid', 'patient_no', 'patient_num',
+      'patient_number', 'patient', 'mrn', 'pid', 'subject_id',
+      'hosp_no', 'reg_no', 'ip_no', 'op_no'
+    ]);
+
+    if (!colMap.has('ROW_IDX')) {
+      const cand = findCandidate(['row_idx', 'rowidx', 'row_id', 'rowid', 'id']);
+      try {
+        exec('ALTER TABLE Isolates ADD COLUMN ROW_IDX INTEGER DEFAULT 0');
+        if (cand) {
+          const quoted = cand.replace(/"/g, '""');
+          exec(`UPDATE Isolates SET ROW_IDX = COALESCE(CAST("${quoted}" AS INTEGER), rowid)`);
+        } else {
+          try {
+            exec('UPDATE Isolates SET ROW_IDX = rowid');
+          } catch (_) {}
+        }
+        colMap.set('ROW_IDX', 'ROW_IDX');
+      } catch (_) {}
+    }
+
+    if (!colMap.has('FULL_NAME')) {
+      const cand = findCandidate(['full_name', 'fullname', 'patient_name', 'patientname', 'name']);
+      try {
+        if (cand) {
+          const quoted = cand.replace(/"/g, '""');
+          exec("ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''");
+          exec(`UPDATE Isolates SET FULL_NAME = COALESCE(TRIM(CAST("${quoted}" AS TEXT)), '') WHERE "${quoted}" IS NOT NULL`);
+        } else if (colMap.has('FIRST_NAME') && colMap.has('LAST_NAME')) {
+          exec(
+            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS ` +
+            `(TRIM(COALESCE(FIRST_NAME,'') || ' ' || COALESCE(LAST_NAME,''))) VIRTUAL`
+          );
+        } else if (colMap.has('LAST_NAME')) {
+          exec(
+            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(LAST_NAME, '')) VIRTUAL`
+          );
+        } else if (colMap.has('FIRST_NAME')) {
+          exec(
+            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(FIRST_NAME, '')) VIRTUAL`
+          );
+        } else {
+          exec("ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''");
+        }
+        colMap.set('FULL_NAME', 'FULL_NAME');
+      } catch (_) {}
+    }
+
+    const textCols = [
+      { name: 'SPEC_DATE', aliases: ['spec_date', 'date_spec', 'specdate', 'collection_date', 'date'] },
+      { name: 'SPEC_TYPE', aliases: ['spec_type', 'spectype', 'specimen_type', 'spec_code', 'sample_type'] },
+      { name: 'ORGANISM', aliases: ['organism', 'org', 'organism_code', 'org_code', 'pathogen', 'bacteria'] },
+      { name: 'WARD', aliases: ['ward', 'ward_name', 'unit', 'location'] },
+      { name: 'DEPARTMENT', aliases: ['department', 'dept', 'service'] },
+      { name: 'WARD_TYPE', aliases: ['ward_type', 'wardtype'] }
+    ];
+    for (const { name, aliases } of textCols) {
+      ensureTextCol(name, aliases);
+    }
+  } catch (_) {}
 }

@@ -18,6 +18,21 @@ export function escapeHtml(str) {
 }
 
 /**
+ * Formats a value as a quoted CSV cell and neutralizes spreadsheet formula injection
+ * (=, +, -, @, tab, CR) so exported files are safe to open in Excel/Sheets.
+ * @param {*} value
+ * @returns {string}
+ */
+export function csvCell(value) {
+  if (value === null || value === undefined) return '""';
+  let str = String(value);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+/**
  * Formats a raw database date string into user locale date string.
  * @param {string|null|undefined} d 
  * @returns {string}

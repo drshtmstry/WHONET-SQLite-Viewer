@@ -771,14 +771,26 @@ export async function handleFileUpload(file, fileHandle = null) {
   }
 }
 
-export function handleFileDrop(e) {
+export async function handleFileDrop(e) {
   e.preventDefault();
   e.stopPropagation();
   const dropzone = document.getElementById("global-dropzone");
   if (dropzone) dropzone.classList.remove("dragover");
 
+  const item = e.dataTransfer?.items?.[0];
+  if (item && typeof item.getAsFileSystemHandle === "function") {
+    try {
+      const handle = await item.getAsFileSystemHandle();
+      if (handle && handle.kind === "file" && typeof handle.getFile === "function") {
+        const file = await handle.getFile();
+        await handleFileUpload(file, handle);
+        return;
+      }
+    } catch (_) {}
+  }
+
   const files = e.dataTransfer?.files;
   if (files && files.length > 0) {
-    handleFileUpload(files[0]);
+    await handleFileUpload(files[0]);
   }
 }

@@ -4,6 +4,7 @@ import { toast } from "../ui/toast.js";
 import { getSpecimenName } from "../utils/specimens.js";
 import {
   escapeHtml,
+  csvCell,
   formatWardTypeLabel,
   formatAmrMonthLabel,
   copyTableHtmlAndTsv,
@@ -1227,32 +1228,33 @@ export function exportAntibiogramCsv() {
     "Total Isolates (N)",
     ...colHeaders,
   ];
-  const rows = [headers.join(",")];
+  const rows = [headers.map((h) => csvCell(h)).join(",")];
 
   for (const org of activeOrgs) {
     const row = [
-      `"${org.orgCode}"`,
-      `"${org.orgName.replace(/"/g, '""')}"`,
+      csvCell(org.orgCode),
+      csvCell(org.orgName),
       org.totalCount,
     ];
     for (const drug of activeAbxList) {
       const stats = org.drugStats[drug.code];
       if (!stats) row.push('""');
       else if (stats.isIntrinsic)
-        row.push(currentMetric === "R" ? '"100% (R)"' : '"R"');
+        row.push(csvCell(currentMetric === "R" ? "100% (R)" : "R"));
       else
         row.push(
-          currentMetric === "R" ? `"${stats.pctR}%"` : `"${stats.pctS}%"`,
+          csvCell(currentMetric === "R" ? `${stats.pctR}%` : `${stats.pctS}%`),
         );
     }
     rows.push(row.join(","));
   }
 
+  const safeDbName = String(state.currentDb || "WHONET").replace(/[^a-zA-Z0-9._-]/g, "_");
   const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Antibiogram_${state.currentDb || "WHONET"}_${currentDedupMode}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `Antibiogram_${safeDbName}_${currentDedupMode}_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   toast("Antibiogram CSV exported successfully!", "success");

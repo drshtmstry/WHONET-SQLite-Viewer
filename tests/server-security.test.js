@@ -197,4 +197,35 @@ test('server security, binary upload fidelity, row_idx === 0 update, and custom-
     body: { sql: 'SELECT 1; DELETE FROM Isolates' }
   });
   assert.equal(multiSqlRes.status, 400);
+
+  // 8. Reject ATTACH DATABASE in /api/custom-sql
+  const attachRes = await invokeHandler(handleRequest, {
+    method: 'POST',
+    url: '/api/custom-sql',
+    body: { sql: "ATTACH DATABASE ':memory:' AS extra" }
+  });
+  assert.equal(attachRes.status, 400);
+
+  // 9. /api/isolate/0 succeeds and invalid rowIdx is rejected
+  const isoZeroRes = await invokeHandler(handleRequest, { method: 'GET', url: '/api/isolate/0' });
+  assert.equal(isoZeroRes.status, 200);
+  assert.equal(isoZeroRes.json().row.ROW_IDX, 0);
+
+  const isoBadRes = await invokeHandler(handleRequest, { method: 'GET', url: '/api/isolate/abc' });
+  assert.equal(isoBadRes.status, 400);
+
+  // 10. /api/upload-database rejects non-.sqlite extensions and non-SQLite binary payloads
+  const badExtRes = await invokeHandler(handleRequest, {
+    method: 'POST',
+    url: '/api/upload-database?filename=malicious.js',
+    body: rawBytes
+  });
+  assert.equal(badExtRes.status, 400);
+
+  const badMagicRes = await invokeHandler(handleRequest, {
+    method: 'POST',
+    url: '/api/upload-database?filename=fake.sqlite',
+    body: Buffer.from('not a real sqlite database file')
+  });
+  assert.equal(badMagicRes.status, 400);
 });

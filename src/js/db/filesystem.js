@@ -187,7 +187,7 @@ export async function chooseWhonetFolder() {
       // Do not pass startIn: "documents" (Windows redirects Documents to OneDrive,
       // which freezes Windows File Explorer if OneDrive is offline/syncing).
       // Do not pass id to avoid stale/corrupted path cache lookups in Chromium.
-      const dirHandle = await window.showDirectoryPicker();
+      const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
       state.isWasmMode = true;
       await saveWhonetFolderHandle(dirHandle);
       await scanWhonetFolder(dirHandle);

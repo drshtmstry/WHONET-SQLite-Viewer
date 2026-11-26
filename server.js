@@ -1,8 +1,9 @@
 import { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve, basename, extname, sep } from "node:path";
+import { tmpdir } from "node:os";
 import { URL } from "node:url";
 import { exec } from "node:child_process";
 import { watch } from "node:fs";
@@ -22,6 +23,7 @@ import {
 } from "./src/js/utils/antibiogram-engine.js";
 import {
   CUSTOM_SQL_ROW_LIMIT,
+  parseRowIdx,
   classifySqlStatement,
   buildIsolatesQuery,
   buildDuplicatesQuery,
@@ -30,8 +32,11 @@ import {
   buildUpdateFieldQuery,
   buildUpdateRowQuery,
   buildDateProfileQueries,
-  buildAntibiogramDateExclusionQuery
+  buildAntibiogramDateExclusionQuery,
+  buildAntibiogramIsolatesQuery,
+  normaliseIsolatesSchema
 } from "./src/js/db/query-core.js";
+import { aggregateMonthlyAmr } from "./src/js/utils/monthly-amr.js";
 import {
   analyzeDateProfile,
   suggestSurveillancePeriods
@@ -304,152 +309,29 @@ function setTargetDb(filename, customPath = null) {
 }
 
 // Execute query with on-demand connection that closes immediately, freeing the file lock
-function ensureDatabaseSchema(db) {
-  try {
-    let rawCols = db
-      .prepare("PRAGMA table_info(Isolates)")
-      .all()
-      .map((c) => c.name);
+const normalizedSchemaCache = new Map();
 
-    if (!rawCols.length) {
-      const userTables = db
+function ensureDatabaseSchema(db) {
+  normaliseIsolatesSchema({
+    getCols: () => db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name),
+    getUserTables: () =>
+      db
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         .all()
-        .map((t) => t.name);
-      const match = userTables.find((t) => /isolate/i.test(t)) || (userTables.length === 1 ? userTables[0] : null);
-      if (match && match.toLowerCase() !== "isolates") {
-        try {
-          db.exec(`CREATE VIEW IF NOT EXISTS Isolates AS SELECT * FROM "${match.replace(/"/g, '""')}"`);
-          rawCols = db
-            .prepare("PRAGMA table_info(Isolates)")
-            .all()
-            .map((c) => c.name);
-        } catch (_) {}
-      }
-    }
-
-    if (!rawCols.length) return;
-
-    const cleanCol = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const colMap = new Map();
-    for (const col of rawCols) {
-      colMap.set(col.toUpperCase(), col);
-      colMap.set(cleanCol(col), col);
-    }
-
-    const findCandidate = (aliases) => {
-      for (const alias of aliases) {
-        const found = colMap.get(alias.toUpperCase()) || colMap.get(cleanCol(alias));
-        if (found) return found;
-      }
-      return null;
-    };
-
-    // 1. Ensure SPEC_NUM exists
-    if (!colMap.has("SPEC_NUM")) {
-      const cand = findCandidate([
-        "spec_no", "specnum", "specno", "spec_id", "specid", "specimen_num",
-        "specimen_no", "specimen_number", "specimen_id", "specimen",
-        "accession", "accession_no", "accession_num", "accession_number",
-        "acc_no", "acc_num", "sample_id", "sample_no", "sample_num",
-        "sample_number", "lab_no", "lab_num", "barcode"
-      ]);
-      try {
-        db.exec("ALTER TABLE Isolates ADD COLUMN SPEC_NUM TEXT DEFAULT ''");
-        if (cand) {
-          db.exec(`UPDATE Isolates SET SPEC_NUM = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
-        }
-        colMap.set("SPEC_NUM", "SPEC_NUM");
-      } catch (_) {}
-    }
-
-    // 2. Ensure PATIENT_ID exists
-    if (!colMap.has("PATIENT_ID")) {
-      const cand = findCandidate([
-        "pat_id", "patientid", "patid", "patient_no", "patient_num",
-        "patient_number", "patient", "mrn", "pid", "subject_id",
-        "hosp_no", "reg_no", "ip_no", "op_no"
-      ]);
-      try {
-        db.exec("ALTER TABLE Isolates ADD COLUMN PATIENT_ID TEXT DEFAULT ''");
-        if (cand) {
-          db.exec(`UPDATE Isolates SET PATIENT_ID = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
-        }
-        colMap.set("PATIENT_ID", "PATIENT_ID");
-      } catch (_) {}
-    }
-
-    // 3. Ensure ROW_IDX exists
-    if (!colMap.has("ROW_IDX")) {
-      const cand = findCandidate(["row_idx", "rowidx", "row_id", "rowid", "id"]);
-      try {
-        db.exec("ALTER TABLE Isolates ADD COLUMN ROW_IDX INTEGER DEFAULT 0");
-        if (cand) {
-          db.exec(`UPDATE Isolates SET ROW_IDX = COALESCE(CAST("${cand.replace(/"/g, '""')}" AS INTEGER), rowid)`);
-        } else {
-          try {
-            db.exec("UPDATE Isolates SET ROW_IDX = rowid");
-          } catch (_) {}
-        }
-        colMap.set("ROW_IDX", "ROW_IDX");
-      } catch (_) {}
-    }
-
-    // 4. Ensure FULL_NAME exists
-    if (!colMap.has("FULL_NAME")) {
-      const cand = findCandidate(["full_name", "fullname", "patient_name", "patientname", "name"]);
-      try {
-        if (cand) {
-          db.exec("ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''");
-          db.exec(`UPDATE Isolates SET FULL_NAME = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
-        } else if (colMap.has("FIRST_NAME") && colMap.has("LAST_NAME")) {
-          db.exec(
-            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS ` +
-            `(TRIM(COALESCE(FIRST_NAME,'') || ' ' || COALESCE(LAST_NAME,''))) VIRTUAL`,
-          );
-        } else if (colMap.has("LAST_NAME")) {
-          db.exec(
-            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(LAST_NAME, '')) VIRTUAL`,
-          );
-        } else if (colMap.has("FIRST_NAME")) {
-          db.exec(
-            `ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT GENERATED ALWAYS AS (COALESCE(FIRST_NAME, '')) VIRTUAL`,
-          );
-        } else {
-          db.exec("ALTER TABLE Isolates ADD COLUMN FULL_NAME TEXT DEFAULT ''");
-        }
-        colMap.set("FULL_NAME", "FULL_NAME");
-      } catch (_) {}
-    }
-
-    // 5. Ensure core clinical & surveillance fields exist
-    const textCols = [
-      { name: "SPEC_DATE", aliases: ["spec_date", "date_spec", "specdate", "collection_date", "date"] },
-      { name: "SPEC_TYPE", aliases: ["spec_type", "spectype", "specimen_type", "spec_code", "sample_type"] },
-      { name: "ORGANISM", aliases: ["organism", "org", "organism_code", "org_code", "pathogen", "bacteria"] },
-      { name: "WARD", aliases: ["ward", "ward_name", "unit", "location"] },
-      { name: "DEPARTMENT", aliases: ["department", "dept", "service"] },
-      { name: "WARD_TYPE", aliases: ["ward_type", "wardtype"] }
-    ];
-    for (const { name, aliases } of textCols) {
-      if (!colMap.has(name)) {
-        const cand = findCandidate(aliases);
-        try {
-          db.exec(`ALTER TABLE Isolates ADD COLUMN ${name} TEXT DEFAULT ''`);
-          if (cand) {
-            db.exec(`UPDATE Isolates SET ${name} = COALESCE(TRIM(CAST("${cand.replace(/"/g, '""')}" AS TEXT)), '') WHERE "${cand.replace(/"/g, '""')}" IS NOT NULL`);
-          }
-          colMap.set(name, name);
-        } catch (_) {}
-      }
-    }
-  } catch (_) { }
+        .map((t) => t.name),
+    exec: (sql) => db.exec(sql),
+  });
 }
 
 function withDb(callback) {
   if (!currentDbFullPath) {
     throw new Error("No database selected");
   }
+  let mtimeMs = null;
+  try {
+    mtimeMs = statSync(currentDbFullPath).mtimeMs;
+  } catch (_) {}
+
   const db = new DatabaseSync(currentDbFullPath);
   try {
     db.exec("PRAGMA busy_timeout = 5000;");
@@ -462,7 +344,12 @@ function withDb(callback) {
     db.function("NATURAL_KEY", { deterministic: true, varargs: true }, naturalKeyFn);
     db.function("natural_key", { deterministic: true, varargs: true }, naturalKeyFn);
     db.function("Natural_key", { deterministic: true, varargs: true }, naturalKeyFn);
-    ensureDatabaseSchema(db);
+    if (mtimeMs === null || normalizedSchemaCache.get(currentDbFullPath) !== mtimeMs) {
+      ensureDatabaseSchema(db);
+      try {
+        normalizedSchemaCache.set(currentDbFullPath, statSync(currentDbFullPath).mtimeMs);
+      } catch (_) {}
+    }
     return callback(db);
   } finally {
     try {
@@ -711,18 +598,30 @@ async function handleApi(req, res) {
   if (path === "/api/upload-database" && req.method === "POST") {
     const filename = urlObj.searchParams.get("filename") || "uploaded.sqlite";
     const safeName = basename(filename) || "uploaded.sqlite";
+    const ext = extname(safeName).toLowerCase();
+    if (ext !== ".sqlite" && ext !== ".sqlite3") {
+      return sendJson(res, { error: "Only .sqlite and .sqlite3 database files are allowed" }, 400);
+    }
     const targetPath = join(WHONET_DIR, safeName);
     const buffer = await readRawBody(req, 50 * 1024 * 1024);
+    const SQLITE_MAGIC = "SQLite format 3\0";
+    if (buffer.length < 16 || buffer.subarray(0, 16).toString("latin1") !== SQLITE_MAGIC) {
+      return sendJson(res, { error: "Invalid SQLite database file" }, 400);
+    }
     try {
       lastSelfWriteTime = Date.now();
-      // Save to WHONET_DIR if possible, otherwise local data directory
+      // Save to WHONET_DIR if possible, otherwise dedicated temp uploads directory
       try {
         writeFileSync(targetPath, buffer);
+        normalizedSchemaCache.delete(targetPath);
         setTargetDb(safeName, targetPath);
       } catch (_) {
-        const localPath = join(__dirname, safeName);
-        writeFileSync(localPath, buffer);
-        setTargetDb(safeName, localPath);
+        const uploadDir = join(tmpdir(), "whonet-uploads");
+        mkdirSync(uploadDir, { recursive: true });
+        const tempPath = join(uploadDir, safeName);
+        writeFileSync(tempPath, buffer);
+        normalizedSchemaCache.delete(tempPath);
+        setTargetDb(safeName, tempPath);
       }
       DB_FILES = getDbFiles();
       if (!DB_FILES.includes(safeName)) DB_FILES.push(safeName);
@@ -875,59 +774,25 @@ async function handleApi(req, res) {
       }
 
       withDb((db) => {
-        const where = [];
-        const params = [];
-
-        if (orgFilter) {
-          where.push("LOWER(ORGANISM) = ?");
-          params.push(orgFilter);
-        }
-        if (locType) {
-          const lt = locType.toLowerCase();
-          if (lt === "icu") {
-            where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%')");
-          } else if (lt === "outpatient" || lt === "out") {
-            where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')");
-          } else if (lt === "inpatient" || lt === "in") {
-            where.push("(LOWER(COALESCE(WARD_TYPE, '')) = 'in' OR (NOT (LOWER(COALESCE(WARD_TYPE, '')) = 'icu' OR LOWER(COALESCE(WARD, '')) LIKE '%icu%' OR LOWER(COALESCE(WARD, '')) LIKE '%intensive%' OR LOWER(COALESCE(WARD, '')) LIKE '%ccu%') AND NOT (LOWER(COALESCE(WARD_TYPE, '')) = 'out' OR LOWER(COALESCE(WARD, '')) LIKE '%opd%' OR LOWER(COALESCE(WARD, '')) LIKE '%out%' OR LOWER(COALESCE(WARD, '')) LIKE '%clinic%')))");
-          } else {
-            where.push("(LOWER(COALESCE(WARD_TYPE, '')) = ? OR (COALESCE(WARD_TYPE, '') = '' AND LOWER(COALESCE(WARD, '')) LIKE ?))");
-            params.push(lt, `%${lt}%`);
-          }
-        } else if (wardFilter) {
-          where.push("WARD = ?");
-          params.push(wardFilter);
-        }
-        if (specFilter) {
-          where.push("LOWER(SPEC_TYPE) = LOWER(?)");
-          params.push(specFilter);
-        }
-        // Exclude negative culture / non-pathogen / no growth results (e.g. 'xxx', 'xpa', 'xxp')
-        where.push("LOWER(COALESCE(ORGANISM, '')) NOT LIKE 'x%' AND COALESCE(ORGANISM, '') != ''");
-
-        const nonDateWhereClause = where.length ? "WHERE " + where.join(" AND ") : "";
-        const nonDateParams = [...params];
-
-        if (startDate) {
-          where.push("SUBSTR(TRIM(COALESCE(SPEC_DATE, DATE_DATA, '')), 1, 10) >= ?");
-          params.push(startDate);
-        }
-        if (endDate) {
-          where.push("SUBSTR(TRIM(COALESCE(SPEC_DATE, DATE_DATA, '')), 1, 10) <= ?");
-          params.push(endDate);
-        }
-
-        const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
-        const rawIsolates = db.prepare(`SELECT * FROM Isolates ${whereClause}`).all(...params);
+        const tableCols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name);
+        const abxQuery = buildAntibiogramIsolatesQuery({
+          cols: tableCols,
+          orgFilter,
+          wardFilter,
+          locType,
+          specFilter,
+          startDate,
+          endDate
+        });
+        const rawIsolates = db.prepare(abxQuery.sql).all(...abxQuery.params);
 
         let excludedUndated = 0;
         let excludedOutsideRange = 0;
         if (startDate || endDate) {
-          const tableCols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name);
           const exclQ = buildAntibiogramDateExclusionQuery({
             cols: tableCols,
-            nonDateWhereClause,
-            nonDateParams,
+            nonDateWhereClause: abxQuery.nonDateWhereClause,
+            nonDateParams: abxQuery.nonDateParams,
             startDate,
             endDate,
           });
@@ -1069,136 +934,7 @@ async function handleApi(req, res) {
           )
           .all() : [];
 
-        const monthMap = {};
-
-        // Negative & commensal definitions:
-        // Blood: 'xxx' (no growth), 'xpa', 'nor' (normal flora), 'scn' (CoNS/skin contaminant)
-        // Others: 'xxx', 'xpa', 'xep', 'xsg', 'nor', 'ora', 'vag'
-        const bloodNoGrowth = ["xxx", "xpa", "nor", "scn", ""];
-        const othersNoGrowth = [
-          "xxx",
-          "xpa",
-          "xep",
-          "xsg",
-          "nor",
-          "ora",
-          "vag",
-          "",
-        ];
-
-        for (const r of rows) {
-          const ym = (r.SPEC_DATE || "").substring(0, 7);
-          if (!/^\d{4}-\d{2}$/.test(ym)) continue;
-
-          if (!monthMap[ym]) {
-            monthMap[ym] = {
-              month: ym,
-              totalRows: 0,
-              srcSamples: { opd: 0, ipd: 0, icu: 0, others: 0, total: 0 },
-              srcPositives: { opd: 0, ipd: 0, icu: 0, others: 0, total: 0 },
-              typeSamples: {
-                blood: 0,
-                pus: 0,
-                sputum: 0,
-                urine: 0,
-                others: 0,
-                total: 0,
-              },
-              typePositives: {
-                blood: 0,
-                pus: 0,
-                sputum: 0,
-                urine: 0,
-                others: 0,
-                total: 0,
-              },
-            };
-          }
-
-          const m = monthMap[ym];
-          m.totalRows++;
-
-          const wt = (r.WARD_TYPE || "").toLowerCase();
-          const st = (r.SPEC_TYPE || "").toLowerCase();
-          const org = (r.ORGANISM || "").toLowerCase().trim();
-
-          // Growth rule:
-          // Blood (st === 'bl'): 'xxx', 'xpa', 'nor', 'scn' are no growth / contaminants
-          // Others (st !== 'bl'): 'xxx', 'xpa', 'xep', 'xsg', 'nor', 'ora', 'vag' are no growth
-          const isPos =
-            st === "bl"
-              ? !bloodNoGrowth.includes(org)
-              : !othersNoGrowth.includes(org);
-
-          // By Source of sample (OPD / IPD / ICU / Others)
-          if (wt === "out") {
-            m.srcSamples.opd++;
-            if (isPos) m.srcPositives.opd++;
-          } else if (wt === "in") {
-            m.srcSamples.ipd++;
-            if (isPos) m.srcPositives.ipd++;
-          } else if (wt === "icu") {
-            m.srcSamples.icu++;
-            if (isPos) m.srcPositives.icu++;
-          } else {
-            m.srcSamples.others++;
-            if (isPos) m.srcPositives.others++;
-          }
-
-          // By Type of sample (Blood / Pus / Sputum / Urine / Others)
-          if (st === "bl") {
-            m.typeSamples.blood++;
-            if (isPos) m.typePositives.blood++;
-          } else if (st === "ps") {
-            m.typeSamples.pus++;
-            if (isPos) m.typePositives.pus++;
-          } else if (st === "sp") {
-            m.typeSamples.sputum++;
-            if (isPos) m.typePositives.sputum++;
-          } else if (st === "ur") {
-            m.typeSamples.urine++;
-            if (isPos) m.typePositives.urine++;
-          } else {
-            m.typeSamples.others++;
-            if (isPos) m.typePositives.others++;
-          }
-        }
-
-        // Calculate totals and sort months in ascending order
-        const sortedMonths = Object.keys(monthMap).sort((a, b) =>
-          a.localeCompare(b),
-        );
-        const monthlyData = sortedMonths.map((ym) => {
-          const m = monthMap[ym];
-          m.srcSamples.total =
-            m.srcSamples.opd +
-            m.srcSamples.ipd +
-            m.srcSamples.icu +
-            m.srcSamples.others;
-          m.srcPositives.total =
-            m.srcPositives.opd +
-            m.srcPositives.ipd +
-            m.srcPositives.icu +
-            m.srcPositives.others;
-          m.typeSamples.total =
-            m.typeSamples.blood +
-            m.typeSamples.pus +
-            m.typeSamples.sputum +
-            m.typeSamples.urine +
-            m.typeSamples.others;
-          m.typePositives.total =
-            m.typePositives.blood +
-            m.typePositives.pus +
-            m.typePositives.sputum +
-            m.typePositives.urine +
-            m.typePositives.others;
-          return m;
-        });
-
-        sendJson(res, {
-          months: sortedMonths,
-          monthlyData,
-        });
+        sendJson(res, aggregateMonthlyAmr(rows));
       });
     } catch (e) {
       sendJson(res, { error: e.message }, 500);
@@ -1262,10 +998,13 @@ async function handleApi(req, res) {
     if (!currentDbFullPath)
       return sendJson(res, { error: "No database open" }, 400);
     try {
-      const rowIdx = parseInt(path.split("/").pop());
+      const rowIdx = parseRowIdx(path.split("/").pop());
+      if (rowIdx === null) return sendJson(res, { error: "Invalid row_idx" }, 400);
       withDb((db) => {
+        const cols = db.prepare("PRAGMA table_info(Isolates)").all().map((c) => c.name.toUpperCase());
+        const rowIdxCol = cols.includes("ROW_IDX") ? "ROW_IDX" : "rowid";
         const row = db
-          .prepare("SELECT * FROM Isolates WHERE ROW_IDX = ?")
+          .prepare(`SELECT * FROM Isolates WHERE ${rowIdxCol} = ?`)
           .get(rowIdx);
         if (!row) return sendJson(res, { error: "Not found" }, 404);
         sendJson(res, { row });
@@ -1367,13 +1106,21 @@ async function handleApi(req, res) {
       return sendJson(res, { error: "Empty SQL" }, 400);
     if (info.hasMultipleStatements)
       return sendJson(res, { error: "Only a single SQL statement is allowed per execution" }, 400);
+    if (info.isRestricted)
+      return sendJson(res, { error: "ATTACH and DETACH statements are not allowed" }, 400);
 
     withDb((db) => {
       const stmt = db.prepare(sql);
       if (info.isReadOnly) {
-        const rows = stmt.all();
-        const truncated = rows.length > CUSTOM_SQL_ROW_LIMIT;
-        const limited = truncated ? rows.slice(0, CUSTOM_SQL_ROW_LIMIT) : rows;
+        const limited = [];
+        let truncated = false;
+        for (const row of stmt.iterate()) {
+          if (limited.length >= CUSTOM_SQL_ROW_LIMIT) {
+            truncated = true;
+            break;
+          }
+          limited.push(row);
+        }
         const columns = limited.length > 0 ? Object.keys(limited[0]) : [];
         sendJson(res, {
           type: "select",

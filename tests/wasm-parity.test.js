@@ -7,8 +7,11 @@ import {
   buildIsolatesQuery,
   buildDuplicatesQuery,
   buildChartDataQuery,
-  buildUpdateRowQuery
+  buildUpdateRowQuery,
+  buildAntibiogramIsolatesQuery,
+  normaliseIsolatesSchema
 } from '../src/js/db/query-core.js';
+import { aggregateMonthlyAmr } from '../src/js/utils/monthly-amr.js';
 
 function createNodeFixture() {
   const db = new DatabaseSync(':memory:');
@@ -125,4 +128,43 @@ test('Node SQLite and sql.js WASM produce identical results across shared query-
   const wasmWard = wasmExecObjects(wasmDb, 'SELECT WARD FROM Isolates WHERE ROW_IDX = 0')[0].WARD;
   assert.equal(nodeWard, 'PICU');
   assert.equal(wasmWard, 'PICU');
+
+  // 5. /api/antibiogram query + monthly-amr aggregation parity
+  const abxQ = buildAntibiogramIsolatesQuery({ cols, startDate: '2025-04-01', endDate: '2025-04-30' });
+  const nodeAbxRows = nodeDb.prepare(abxQ.sql).all(...abxQ.params);
+  const wasmAbxRows = wasmExecObjects(wasmDb, abxQ.sql, abxQ.params);
+  assert.deepEqual(wasmAbxRows.map(r => r.ROW_IDX), nodeAbxRows.map(r => r.ROW_IDX));
+
+  const nodeAmr = aggregateMonthlyAmr(nodeAbxRows);
+  const wasmAmr = aggregateMonthlyAmr(wasmAbxRows);
+  assert.deepEqual(wasmAmr, nodeAmr);
+  assert.equal(nodeAmr.months[0], '2025-04');
+  assert.equal(nodeAmr.monthlyData[0].totalRows, 4);
+
+  // 6. normaliseIsolatesSchema parity on a minimal table
+  const nodeMin = new DatabaseSync(':memory:');
+  const wasmSQL = await initSqlJs();
+  const wasmMin = new wasmSQL.Database();
+  t.after(() => {
+    nodeMin.close();
+    wasmMin.close();
+  });
+  nodeMin.exec('CREATE TABLE Isolates (org TEXT, spec_no TEXT)');
+  wasmMin.run('CREATE TABLE Isolates (org TEXT, spec_no TEXT)');
+  normaliseIsolatesSchema({
+    getCols: () => nodeMin.prepare('PRAGMA table_info(Isolates)').all().map(c => c.name),
+    getUserTables: () => [],
+    exec: (sql) => nodeMin.exec(sql),
+  });
+  normaliseIsolatesSchema({
+    getCols: () => wasmExecObjects(wasmMin, 'PRAGMA table_info(Isolates)').map(c => c.name),
+    getUserTables: () => [],
+    exec: (sql) => wasmMin.run(sql),
+  });
+  const nodeMinCols = nodeMin.prepare('PRAGMA table_info(Isolates)').all().map(c => c.name);
+  const wasmMinCols = wasmExecObjects(wasmMin, 'PRAGMA table_info(Isolates)').map(c => c.name);
+  assert.deepEqual(wasmMinCols, nodeMinCols);
+  assert.ok(nodeMinCols.includes('SPEC_NUM'));
+  assert.ok(nodeMinCols.includes('ORGANISM'));
+  assert.ok(nodeMinCols.includes('ROW_IDX'));
 });
